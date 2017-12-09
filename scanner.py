@@ -7,6 +7,7 @@ from image import Image
 import init_functions
 import scan_functions
 import df_functions
+from openQ import OpenQs
 
 
 class Scanner(object):
@@ -48,36 +49,49 @@ class Scanner(object):
         self.qAreas, self.idAreas, self.nAreas = init_functions.makeAreaDict(quests)
         # make the dictionaries to convert coordinates to letters or numbers
         self.Ndict, self.Idict, self.Qdict = init_functions.makeResDict()
-        # Start the scanner
-        self.rundots()
-        #print('here')
-        # run the open questions grader
-#         if self.openQ:
-#             self.runopenQ():
-        
-    def rundots(self):
-        # the main loop for loading images for alignment and dot scanning
+        # Run the scanner on each file
+        # will scan dots and save out aligned image for future use)
         for i in range(len(self.image_list)):
             # create image object, which will load and align image
+            # makes img.aligned, img.scanimg
             img = Image(self.image_list[i], self.scan_settings)
             print('Processing scan {0:1d}'.format(i))
-            # scan the aligned image and return a dict of all markers for the image
-            self.qRes = scan_functions.scanDots(img.scanimg, self.qAreas, self.ignores, self.Qdict)
-            self.idRes = scan_functions.scanDots(img.scanimg, self.idAreas, self.ignores, self.Idict)
-            self.nRes = scan_functions.scanDots(img.scanimg, self.nAreas, self.ignores, self.Ndict)
-            # if this is the key image, save the results to keyDict
-            if i == 0:
-                self.keyDict = self.qRes.copy()
-            # parse the name and id
-            lastName, firstName, studentID = df_functions.getid(self.idRes, self.nRes)
-            self.qRes['LastName'] = lastName
-            self.qRes['FirstName'] = firstName
-            self.qRes['studentID'] = studentID
-            # save data to data frame
+            #save the aligned image aligned_00i.jpg in ./aligned
+            scan_functions.saveimg(self.image_list, i, img.aligned)
+            self.qRes=scan_functions.rundots(img.scanimg, 
+                                            self.qAreas, self.idAreas, self.nAreas, 
+                                            self.ignores, 
+                                            self.Qdict, self.Idict, self.Ndict)
+            # save results dictionary data to data frame
             for k, v in self.qRes.items():
                 self.resdf.loc[i,k]=v
-            #save the aligned image for later marking
-            scan_functions.saveimg(self.image_list, i, img.scanimg)
+        #get the aligned image dir
+        aligneddir = image_list[0].rsplit('/',1)[0]+'/aligned/'
+        self.aligned_image_list = []
+        for file in os.listdir(aligneddir):
+            if ((fnmatch.fnmatch(file, '*.jpg'):
+                # add the path to the file
+                self.aligned_image_list.append(pathname+file)
+        
+        self.aligned_image_list = aligned_image_list.sorted()
+        # run the open questions grader
+        if self.openQ:
+            ''' 
+            open the key for open question grading, openQs will be object
+            openQs.openQkeyimgs is a dictionary containing the images for grading
+            openQs.openQcoords is a dictionary containing the coordinates for each image
+            openQs.openQres is a dataframe containing the two-letter results (CC, CX, XX) for the open ended questions in same format as main results dictionary
+            '''
+            openQs = openQ_functions.gradeOpenQ(self.aligned_image_list)
+            # results data frame is accessed as openQs.openQres
+            
+            #### HERE#######
+            # need to grade scanned and open ended questions
+            # need to mark scanned questions
+            # need to mark open ended questions
+            # need to save out marked pdf and marked jpgs
+                
+        
 
         # test write resdf to csv
         fname = self.path + 'results.csv'

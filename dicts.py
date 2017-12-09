@@ -16,7 +16,7 @@ class Dicts(object):
         3 first and 5 last name boxes
         '''
         # First names
-        NX=122
+        NX=124
         NY=268
         nameWidth=676
         namegap = 2
@@ -29,7 +29,7 @@ class Dicts(object):
             self.areaDict[keyName] = (startX,startY), (endX, endY)
 
         # Last names
-        NX=122
+        NX=124
         NY=400
         nameWidth=676
         namegap = 2
@@ -55,7 +55,7 @@ class Dicts(object):
             self.areaDict[keyName] = (startX,startY), (endX, endY)
         
         # Questions
-        QX = 124
+        QX = 126
         QY = 595
         Qwidth = 160
         Qgap = 2
@@ -69,28 +69,28 @@ class Dicts(object):
                 QY = 1046
                 startY=QY+((28+Qgap) * (i - 16))
             elif i < 46:
-                QX = 336
+                QX = 338
                 QY = 595
                 startY=QY+((28+Qgap) * (i - 31))
             elif i < 61:
                 QY = 1046
                 startY=QY+((28+Qgap) * (i - 46))
             elif i < 76:
-                QX = 548
+                QX = 550
                 QY = 595
                 startY=QY+((28+Qgap) * (i - 61))
             elif i < 91:
                 QY = 1046
                 startY=QY+((28+Qgap) * (i - 76))
             elif i < 106:
-                QX = 760
+                QX = 762
                 QY = 595
                 startY=QY+((28+Qgap) * (i - 91))
             elif i < 121:
                 QY = 1046
                 startY=QY+((28+Qgap) * (i - 106))
             elif i < 136:
-                QX = 974
+                QX = 976
                 QY = 595
                 startY=QY+((28+Qgap) * (i - 121))
             else:

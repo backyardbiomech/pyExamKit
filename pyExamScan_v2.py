@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from gui import pyScanUI
 from tkinter import *
 

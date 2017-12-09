@@ -1,9 +1,8 @@
 import numpy as np
 import cv2
 import fnmatch
-
-#def loadandalign(fname):
-#    img = Image(fname)
+import os
+import df_functions
     
     
 def imgReg(img, regPts, scan_settings):
@@ -26,7 +25,7 @@ def getRegPts(img, scan_settings):
     ret, imgthresh = cv2.threshold(bw.copy(), scan_settings.volthresh, 255, cv2.THRESH_BINARY_INV)
     
     # find contours
-    (_, cnts, _) = cv2.findContours(imgcopy,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    (_, cnts, _) = cv2.findContours(imgthresh,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     #get the contours sorted by size
     cnts = sorted(cnts, key = cv2.contourArea, reverse = True)
     # initiate the alignment points list
@@ -159,5 +158,27 @@ def scanDots(img, areaDict, ignores, convDict):
 def saveimg(image_list, i, scanimg):
     basename = image_list[i].split('.')[0] #includes full path, not extension
     pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
-    savename = pathname + 'aligned_' + '{0:03d}'.format(i) + '.jpg'
+    if not os.path.isdir(pathname + 'aligned'):
+        os.mkdir(pathname + 'aligned')
+    savename = pathname + '/aligned/aligned_' + '{0:03d}'.format(i) + '.jpg'
     cv2.imwrite(savename, scanimg)
+    
+def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
+    '''
+    loads the selected, image from imageList, aligns the image,
+    scans the bubbles, creates a dictionary of results and parsed names and ID (qRes),
+    returns that row to be added to the main results data frame,
+    and saves out the aligned image
+    '''    
+    # scan the aligned image and return a dict of all markers for the image
+    qRes = scanDots(img, qAreas, ignores, Qdict)
+    idRes = scanDots(img, idAreas, ignores, Idict)
+    nRes = scanDots(img, nAreas, ignores, Ndict)
+    # parse the name and id
+    lastName, firstName, studentID = df_functions.getid(idRes, nRes)
+    # save name and id in results dictionary for current image
+    qRes['LastName'] = lastName
+    qRes['FirstName'] = firstName
+    qRes['studentID'] = studentID
+    #return the dictionary of results
+    return qRes
