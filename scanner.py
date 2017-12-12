@@ -1,12 +1,16 @@
 from fpdf import FPDF
 import sys
+import os
+import fnmatch
+import pandas as pd
+import ast
 
 from dicts import Dicts
 from settings import Settings
 from image import Image
 import init_functions
 import scan_functions
-import df_functions
+import grade_functions
 from openQ import OpenQs
 
 
@@ -30,7 +34,7 @@ class Scanner(object):
         '''
         self.input_file = input_file
         self.quests = quests
-        self.markmissing = markmissing
+        self.markmissing = markmissing #means select all that apply questions
         self.openQ = openQ
         if len(ignores)>0:
             ignores=ignores+','
@@ -49,6 +53,9 @@ class Scanner(object):
         self.qAreas, self.idAreas, self.nAreas = init_functions.makeAreaDict(quests)
         # make the dictionaries to convert coordinates to letters or numbers
         self.Ndict, self.Idict, self.Qdict = init_functions.makeResDict()
+        self.run()
+        
+    def run(self):
         # Run the scanner on each file
         # will scan dots and save out aligned image for future use)
         for i in range(len(self.image_list)):
@@ -66,14 +73,13 @@ class Scanner(object):
             for k, v in self.qRes.items():
                 self.resdf.loc[i,k]=v
         #get the aligned image dir
-        aligneddir = image_list[0].rsplit('/',1)[0]+'/aligned/'
+        aligneddir = self.image_list[0].rsplit('/',1)[0]+'/aligned/'
         self.aligned_image_list = []
         for file in os.listdir(aligneddir):
-            if ((fnmatch.fnmatch(file, '*.jpg'):
+            if fnmatch.fnmatch(file, '*.jpg'):
                 # add the path to the file
-                self.aligned_image_list.append(pathname+file)
-        
-        self.aligned_image_list = aligned_image_list.sorted()
+                self.aligned_image_list.append(aligneddir+file)
+
         # run the open questions grader
         if self.openQ:
             ''' 
@@ -82,20 +88,34 @@ class Scanner(object):
             openQs.openQcoords is a dictionary containing the coordinates for each image
             openQs.openQres is a dataframe containing the two-letter results (CC, CX, XX) for the open ended questions in same format as main results dictionary
             '''
-            openQs = openQ_functions.gradeOpenQ(self.aligned_image_list)
-            # results data frame is accessed as openQs.openQres
             
-            #### HERE#######
-            # need to grade scanned and open ended questions
-            # need to mark scanned questions
-            # need to mark open ended questions
-            # need to save out marked pdf and marked jpgs
+            openQs = OpenQs(self.aligned_image_list)
+            # results data frame is accessed as openQs.openQres
+            # add openQcoords to self.qAreas
+            # rearrange first
+            for k, v in openQs.openQcoords.items():
+                self.qAreas[k] = ((v[0],v[1]),(v[2], v[3]))
+            # add openQ results to regular results
+            self.resdf = pd.concat([self.resdf, openQs.openQres], axis=1)
+        
+        # write resdf to csv
+        self.resCsv = self.path + 'results.csv'
+        self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
+        
+        # grade the results csv file and save out pts per question csv file
+        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ)
+        
+        # mark questions
+        markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'
+        grade_functions.markSheets(self.resCsv, self.aligned_image_list, markeddir, self.qAreas, self.Qdict, self.markmissing)
+        # need to save out marked pdf and marked jpgs
+        # intialize the output pdf
+        self.outpdf=FPDF('P','pt','Letter')
+        scan_functions.savePdf(markeddir, self.outpdf)
+        self.outpdf.output(self.path + 'marked.pdf', 'F')
                 
         
 
-        # test write resdf to csv
-        fname = self.path + 'results.csv'
-        print(fname)
-        self.resdf.to_csv(fname, index=True, index_label = 'index')
+        
         sys.exit()
 

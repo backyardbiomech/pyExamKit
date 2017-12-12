@@ -2,7 +2,8 @@ import numpy as np
 import cv2
 import fnmatch
 import os
-import df_functions
+import grade_functions
+from fpdf import FPDF
     
     
 def imgReg(img, regPts, scan_settings):
@@ -163,6 +164,12 @@ def saveimg(image_list, i, scanimg):
     savename = pathname + '/aligned/aligned_' + '{0:03d}'.format(i) + '.jpg'
     cv2.imwrite(savename, scanimg)
     
+def saveMarkedImg(markeddir, studentName, img):
+    if not os.path.isdir(markeddir):
+        os.mkdir(markeddir)
+    savename = markeddir + studentName + '.jpg'
+    cv2.imwrite(savename, img)
+    
 def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
     '''
     loads the selected, image from imageList, aligns the image,
@@ -175,10 +182,22 @@ def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
     idRes = scanDots(img, idAreas, ignores, Idict)
     nRes = scanDots(img, nAreas, ignores, Ndict)
     # parse the name and id
-    lastName, firstName, studentID = df_functions.getid(idRes, nRes)
+    lastName, firstName, studentID = grade_functions.getid(idRes, nRes)
     # save name and id in results dictionary for current image
     qRes['LastName'] = lastName
     qRes['FirstName'] = firstName
     qRes['studentID'] = studentID
     #return the dictionary of results
     return qRes
+
+def savePdf(markeddir, outpdf):
+    #get a list of all the tmp#.jpg temporary images
+    filelist=[]
+    for file in os.listdir(markeddir):
+        if fnmatch.fnmatch(file, '*.jpg'):
+            filelist.append(markeddir + '/' + file)
+    #go through each file, add it to the pdf, and delete the temporary file
+    for page in sorted(filelist):
+        outpdf.add_page()
+        outpdf.image(page, 0, 0, 612)
+        #os.remove(page)

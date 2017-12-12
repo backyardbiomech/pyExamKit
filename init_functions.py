@@ -26,8 +26,8 @@ def filenames(input_file):
             # add the path to the file
             image_list.append(pathname+file)
     #make a new directory that will contain all of the outputs  
-    if not os.path.isdir(basename + '_marked'):
-        os.mkdir(basename + '_marked')
+#     if not os.path.isdir(basename + '_marked'):
+#         os.mkdir(basename + '_marked')
     return pathname, image_list
     
 def splitpdf(input_file):
