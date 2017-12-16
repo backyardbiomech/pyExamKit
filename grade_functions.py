@@ -154,6 +154,6 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                                     (0, 0, 255), 2)
         # save image in marked dir
         # get name of student
-        studentName=df['LastName'][row] + '_' + df['FirstName'][row]
+        studentName=df['LastName'][row] + '_' + df['FirstName'][row] + '_' + df['studentID'][row]
         scan_functions.saveMarkedImg(markeddir, studentName, img)
         
