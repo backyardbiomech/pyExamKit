@@ -12,7 +12,6 @@
 3. In that window enter the following commands to install the required packages:
     1. `conda update --all`  (this updates all the installed Anaconda packages)
     2. `conda config --add channels conda-forge` (adds the conda-forge package source as the first place to look)
-    3. `conda install python=3.5` (This downgrades the version of Python for better compatibility with opencv; agree to any warnings)
     4. `conda install opencv matplotlib pandas scipy Pillow imageio` (this installs Python packages required by pyExamScan. Agree to install all and their dependencies - it will be a long list and may take a few minutes)
     5. `pip install fpdf` (This installs one package not available directly from Anaconda)
 4. Opencv is a finicky package, so before we get too much further, check the installation of opencv. In the terminal:
