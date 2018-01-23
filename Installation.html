@@ -1,0 +1,41 @@
+<h1 id="pyexamscan-installation-on-mac">pyExamScan installation on Mac</h1>
+<ol type="1">
+<li>Download the <a href="https://conda.io/miniconda.html">Miniconda installer</a> aka miniconda from Continuum. Except in unusual circumstances you’ll want the latest 64bit Python 3.x installer. You can also use the full Anaconda environment, which will let you avoid many of the steps below, though the download is <strong>much</strong> larger and installs many packages not needed for pyExamScan. I recommend you stick with miniconda unless you already use Anaconda. If you use the full Anaconda installer, you can jump down to step 4 below.</li>
+<li>To install Miniconda, open a Terminal window. On a mac, hit <code>cmd-space</code>, type in “terminal”, and hit enter.
+<ol type="1">
+<li>In the terminal window, change directory into your downloads folder:<br />
+<code>cd ~/Downloads</code> NB: if you don’t know, <code>cd</code> stands for “change directories”, and is like navigating folders. The <code>~</code> on a Mac is a shortcut for your home directory – the folder named as your user name that contains your Documents, Downloads, and Desktop folders, and where you’ll be installing miniconda. So <code>~/Downloads</code> is just a handy shortcut for <code>Volumes/Macintosh HD/Users/&lt;your user name&gt;/Downloads</code></li>
+<li>Then install (you might need to change the text to match the name of the file you just downloaded).<br />
+<code>bash Miniconda3-latest-MacOSX-x86_64.sh</code></li>
+<li>Agree to all of the default options.</li>
+<li>Close that terminal window, and open a new one.</li>
+</ol></li>
+<li>In that window enter the following commands to install the required packages:
+<ol type="1">
+<li><code>conda update --all</code> (this updates all the installed Anaconda packages)</li>
+<li><code>conda config --add channels conda-forge</code> (adds the conda-forge package source as the first place to look)</li>
+<li><code>conda install opencv matplotlib pandas scipy Pillow imageio</code> (this installs Python packages required by pyExamScan. Agree to install all and their dependencies - it will be a long list and may take a few minutes)</li>
+<li><code>pip install fpdf</code> (This installs one package not available directly from Anaconda)</li>
+</ol></li>
+<li>Opencv is a finicky package, so before we get too much further, check the installation of opencv. In the terminal:
+<ol type="1">
+<li><code>python3</code></li>
+<li><code>import cv2</code></li>
+<li>If you don’t get an error, congrats, opencv is installed. Quit python with <code>quit()</code>, and go to step 5.</li>
+<li>If you get an error that ends with something like “libopencv_core…dylib, Reason: image not found”:
+<ol type="1">
+<li>Quit python with <code>quit()</code></li>
+<li><code>conda install openblas=0.2.19</code></li>
+<li><code>python3</code></li>
+<li><code>import cv2</code></li>
+<li>if you don’t get an error, congrats, opencv is installed. Quit python with <code>quit()</code>.</li>
+</ol></li>
+</ol></li>
+<li>Now that you have a Python environment with opencv and other packages installed, it’s time to install the pyExamScan software:
+<ol type="1">
+<li>Download the main <a href="https://longwood.box.com/s/9x8lqixu7ho6b7uavrcjcolfmg6lj5il">pyExamScan folder</a> (from a Longwood Box account so will require you to sign in). Right click on the folder named pyexamscan_v2 and select download. Make sure the downloaded folder is named exactly <code>pyexamscan_v2</code>, and move it to your Desktop.</li>
+</ol></li>
+<li>The easiest way to run the software on a mac is to open that folder, and double-click on the <strong>Exam Scanner.app</strong>. You can move that “.app” anywhere you want, but it points to a folder named ‘pyexamscan_v2’ on your Desktop, so don’t move <em>that</em> folder if you want to use the app start method.</li>
+<li>On other systems, or if your are comfortable in the terminal, use the command line to navigate to the folder (where ever you want to put it), and run <code>pyExamScan_v2.py</code>.</li>
+<li>That will open a control window to load files and run the scanner. Please see the usage instructions for more!</li>
+</ol>
