@@ -39,6 +39,13 @@ class pyScanUI(Frame):
         self.openQvar = IntVar()
         self.openQcheck = Checkbutton(self.parent, text = 'Any open ended questions to grade on the fly?', variable = self.openQvar)
         self.openQcheck.pack()
+        
+        self.threshlabel = Label(self.parent, text = "Don't change the value below unless you are having problems. \n Decrease to 0.2 to pick up lighter marks, \n increase to 0.3 to avoid picking up erased marks")
+        self.threshlabel.pack()
+        
+        self.threshEntry = Entry(self.parent, width = 15)
+        self.threshEntry.insert(0, '0.25')
+        self.threshEntry.pack()
               
         button_go = Button(self.parent, text = "Run Scan", command = self.button_go_callback)
         button_go.pack()
@@ -78,8 +85,9 @@ class pyScanUI(Frame):
         markmissing=bool(self.setavar.get())
         openQ=bool(self.openQvar.get())
         ignores = self.ignoreEntry.get()
+        thresh = float(self.threshEntry.get())
         #main call to start processing
-        Scanner(input_file, quests, markmissing, openQ, ignores)
+        Scanner(input_file, quests, markmissing, openQ, ignores, thresh)
 
     def button_grade_callback(self):
         input_file = self.csvEntry.get()

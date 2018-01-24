@@ -23,7 +23,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, ignores):
+    def __init__(self, input_file, quests, markmissing, openQ, ignores, thresh):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -43,6 +43,7 @@ class Scanner(object):
             self.ignores=None
         # pull settings into scanner object
         self.scan_settings=Settings()
+        self.scan_settings.sigma = thresh
         # initialize file and pathnames (and split pdfs into jpgs)
         self.path, self.image_list = init_functions.filenames(input_file)
         # intialize the output pdf which the scanner object will write to
@@ -113,9 +114,5 @@ class Scanner(object):
         self.outpdf=FPDF('P','pt','Letter')
         scan_functions.savePdf(markeddir, self.outpdf)
         self.outpdf.output(self.path + 'marked.pdf', 'F')
-                
-        
 
-        
-        sys.exit()
 
