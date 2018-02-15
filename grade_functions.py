@@ -146,7 +146,14 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                                         cv2.FONT_HERSHEY_SIMPLEX, 1,
                                         (0,0,255), 2)
                 # if markmissing, and if there are letters in the key not in the answer, add a red M
-                if markmissing and len(key) > 0:
+                if markmissing and len(key)>0:
+                    markX=qAreas[col][0][0] - 26
+                    cv2.putText(img, 'M',
+                                    (markX, markY),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1,
+                                    (0, 0, 255), 2)
+                # if student left answer blank and it shouldn't have been
+                if ans == '-' and len(key)>0:
                     markX=qAreas[col][0][0] - 26
                     cv2.putText(img, 'M',
                                     (markX, markY),

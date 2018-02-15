@@ -1,7 +1,9 @@
 import sys
 from scanner import Scanner
+from keymaker import KeyMaker
 from tkinter import *
 from tkinter import filedialog
+from tkinter import ttk
 
 class pyScanUI(Frame): 
     """
@@ -50,21 +52,55 @@ class pyScanUI(Frame):
         button_go = Button(self.parent, text = "Run Scan", command = self.button_go_callback)
         button_go.pack()
         
-        separator = Frame(self.parent, height =2, bd = 1, relief = SUNKEN)
-        separator.pack(fill=X, padx = 5, pady = 5)
+        separator = Frame(self.parent, height =5, bd = 1, relief = SUNKEN)
+        separator.pack(fill=X, padx = 5, pady = 15)
+
+        '''
+        Add GUI for key creater
+        '''
+        button_keyimg = Button(self.parent, text="Choose jpg of key image", command = self.button_keyimg_callback)
+        button_keyimg.pack()
+
+        self.keyImgEntry = Entry(self.parent, width = 50)
+        self.keyImgEntry.pack()
         
-        button_gradebrowse = Button(self.parent, text='choose results .csv file to re-grade', command=self.button_gradebrowse_callback)
-        button_gradebrowse.pack()
+        button_keyFile = Button(self.parent, text="Choose CSV of key answers", command = self.button_keyFile_callback)
+        button_keyFile.pack()
+
+        self.keyFileEntry = Entry(self.parent, width = 50)
+        self.keyFileEntry.pack()
         
-        self.csvEntry = Entry(self.parent, width = 50)
-        self.csvEntry.pack()
+        self.versionLabel = Label(self.parent, text = 'Enter an exam version letter (A through D)')
+        self.versionLabel.pack()
         
-        button_grade = Button(self.parent, text='Grade file', command=self.button_grade_callback)
-        button_grade.pack()
+        self.keyVersionEntry = Entry(self.parent, width = 5)
+        self.keyVersionEntry.insert(0, 'A')
+        self.keyVersionEntry.pack()
         
-        separator = Frame(self.parent, height =2, bd = 1, relief = SUNKEN)
-        separator.pack(fill=X, padx = 5, pady = 5)
+        button_makeKey = Button(self.parent, text = "Make the Key", command = self.button_makekey_callback)
+        button_makeKey.pack()
         
+        
+        
+        '''
+        Add GUI for CSV regrader
+        '''
+        
+#         separator = Frame(self.parent, height =5, bd = 1, relief = SUNKEN)
+#         separator.pack(fill=X, padx = 5, pady = 15)
+#         
+#         button_gradebrowse = Button(self.parent, text='choose results .csv file to re-grade', command=self.button_gradebrowse_callback)
+#         button_gradebrowse.pack()
+#         
+#         self.csvEntry = Entry(self.parent, width = 50)
+#         self.csvEntry.pack()
+#         
+#         button_grade = Button(self.parent, text='Grade file', command=self.button_grade_callback)
+#         button_grade.pack()
+#         
+#         separator = Frame(self.parent, height =2, bd = 1, relief = SUNKEN)
+#         separator.pack(fill=X, padx = 5, pady = 15)
+#         
         button_exit = Button(self.parent, text = 'Exit', command=sys.exit)
         button_exit.pack()
         
@@ -73,6 +109,16 @@ class pyScanUI(Frame):
         filename = filedialog.askopenfilename()
         self.fileEntry.delete(0,END)
         self.fileEntry.insert(0,filename)
+        
+    def button_keyimg_callback(self):
+        filename = filedialog.askopenfilename()
+        self.keyImgEntry.delete(0,END)
+        self.keyImgEntry.insert(0,filename)
+    
+    def button_keyFile_callback(self):
+        filename = filedialog.askopenfilename()
+        self.keyFileEntry.delete(0,END)
+        self.keyFileEntry.insert(0,filename)
 
     def button_gradebrowse_callback(self):
         filename = filedialog.askopenfilename()
@@ -88,7 +134,14 @@ class pyScanUI(Frame):
         thresh = float(self.threshEntry.get())
         #main call to start processing
         Scanner(input_file, quests, markmissing, openQ, ignores, thresh)
+        
+    def button_makekey_callback(self):
+        keyImg = self.keyImgEntry.get()
+        keyFile = self.keyFileEntry.get()
+        keyVersion = self.keyVersionEntry.get()
+        KeyMaker(keyImg, keyFile, keyVersion)
+        
 
-    def button_grade_callback(self):
-        input_file = self.csvEntry.get()
-        #pyScan.gradeData(self,input_file)
+#     def button_grade_callback(self):
+#         input_file = self.csvEntry.get()
+#         pyScan.gradeData(self,input_file)

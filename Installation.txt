@@ -31,6 +31,4 @@ Date: 16 Jan., 2018
         5. if you don’t get an error, congrats, opencv is installed. Quit python with `quit()`.
 5. Now that you have a Python environment with opencv and other packages installed, it's time to install the pyExamScan software:
     1. Download the main [pyExamScan folder](https://longwood.box.com/s/9x8lqixu7ho6b7uavrcjcolfmg6lj5il) (from a Longwood Box account so will require you to sign in). Right click on the folder named pyexamscan_v2 and select download. Make sure the downloaded folder is named exactly `pyexamscan_v2`, and move it to your Desktop.
-6. The easiest way to run the software on a mac is to open that folder, and double-click on the **Exam Scanner.app**. You can move that ".app" anywhere you want, but it points to a folder named 'pyexamscan_v2' on your Desktop, so don't move *that* folder if you want to use the app start method.
-7. On other systems, or if your are comfortable in the terminal, use the command line to navigate to the folder (where ever you want to put it), and run `pyExamScan_v2.py`.
-8. That will open a control window to load files and run the scanner. Please see the usage instructions for more!
+6. Open that folder and open the Usage Instructions (pdf or html files!)

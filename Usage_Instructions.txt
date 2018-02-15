@@ -1,13 +1,44 @@
 # pyExamScan Usage Instructions
 
 pyExamScan has several modules, all accessible from the main control window. Currently, the software is not packaged as an app, so it must be started from the terminal. If you followed the Installation instructions carefully, you can start the app in several ways:
-1. The easiest way to run the software on a mac is to open that folder, and double-click on the **Exam Scanner.app**.
-2. On other systems, or if your are comfortable in the terminal, use the command line to navigate to the folder, and run `pyExamScan_v2.py`.
+1. There isn't a super easy way to open the application on mac, yet.
+2. Open your terminal or command line (on mac, cmd-space to search, find "terminal" and open the app).
+    A) in Terminal, navigate to the folder you installed, 
+    `cd ~/Deskstop/pyexamscan_v2`
+    then open the file
+    `./pyExamScan_v2.py`
 3. That will open a control window to load files and run the scanner.
 
+## Making your key
+1. You can modify the included answer sheet files as described below. Once you are done, save a final version as a jpg. 
+2. You are of course welcome to print this out and fill it out as the key. OR...
+3. Make a .csv file of your answers. You can do this in a spreadsheet or text editor. 
+    A) All answers go in one column without a header, each row is another question
+    B) to leave a row blank, enter IGNORE
+    C) Enter letters as capital letters, multiple answers not separated by spaces or commas. 
+    D) Export the file (or save as) and select .csv as your file format
+    E) For example, your table might look like
+    
+||
+|:---|
+|A|
+|C|
+|IGNORE|
+|ABD|
+|D|
+|FD|
+
+4. Launch pyExamScan using the instructions above
+5. In the bottom panel, you can load your jpg of the answer sheet and the csv file you just created
+6. If you have multiple versions of the test, enter the appropriate version letter (or leave it as A)
+6. Click the Make Key button. In the folder containing your key, you will now see a new jpg file. The Last Name should be filled in as "KEY" and the first name as "A" or whatever you changed the version to, and all of the bubbles should be filled in appropriately!
+7. Print this out for your records, and add it as the first page in your scan after you collect the student exams.
+
+
 ## Scanning bubbles  
-Assuming have made a key by filling out an answer sheet by hand, and the students are done with their exam. 
-1. Scan all of the students' answer sheets and the key, with the key as the first page, into a single pdf or a bunch of jpgs. I recommend at least 200 dpi, color, for the scanner settings. 
+Assuming have made a key by filling out an answer sheet by hand or the Key Maker function, and the students are done with their exam.  
+
+1. Scan all of the students' answer sheets and the key, with the key as the first page, into a single pdf or a bunch of jpgs. I recommend at least 200 dpi, color, for the scanner settings.
 2. Make a folder on your computer containing nothing but the scanned file(s).
 3. In the control window, click on the `Choose pdf of scans or jpg of key` button.
 4. In the file selection window, select either the pdf, or the jpg of the key, and click Ok.
