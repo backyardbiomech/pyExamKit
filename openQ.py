@@ -53,7 +53,7 @@ class OpenQs(object):
         '''
         #load and resize the image
         img=cv2.imread(imgpath, 1)
-        self.dispres = .7
+        self.dispres = .5
         sz=img.shape
         self.imgopenQ=cv2.resize(img.copy(),
                                 (int(self.dispres*sz[1]), int(self.dispres*sz[0])),

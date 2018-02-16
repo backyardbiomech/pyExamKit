@@ -189,6 +189,8 @@ def makeResDict():
         coord = ((i+1)*26)-12
         lett=chr(i + ord('A'))
         Qdict[lett]=coord
+    #cover blank answers
+    Qdict['-'] = 0
     return Ndict, Idict, Qdict
     
 def makeResDf(quests, scans):
