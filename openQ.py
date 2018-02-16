@@ -38,14 +38,7 @@ class OpenQs(object):
                 v = self.openQcoords[k]
                 self.gradeOpenQs(image_list[self.idx], k, v)
             self.openQidx += 1
-        
-        
-#         for k,v in sorted(self.openQcoords.items()):
-#             self.idx = 1
-#             while self.idx < len(image_list):
-#                 if self.idx < 1:
-#                     self.idx = 1
-#                 self.gradeOpenQs(image_list[self.idx], k, v)
+        cv2.destroyAllWindows()
     
     def openQkey(self, imgpath):
         '''
