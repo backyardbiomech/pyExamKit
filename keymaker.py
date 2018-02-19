@@ -67,6 +67,7 @@ class KeyMaker(object):
         for row in df.index:
             qstr= 'Q' + format(row+1, '03d')
             self.keyDict[qstr] = df.loc[row][0]
+            self.keyDict[qstr] = self.keyDict[qstr].strip()
         self.makeAreas()
         
         # output file name

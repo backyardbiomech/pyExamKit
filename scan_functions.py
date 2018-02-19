@@ -148,7 +148,7 @@ def scanDots(img, areaDict, ignores, convDict):
             #if we're working with questions
             if k[0]=='Q':
                 for lett, coord in convDict.items():
-                    if x < coord < x+w:
+                    if x < coord < x+w and h > 10: #and the height of the bounding rect is greater than 10 (controls for overlaps)
                         # test to see if the lett is already in the resDict
                         if lett not in resDict[k]:
                             resDict[k] = ''.join(sorted(resDict[k] + lett))
