@@ -89,7 +89,7 @@ class Scanner(object):
             if fnmatch.fnmatch(file, '*.jpg'):
                 # add the path to the file
                 self.aligned_image_list.append(str(self.aligneddir / file))
-
+        self.aligned_image_list.append = sorted(self.aligned_image_list)
         # run the open questions grader
         if self.openQ:
             ''' 
