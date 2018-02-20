@@ -159,8 +159,14 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                                     (markX, markY),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1,
                                     (0, 0, 255), 2)
-        # save image in marked dir
+            
         # get name of student
-        studentName=df['LastName'][row] + '_' + df['FirstName'][row] + '_' + df['studentID'][row]
-        scan_functions.saveMarkedImg(markeddir, studentName, img)
+        studentName=df['LastName'][row] + '_' + df['FirstName'][row] + '_' + df['studentID'][row] + '.jpg'
+        # save image in marked dir
+        cv2.imwrite(str(markeddir / studentName), img)
+        if row == 0: #this is the key, get the filename
+            keyname = markeddir / studentName
+            #keyname = keyname.name
+    #return the path to the marked key to include as the first page in the archive pdf
+    return keyname
         

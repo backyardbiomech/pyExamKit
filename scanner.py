@@ -4,6 +4,7 @@ import os
 import fnmatch
 import pandas as pd
 import ast
+from pathlib import Path
 
 from dicts import Dicts
 from settings import Settings
@@ -44,8 +45,16 @@ class Scanner(object):
         # pull settings into scanner object
         self.scan_settings=Settings()
         self.scan_settings.sigma = thresh
-        # initialize file and pathnames (and split pdfs into jpgs)
-        self.path, self.image_list = init_functions.filenames(input_file)
+        # self.path is a Path object
+        #Get the file path as a Path object
+        self.path=Path(input_file).parent
+        # Make all the necessary folders
+        self.aligneddir = self.path / 'aligned'
+        self.aligneddir.mkdir(exist_ok = True)
+        self.markeddir = self.path / 'marked'
+        self.markeddir.mkdir(exist_ok = True)
+        # initialize file and pathnames (and split pdfs into jpgs) 
+        self.image_list = init_functions.filenames(input_file)
         # intialize the output pdf which the scanner object will write to
         self.outpdf=FPDF('P','pt','Letter')
         # initialize the pandas dataframe to contain results
@@ -65,7 +74,7 @@ class Scanner(object):
             img = Image(self.image_list[i], self.scan_settings)
             print('Processing scan {0:1d}'.format(i))
             #save the aligned image aligned_00i.jpg in ./aligned
-            scan_functions.saveimg(self.image_list, i, img.aligned)
+            scan_functions.saveimg(self.image_list, i, img.aligned, self.aligneddir)
             self.qRes=scan_functions.rundots(img.scanimg, 
                                             self.qAreas, self.idAreas, self.nAreas, 
                                             self.ignores, 
@@ -74,12 +83,12 @@ class Scanner(object):
             for k, v in self.qRes.items():
                 self.resdf.loc[i,k]=v
         #get the aligned image dir
-        aligneddir = self.image_list[0].rsplit('/',1)[0]+'/aligned/'
+        #aligneddir = self.image_list[0].rsplit('/',1)[0]+'/aligned/'
         self.aligned_image_list = []
-        for file in os.listdir(aligneddir):
+        for file in os.listdir(str(self.aligneddir)):
             if fnmatch.fnmatch(file, '*.jpg'):
                 # add the path to the file
-                self.aligned_image_list.append(aligneddir+file)
+                self.aligned_image_list.append(str(self.aligneddir / file))
 
         # run the open questions grader
         if self.openQ:
@@ -100,19 +109,18 @@ class Scanner(object):
             self.resdf = pd.concat([self.resdf, openQs.openQres], axis=1)
         
         # write resdf to csv
-        self.resCsv = self.path + 'results.csv'
+        self.resCsv = str(self.path / 'results.csv')
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
         
         # grade the results csv file and save out pts per question csv file
         grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ)
         
         # mark questions
-        markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'
-        grade_functions.markSheets(self.resCsv, self.aligned_image_list, markeddir, self.qAreas, self.Qdict, self.markmissing)
-        # need to save out marked pdf and marked jpgs
+        # markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'
+        keyname = grade_functions.markSheets(self.resCsv, self.aligned_image_list, self.markeddir, self.qAreas, self.Qdict, self.markmissing)
         # intialize the output pdf
         self.outpdf=FPDF('P','pt','Letter')
-        scan_functions.savePdf(markeddir, self.outpdf)
-        self.outpdf.output(self.path + 'marked.pdf', 'F')
+        scan_functions.savePdf(self.markeddir, self.outpdf, keyname)
+        self.outpdf.output(str(self.path / 'marked.pdf'), 'F')
 
 

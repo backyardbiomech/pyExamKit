@@ -4,6 +4,7 @@ import fnmatch
 import os
 import grade_functions
 from fpdf import FPDF
+from pathlib import Path
     
     
 def imgReg(img, regPts, scan_settings):
@@ -156,19 +157,14 @@ def scanDots(img, areaDict, ignores, convDict):
                 resDict[k] = '-'    
     return resDict
 
-def saveimg(image_list, i, scanimg):
-    basename = image_list[i].split('.')[0] #includes full path, not extension
-    pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
-    if not os.path.isdir(pathname + 'aligned'):
-        os.mkdir(pathname + 'aligned')
-    savename = pathname + '/aligned/aligned_' + '{0:03d}'.format(i) + '.jpg'
+def saveimg(image_list, i, scanimg, aligneddir):
+#     basename = image_list[i].split('.')[0] #includes full path, not extension
+#     
+#     pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
+    if not aligneddir.is_dir():
+        aligneddir.mkdir()
+    savename = str(aligneddir / 'aligned_') + '{0:03d}'.format(i) + '.jpg'
     cv2.imwrite(savename, scanimg)
-    
-def saveMarkedImg(markeddir, studentName, img):
-    if not os.path.isdir(markeddir):
-        os.mkdir(markeddir)
-    savename = markeddir + studentName + '.jpg'
-    cv2.imwrite(savename, img)
     
 def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
     '''
@@ -190,14 +186,14 @@ def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
     #return the dictionary of results
     return qRes
 
-def savePdf(markeddir, outpdf):
+def savePdf(markeddir, outpdf, keyname):
     #get a list of all the tmp#.jpg temporary images
-    filelist=[]
-    for file in os.listdir(markeddir):
-        if fnmatch.fnmatch(file, '*.jpg'):
-            filelist.append(markeddir + '/' + file)
-    #go through each file, add it to the pdf, and delete the temporary file
-    for page in sorted(filelist):
+    filelist=[str(keyname)]
+    
+    for file in os.listdir(str(markeddir)):
+        if fnmatch.fnmatch(file, '*.jpg') and not fnmatch.fnmatch(file, str(keyname)):
+            filelist.append(str(markeddir / file))
+    #go through each file, add it to the pdf
+    for page in filelist:
         outpdf.add_page()
         outpdf.image(page, 0, 0, 612)
-        #os.remove(page)

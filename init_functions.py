@@ -3,39 +3,62 @@ import cv2
 import os
 import fnmatch
 import pandas as pd
+from pathlib import Path
 
 
 def filenames(input_file):
+    #Get the file path as a Path object
+    filename=Path(input_file)
+    #Get the extension
+    ext = filename.suffix
+    #Get the path to the current directory
+    pathname = filename.parent
+    # Get the name of the file
+    basename = filename.stem
     #get the name of the file
-    basename = input_file.split('.')[0] #includes full path, not extension
-    ext = input_file.split('.')[1] #extension
-    pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
+    #basename = input_file.split('.')[0] #includes full path, not extension
+    #ext = input_file.split('.')[1] #extension
+    #pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
+    
 
     # open a pdf file containing all of the scans and make jpegs
-    if ext == 'pdf':
+    if ext.lower() == '.pdf': 
         # write the jpgs, and change input_file to name of key jpg
         input_file = splitpdf(input_file)
-       
+        #Get the file path as a Path object
+        filename=Path(input_file)
+        #Get the path to the current directory
+        pathname = filename.parent
+
+    image_list=[]
     # create list of files beginning with key   
-    image_list = [input_file] 
+    image_list.append(input_file)
     #for all the files in the current directory
-    for file in os.listdir(pathname):
+    for file in os.listdir(str(pathname)):
         # if the file is a jpg and not the key
         if ((fnmatch.fnmatch(file, '*.jpg') or fnmatch.fnmatch(file,'*.jpeg')) and not 
-                fnmatch.fnmatch(pathname+file,input_file)):
+                fnmatch.fnmatch(str(pathname / file),input_file)):
             # add the path to the file
-            image_list.append(pathname+file)
+            image_list.append(str(pathname / file))
     #make a new directory that will contain all of the outputs  
 #     if not os.path.isdir(basename + '_marked'):
 #         os.mkdir(basename + '_marked')
-    return pathname, image_list
+    return image_list
     
 def splitpdf(input_file):
     '''
-    takes in a pdf file, splits it out to jpgs in same directory, with same base name
+    takes in a pdf file, splits it out to jpgs in jpgdir (Path object), with same base name
     '''
-    basename = input_file.split('.')[0] #includes full path, not extension
-    pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
+    #Get the file path as a Path object
+    filename=Path(input_file)
+    #Get the path to the current directory
+    pathname = filename.parent
+    # Get the name of the file
+    basename = filename.stem
+    # make a new folder to put the jpegs in
+    jpgdir = Path(pathname) / 'scanJPGs'
+    jpgdir.mkdir(exist_ok = True)
+    
     pdf = open(input_file, 'rb').read()
     # find the image in the pdf
     #stuff about bytes
@@ -68,7 +91,8 @@ def splitpdf(input_file):
         nparr = np.fromstring(jpg, np.uint8)
         jpg_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         #save jpg
-        savename=basename + '_scan_'+'{0:03d}'.format(njpg)+'.jpg'
+        savename = str(jpgdir / '_scan_')+'{0:03d}'.format(njpg)+'.jpg'
+        #savename=basename + '_scan_'+'{0:03d}'.format(njpg)+'.jpg'
         cv2.imwrite(savename, jpg_np)
         if njpg == 0:
             key = savename
