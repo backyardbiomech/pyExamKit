@@ -89,7 +89,7 @@ class Scanner(object):
             if fnmatch.fnmatch(file, '*.jpg'):
                 # add the path to the file
                 self.aligned_image_list.append(str(self.aligneddir / file))
-        self.aligned_image_list.append = sorted(self.aligned_image_list)
+        self.aligned_image_list = sorted(self.aligned_image_list)
         # run the open questions grader
         if self.openQ:
             ''' 
@@ -119,8 +119,10 @@ class Scanner(object):
         # markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'
         keyname = grade_functions.markSheets(self.resCsv, self.aligned_image_list, self.markeddir, self.qAreas, self.Qdict, self.markmissing)
         # intialize the output pdf
+        print('Saving marked files')
         self.outpdf=FPDF('P','pt','Letter')
         scan_functions.savePdf(self.markeddir, self.outpdf, keyname)
         self.outpdf.output(str(self.path / 'marked.pdf'), 'F')
+        print('All steps complete!')
 
 

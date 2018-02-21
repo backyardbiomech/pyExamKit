@@ -191,7 +191,7 @@ def savePdf(markeddir, outpdf, keyname):
     filelist=[str(keyname)]
     
     for file in os.listdir(str(markeddir)):
-        if fnmatch.fnmatch(file, '*.jpg') and not fnmatch.fnmatch(file, str(keyname)):
+        if fnmatch.fnmatch(file, '*.jpg') and not fnmatch.fnmatch(file, str(keyname.name)):
             filelist.append(str(markeddir / file))
     #go through each file, add it to the pdf
     for page in filelist:
