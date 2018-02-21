@@ -30,7 +30,7 @@ def gradeResults(resCsv, selectAll, openQ):
     df.loc['numb_correct']=0
     #create a new dataframe that matches the results frame, but that contains points gained per question per student (replace answers with points gained
     ptsdf=df.copy(deep=True)
-    ptsdf[:] = 0.0
+    ptsdf.loc[:,3:] = 0.0
     #loop through students
     for row in range(1,df.shape[0]-1):
         row=str(row)
@@ -43,6 +43,20 @@ def gradeResults(resCsv, selectAll, openQ):
             #compare student's answer to key
             key = df[col][0]
             if key == 'ignore':
+                continue
+            #if it's an open ended question
+            if key == 'CC':
+                ans = df[col][row]
+                if ans == 'CC':
+                    score += 2
+                    partscore += 2
+                    ptsdf.loc[row,col]=2
+                    df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
+                if ans == 'CX':
+                    score =+ 1
+                    partscore += 1
+                    ptsdf.loc[row,col]=2
+                # go on to the next question
                 continue
             ans = df[col][row]
             #if no partial credit calculations necessary

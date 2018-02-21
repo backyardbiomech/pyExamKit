@@ -187,7 +187,7 @@ def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
     return qRes
 
 def savePdf(markeddir, outpdf, keyname):
-    #get a list of all the tmp#.jpg temporary images
+    #get a list of all the .jpg images in the markeddir
     filelist=[str(keyname)]
     
     for file in os.listdir(str(markeddir)):
