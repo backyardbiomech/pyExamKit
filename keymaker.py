@@ -7,6 +7,7 @@ import numpy as np
 import ast
 from PIL import Image, ImageDraw
 import PIL
+from pathlib import Path
 
 from dicts import Dicts
 from settings import Settings
@@ -32,11 +33,12 @@ class KeyMaker(object):
         self.keyImg = keyImg
         self.keyFile = keyFile
         self.keyVersion = keyVersion
+        self.path = Path(self.keyFile).parent
         # pull settings into keymaker object
         self.scan_settings=Settings()
         #self.scan_settings.sigma = thresh
         # initialize file and pathnames (and split pdfs into jpgs)
-        self.path, self.image_list = init_functions.filenames(self.keyImg)
+        self.image_list = init_functions.filenames(self.keyImg)
         # intialize the output pdf which the scanner object will write to
         self.outpdf=FPDF('P','pt','Letter')
         # initialize the pandas dataframe to contain results
@@ -71,7 +73,7 @@ class KeyMaker(object):
         self.makeAreas()
         
         # output file name
-        outname = self.path + 'Key_ver' + ver + '.jpg'
+        outname = str(self.path.joinpath('Key_ver' + ver + '.jpg'))
         #resize the image
         width=1224
         wpercent = width/img.size[0]
@@ -99,6 +101,7 @@ class KeyMaker(object):
             draw.ellipse([mark, (mark[0]+24, mark[1]+24)], fill = 'black')
         #save the image
         img2.save(outname)
+        print("Key saved as " + outname)
         
     def makeAreas(self):
         # make a dictionary containing the location of all of the questions#first column first 15
