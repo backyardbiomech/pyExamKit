@@ -17,7 +17,7 @@ def getid(idRes, nRes):
     return lastName, firstName, studentID
 
     
-def gradeResults(resCsv, selectAll, openQ):
+def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
     #open the csv into a Pandas data frame
     df=pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
@@ -48,23 +48,23 @@ def gradeResults(resCsv, selectAll, openQ):
             if key == 'CC':
                 ans = df[col][row]
                 if ans == 'CC':
-                    score += 2
-                    partscore += 2
-                    ptsdf.loc[row,col]=2
+                    score += openVal
+                    partscore += openVal
+                    ptsdf.loc[row,col] = openVal
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
                 if ans == 'CX':
-                    score =+ 1
-                    partscore += 1
-                    ptsdf.loc[row,col]=2
+                    score =+ openVal / 2
+                    partscore += openVal / 2
+                    ptsdf.loc[row,col] = openVal / 2
                 # go on to the next question
                 continue
             ans = df[col][row]
             #if no partial credit calculations necessary
             if not selectAll or not openQ:
                 if ans == key:
-                    score += 1
-                    partscore += 1
-                    ptsdf.loc[row,col]=1
+                    score += bubbleVal
+                    partscore += bubbleVal
+                    ptsdf.loc[row,col] = bubbleVal
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
             # if necessary to calculate for partial credit:
             else:
@@ -72,16 +72,16 @@ def gradeResults(resCsv, selectAll, openQ):
                 s = difflib.SequenceMatcher(None, key, ans)
                 #if it's completely right, add one
                 if s.ratio() == 1:
-                    score += 1
-                    partscore += 1
-                    ptsdf.loc[row,col]=1
+                    score += bubbleVal
+                    partscore += bubbleVal
+                    ptsdf.loc[row,col] = bubbleVal
                 else:
                     ptsdf.loc[row,col]=0
                 #if anything matches...
                 if 0 < s.ratio() < 1:
                     ptscore=0
                     #each bubble is worth 1/(# of filled bubbles on key) up to 1
-                    partial=1/len(key)
+                    partial=bubbleVal/len(key)
                     #for each bubble in the student's answer
                     for i in ans:
                         #if it's in the key, add the fractional point

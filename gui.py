@@ -42,6 +42,18 @@ class pyScanUI(Frame):
         self.openQcheck = Checkbutton(self.parent, text = 'Any open ended questions to grade on the fly?', variable = self.openQvar)
         self.openQcheck.pack()
         
+        self.bubbleValLabel = Label(self.parent, text = 'points per bubble question')
+        self.bubbleValLabel.pack()
+        self.bubbleValEntry = Entry(self.parent, width = 10)
+        self.bubbleValEntry.insert(0, '1')
+        self.bubbleValEntry.pack()
+        
+        self.openValLabel = Label(self.parent, text = 'points per open-ended question')
+        self.openValLabel.pack()
+        self.openValEntry = Entry(self.parent, width = 10)
+        self.openValEntry.insert(0, '2')
+        self.openValEntry.pack()
+        
         self.threshlabel = Label(self.parent, text = "Don't change the value below unless you are having problems. \n Decrease to 0.2 to pick up lighter marks, \n increase to 0.3 to avoid picking up erased marks")
         self.threshlabel.pack()
         
@@ -132,8 +144,10 @@ class pyScanUI(Frame):
         openQ=bool(self.openQvar.get())
         ignores = self.ignoreEntry.get()
         thresh = float(self.threshEntry.get())
+        bubbleVal = float(self.bubbleValEntry.get())
+        openVal = float(self.openValEntry.get())
         #main call to start processing
-        Scanner(input_file, quests, markmissing, openQ, ignores, thresh)
+        Scanner(input_file, quests, markmissing, openQ, ignores, thresh, bubbleVal, openVal)
         
     def button_makekey_callback(self):
         keyImg = self.keyImgEntry.get()
