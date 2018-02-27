@@ -60,7 +60,7 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
                 continue
             ans = df[col][row]
             #if no partial credit calculations necessary
-            if not selectAll or not openQ:
+            if not selectAll and not openQ:
                 if ans == key:
                     score += bubbleVal
                     partscore += bubbleVal
@@ -81,15 +81,15 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
                 if 0 < s.ratio() < 1:
                     ptscore=0
                     #each bubble is worth 1/(# of filled bubbles on key) up to 1
-                    partial=bubbleVal/len(key)
+                    partial = bubbleVal/len(key)
                     #for each bubble in the student's answer
                     for i in ans:
                         #if it's in the key, add the fractional point
                         if i in key:
-                            ptscore=ptscore+partial
+                            ptscore = ptscore + partial
                         #if it's not in the key, penalize by the fractional point
                         if i not in key:
-                            ptscore=ptscore-partial
+                            ptscore = ptscore - partial
                     #make sure the partial score is positive and add
                     if ptscore>0:
                         partscore = partscore + ptscore
@@ -154,7 +154,7 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                                         (0,255,0), 2)
                         key.remove(lett)
                     # if that letter is not in the key, mark with red X
-                    else:
+                    elif lett != '-':
                         cv2.putText(img, 'X',
                                         (markX, markY),
                                         cv2.FONT_HERSHEY_SIMPLEX, 1,

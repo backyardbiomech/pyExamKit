@@ -135,16 +135,16 @@ def scanDots(img, areaDict, ignores, convDict):
             #if we're working with name bubbles
             if k[0]=='F':
                 for lett, coord in convDict.items():
-                    if x< coord < x+w:
+                    if x< coord < x+w and h > 10:
                         resDict[k] = lett
             if k[0]=='N':
                 for lett, coord in convDict.items():
-                    if x < coord < x+w:
+                    if x < coord < x+w and h > 10:
                         resDict[k] = lett
             #if we're working with ID numbers
             if k[0]=='I':
                 for lett, coord in convDict.items():
-                    if y < coord < y+h:
+                    if y < coord < y+h and w > 10:
                         resDict[k] = lett
             #if we're working with questions
             if k[0]=='Q':
@@ -154,7 +154,10 @@ def scanDots(img, areaDict, ignores, convDict):
                         if lett not in resDict[k]:
                             resDict[k] = ''.join(sorted(resDict[k] + lett))
             if len(resDict[k]) == 0:
-                resDict[k] = '-'    
+                resDict[k] = '-'
+             #fixing odd behavior where some question results could contain both letters and '-'   
+            if '-' in resDict[k] and resDict[k].isupper():
+                resDict[k] = resDict[k].replace('-','')
     return resDict
 
 def saveimg(image_list, i, scanimg, aligneddir):
