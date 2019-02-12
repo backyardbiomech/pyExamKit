@@ -42,6 +42,10 @@ class pyScanUI(Frame):
         self.openQcheck = Checkbutton(self.parent, text = 'Any open ended questions to grade on the fly?', variable = self.openQvar)
         self.openQcheck.pack()
         
+        self.corrvar = IntVar()
+        self.corrcheck = Checkbutton(self.parent, text = 'Do you want the correct answers marked?', variable = self.corrvar)
+        self.corrcheck.pack()        
+        
         self.bubbleValLabel = Label(self.parent, text = 'points per bubble question')
         self.bubbleValLabel.pack()
         self.bubbleValEntry = Entry(self.parent, width = 10)
@@ -142,12 +146,13 @@ class pyScanUI(Frame):
         quests = int(self.numQEntry.get())
         markmissing=bool(self.setavar.get())
         openQ=bool(self.openQvar.get())
+        corrmark=bool(self.corrvar.get())
         ignores = self.ignoreEntry.get()
         thresh = float(self.threshEntry.get())
         bubbleVal = float(self.bubbleValEntry.get())
         openVal = float(self.openValEntry.get())
         #main call to start processing
-        Scanner(input_file, quests, markmissing, openQ, ignores, thresh, bubbleVal, openVal)
+        Scanner(input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal)
         
     def button_makekey_callback(self):
         keyImg = self.keyImgEntry.get()

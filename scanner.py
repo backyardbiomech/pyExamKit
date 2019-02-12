@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, ignores, thresh, bubbleVal, openVal):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -37,6 +37,7 @@ class Scanner(object):
         self.quests = quests
         self.markmissing = markmissing #means select all that apply questions
         self.openQ = openQ
+        self.corrMark = corrmark
         self.bubbleVal = bubbleVal
         self.openVal = openVal
         if len(ignores)>0:
@@ -115,11 +116,11 @@ class Scanner(object):
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
         
         # grade the results csv file and save out pts per question csv file
-        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal)
+        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir)
         
         # mark questions
         # markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'
-        keyname = grade_functions.markSheets(self.resCsv, self.aligned_image_list, self.markeddir, self.qAreas, self.Qdict, self.markmissing)
+        keyname = grade_functions.markSheets(self.resCsv, self.aligned_image_list, self.markeddir, self.qAreas, self.Qdict, self.markmissing, self.corrMark)
         # intialize the output pdf
         print('Saving marked files')
         self.outpdf=FPDF('P','pt','Letter')

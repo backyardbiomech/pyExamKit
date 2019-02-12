@@ -4,6 +4,7 @@ import pandas as pd
 import fnmatch
 import scan_functions
 import difflib
+from pathlib import Path
 
     
 def getid(idRes, nRes):
@@ -17,7 +18,7 @@ def getid(idRes, nRes):
     return lastName, firstName, studentID
 
     
-def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
+def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
     #open the csv into a Pandas data frame
     df=pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
@@ -59,6 +60,23 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
                 # go on to the next question
                 continue
             ans = df[col][row]
+            # catch when ans is '-' meaning no answer was scanned
+            if ans == '-':
+                    # get scan number (index), name, and L number
+                    alertStr = 'Name: {},{}, Lnumber: {} had no answer scanned for question {}'.format(
+                                df.loc[row, 'LastName'],
+                                df.loc[row, 'FirstName'],
+                                df.loc[row, 'studentID'],
+                                str(col))
+                    # check if ALERT file exists, if it does, append, if it doesn't, create it and append
+                    alertPath = Path (markeddir.parent / 'ALERT.txt')
+                    if not alertPath.exists():
+                        alertPath.write_text(alertStr)
+                    else:
+                        with open(alertPath, 'a') as f:
+                            f.write('\n')
+                            f.write(alertStr)
+                            
             #if no partial credit calculations necessary
             if not selectAll and not openQ:
                 if ans == key:
@@ -102,9 +120,16 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal):
     #write the dataframe back to the csv
     df.to_csv(resCsv, index=True, index_label = 'index')
     ptsdf.to_csv(resCsv.split('.')[0] +'perquestions.csv')
+    # make a grades csv for upload to canvas, sorted by last name, just names, Lnum, and scores without the key
+    cols = ['LastName','FirstName','studentID','partialscore']
+    gradesdf = df[cols].copy()
+    gradesdf = gradesdf.drop(index='0')
+    gradesdf = gradesdf.drop(index='numb_correct')
+    gradesdf = gradesdf.sort_values(by=['LastName', 'FirstName','studentID'])
+    gradesdf.to_csv(resCsv.split('.')[0]+'forCanvas.csv')
     print('Done grading')
 
-def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing):
+def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr):
     # load results csv
     df=pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
@@ -173,6 +198,16 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                                     (markX, markY),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1,
                                     (0, 0, 255), 2)
+                # if mark correct is selected and the student did not mark the correct answer
+                if markCorr and len(key)>0:
+                    for lett in key:
+                        coord = qDict[lett]
+                        markX=qAreas[col][0][0]+coord-8
+                        cv2.putText(img, '#',
+                                        (markX, markY),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 1,
+                                        (255,0,0), 2)
+                
             
         # get name of student
         studentName=df['LastName'][row] + '_' + df['FirstName'][row] + '_' + df['studentID'][row] + '.jpg'
