@@ -9,7 +9,9 @@ from setuptools import setup
 
 APP = ['pyExamScan_v2.py']
 DATA_FILES = []
-OPTIONS = {'excludes': "jupyter, jupyterlab, jupyter_console, statsmodels, ipython"}#{'argv_emulation': True}#,
+OPTIONS = {'excludes': "jupyter, jupyterlab, jupyter_console, statsmodels, IPython, ipykernel",
+            'includes': "PIL, zipimport, cv2, zipimport, numpy_distutils",
+            'packages': "pandas, numpy"}#{'argv_emulation': True}#,
         #'excludes': "PyQt5, scipy, jupyter, jupyterlab,numpy,pandas,jupyter_console,matplotlib,statsmodels,ipython"}
 
 setup(
