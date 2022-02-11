@@ -1,23 +1,33 @@
 # pyExamScan Usage Instructions
 
-pyExamScan has several modules, all accessible from the main control window. Currently, the software is not packaged as an app, so it must be started from the terminal. If you followed the Installation instructions carefully, you can start the app in several ways:
-1. There isn't a super easy way to open the application on mac, yet.
-2. Open your terminal or command line (on mac, cmd-space to search, find "terminal" and open the app).
-    A) in Terminal, navigate to the folder you installed, 
-    `cd ~/Deskstop/pyexamscan_v2`
-    then open the file
-    `./pyExamScan_v2.py`
-3. That will open a control window to load files and run the scanner.
+pyExamScan has several modules, all accessible from the main control window. Currently, the software is not packaged as an app, so it must be started from the terminal. If you followed the Installation instructions carefully, you can start the app as follows:
+
+1. Open your terminal or command line (on mac, cmd-space to search, find "terminal" and open the app).
+2. in Terminal, navigate to the folder you installed, 
+    
+    ```bash
+    cd ~/Desktop/pyexamscan_v2
+    ```
+    
+3. Run the program with 
+
+    ```bash
+    python pyExamScan_v2.py
+    ```
+    
+4. That will open a control window to load files and run the scanner.
 
 ## Making your key
-1. You can modify the included answer sheet files as described below. Once you are done, save a final version as a jpg. 
-2. You are of course welcome to print this out and fill it out as the key. OR...
-3. Make a .csv file of your answers. You can do this in a spreadsheet or text editor. 
-    A) All answers go in one column without a header, each row is another question
-    B) to leave a row blank, enter IGNORE
-    C) Enter letters as capital letters, multiple answers not separated by spaces or commas. 
-    D) Export the file (or save as) and select .csv as your file format
-    E) For example, your table might look like
+### Option 1 - fill in the bubbles:
+1. Print out one of the answer sheets and fill it out as the key. Scan it with the exams as the first sheet in the stack **OR...**
+
+### Option 2 - let the software fill in the bubbles:
+1. Make a .csv file of your answers. You can do this in a spreadsheet or text editor. 
+    + All answers go in one column without a header, each row is another question
+    + to leave a row blank, enter IGNORE
+    + Enter letters as capital letters, multiple answers not separated by spaces or commas. 
+    + Export the file (or save as) and select .csv as your file format
+    + For example, your table might look like
     
 ||
 |:---|
@@ -28,35 +38,34 @@ pyExamScan has several modules, all accessible from the main control window. Cur
 |D|
 |FD|
 
-4. Launch pyExamScan using the instructions above
-5. In the bottom panel, you can load your jpg of the answer sheet and the csv file you just created
-6. If you have multiple versions of the test, enter the appropriate version letter (or leave it as A)
-6. Click the Make Key button. In the folder containing your key, you will now see a new jpg file. The Last Name should be filled in as "KEY" and the first name as "A" or whatever you changed the version to, and all of the bubbles should be filled in appropriately!
-7. Print this out for your records, and add it as the first page in your scan after you collect the student exams.
-
+2. Launch pyExamScan using the instructions above
+3. In the bottom panel, you can load the jpg of the blank answer sheet and select csv file you just created
+    + If you have multiple versions of the test, enter the appropriate version letter (or leave it as A)
+4. Click the Make Key button. In the folder containing your key, you will now see a new jpg file. The Last Name should be filled in as "KEY" and the first name as "A" or whatever you changed the version to, and all of the bubbles should be filled in appropriately!
+5. Print this out for your records, and add it as the first page in your scan after you collect the student exams.
 
 ## Scanning bubbles  
 Assuming have made a key by filling out an answer sheet by hand or the Key Maker function, and the students are done with their exam.  
 
-1. Scan all of the students' answer sheets and the key, with the key as the first page, into a single pdf or a bunch of jpgs. I recommend at least 200 dpi, color, for the scanner settings.
+1. Scan all of the students' answer sheets and the key, with the key as the first page, into a single pdf or a bunch of jpgs. I recommend at least 200 dpi, color, for the scanner settings. If you can't scan all at once, scan as jpgs because pdfs cannot be easily modified after being created
 2. Make a folder on your computer containing nothing but the scanned file(s).
 3. In the control window, click on the `Choose pdf of scans or jpg of key` button.
 4. In the file selection window, select either the pdf, or the jpg of the key, and click Ok.
 5. In the control window, enter the number of the last question you want graded.
-6. If you used "select all that apply" questions, where the correct answer could be one to all of the possibilities, click the "Any select all that apply" checkbox.
-7. Click "Run Scan", and wait for completion!
+6. If you used "select all that apply" questions, where the correct answer could be none to all of the possibilities, click the `Any select all that apply?` checkbox.
+7. Click `Run Scan`, and wait for completion!
 
 ## Open ended questions  
 If you want to include any fill in the blank kinds of questions, and you want to grade/mark them while scanning:
 1. Modify the answer sheet as mentioned below.
 2. Select the scans as mentioned above.
-3. If the open ended question is in the middle of the exam (not stacked at the end), that set of bubbles needs to be "ignored" by the bubble scanner. Enter that questions number (or multiple number separated by commas) in the appropriate box in the control window.
-4. Check the box for "any open ended questions to grade on the fly?"
-4. Click "Run Scan".
+3. If the open ended question is in the middle of the exam (not stacked at the end), that set of bubbles needs to be "ignored" by the bubble scanner. Enter that question's number (or multiple numbers separated by commas) in the appropriate box in the control window.
+4. Check the box for `any open ended questions to grade on the fly?`
+4. Click `Run Scan`.
 5. An image of the key will appear. 
     1. On that image, use the mouse to draw a box around the answer area for the first open ended question. 
     2. Draw boxes around the answer areas for other questions. At this time, there is no way to delete a drawn box! If you make an error, you have to close everything and start again.
-    3. When you have drawn all of your boxes (one per open ended question), hit the 'g' key. And the window will disappear.
+    3. When you have drawn all of your boxes (one per open ended question), hit the `g` key. And the window will disappear.
 6. After the bubbles have been scanned (a short wait), a small window will open for grading the open ended questions:
     1. The top of the window shows what was in the first box you drew on the key, and the bottom shows what was in the box on the first student's sheet.
     2. To award full credit, hit the 'c' key twice. The next student's answer should appear.
@@ -66,7 +75,8 @@ If you want to include any fill in the blank kinds of questions, and you want to
     6. When you've graded the last question for the last student, the image window will close and the software will finish grading.
     
 ## Using select all that apply questions
-If you check the "select all that apply questions" box on the control window, *all* questions will be graded as select all that apply. What does this mean for grading?:
+
+If you check the `select all that apply questions` box on the control window, *all* questions will be graded as select all that apply. What does this mean for grading?:
 + Partial credit can be awarded for select all that apply questions. For example, if a question has 3 correct answers (A, B, and C), each correct answer is worth 1/3 points. If a student picks two correct (A, B), they get 0.66 points for that question. Each incorrect answer is penalized with the same fraction, so if a student put two correct on one incorrect answer (A, B, D), they get 0.66 - 0.33 = 0.33 points. If *n* is the number of correct answers, *c* is the number of correct answers selected by the student, and *i* is the number of incorrect answers, the points received by the student is calculated as *c(1/n)-i(1/n)*. Also note that that this value will not be less than zero.
 + If there is only one correct answer, though, it is effectively graded as a one-answer question. E.g., if the correct answer is A, and a student puts A *and* B, they get zero points. Each correct answer is 1/n, which is 1/1, or 1. Each incorrect answer is a penalty of 1/n, or 1/1, or 1. The student effectively gets 1 point for putting A, but is then penalized 1 point for putting B, so they get zero.
 
