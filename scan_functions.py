@@ -27,7 +27,7 @@ def getRegPts(img, scan_settings):
     ret, imgthresh = cv2.threshold(bw.copy(), scan_settings.volthresh, 255, cv2.THRESH_BINARY_INV)
     
     # find contours
-    (_, cnts, _) = cv2.findContours(imgthresh,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    (cnts, _) = cv2.findContours(imgthresh,cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     #get the contours sorted by size
     cnts = sorted(cnts, key = cv2.contourArea, reverse = True)
     # initiate the alignment points list
@@ -110,7 +110,7 @@ def scanDots(img, areaDict, ignores, convDict):
         #isolate the image in the search area
         scanArea=img[pt1[1]:pt2[1],pt1[0]:pt2[0]]
         #find the countours in that area
-        (_, cnts, _) = cv2.findContours(scanArea, 
+        (cnts, _) = cv2.findContours(scanArea, 
                                         cv2.RETR_EXTERNAL, 
                                         cv2.CHAIN_APPROX_SIMPLE)
         #initiate a list for contour areas
