@@ -78,7 +78,7 @@ class KeyMaker(object):
         width=1224
         wpercent = width/img.size[0]
         height = int((float(img.size[1]) * float(wpercent)))
-        img = img.resize((width, height), PIL.Image.ANTIALIAS)
+        img = img.resize((width, height), PIL.Image.LANCZOS)
         
         verDict={'A':(122,262), 'B':(148,262),'C':(176,262),'D':(202,262)}
         #copy the image for drawing

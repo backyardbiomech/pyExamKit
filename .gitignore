@@ -13,6 +13,7 @@ __pycache__/
 dist/
 build/
 .github/agents/
+memory/
 *.spec
 
 # Virtual environments

@@ -50,7 +50,7 @@ Assuming have made a key by filling out an answer sheet by hand or the Key Maker
 1. Scan all of the students' answer sheets and the key, with the key as the first page, into a single pdf or a bunch of jpgs. I recommend at least 200 dpi, color, for the scanner settings. If you can't scan all at once, scan as jpgs because pdfs cannot be easily modified after being created
 2. Make a folder on your computer containing nothing but the scanned file(s).
 3. In the control window, click on the `Choose pdf of scans or jpg of key` button.
-4. In the file selection window, select either the pdf, or the jpg of the key, and click Ok.
+4. In the file selection window, select either the pdf (with the scanned key as the first page), or the jpg of the key with all of the student jpgs in the same folder, and click Ok.
 5. In the control window, enter the number of the last question you want graded.
 6. If you used "select all that apply" questions, where the correct answer could be none to all of the possibilities, click the `Any select all that apply?` checkbox.
 7. Click `Run Scan`, and wait for completion!
@@ -62,15 +62,17 @@ If you want to include any fill in the blank kinds of questions, and you want to
 3. If the open ended question is in the middle of the exam (not stacked at the end), that set of bubbles needs to be "ignored" by the bubble scanner. Enter that question's number (or multiple numbers separated by commas) in the appropriate box in the control window.
 4. Check the box for `any open ended questions to grade on the fly?`
 4. Click `Run Scan`.
-5. An image of the key will appear. 
-    1. On that image, use the mouse to draw a box around the answer area for the first open ended question. 
-    2. Draw boxes around the answer areas for other questions. At this time, there is no way to delete a drawn box! If you make an error, you have to close everything and start again.
+5. After grading all of the bubble questions, an image of the key will appear. 
+    1. On that image, use the mouse to draw a box around the answer area for the first open ended question. Do not include the printed question number or any printed labels in the box, just the area where the students wrote their answer. The software will use OCR to read the handwriting in that box and suggest a grade based on the key you provided for that question. 
+    2. Draw boxes around the answer areas for other questions. The only way to edit a box is to remove the last-drawn box and redraw it. 
     3. When you have drawn all of your boxes (one per open ended question), hit the `g` key. And the window will disappear.
-6. After the bubbles have been scanned (a short wait), a small window will open for grading the open ended questions:
+6. A small window will open for grading the open ended questions:
     1. The top of the window shows what was in the first box you drew on the key, and the bottom shows what was in the box on the first student's sheet.
-    2. To award full credit, hit the 'c' key twice. The next student's answer should appear.
-    3. To award half credit, hit the 'c' key then the 'x' key (or 'x' then 'c', it doesn't matter). The next student's answer should appear.
-    4. To award no credit, hit the 'x' key twice. The next student's answer should appear.
+    2. You will see a text box where you can correct the OCR reading of your key if it didn't read your writing correctly.
+    3. You will see the OCR of the student's answer, and a suggested grade (correct, partial, incorrect). If you hit ENTER, you accept that suggested grade.
+    2. To award full credit, hit the 'c' key. The next student's answer should appear.
+    3. To award half credit, hit the 'p' key . The next student's answer should appear.
+    4. To award no credit, hit the 'x' key. The next student's answer should appear.
     5. To go back a student (or to a previous question), hit the 'b' key as many times as needed. Note that this requires that you regrade everything you reload. For example, if you hit 'b' five times to back through the last five students, you have to repeat the grading on all of those five students for that answer.
     6. When you've graded the last question for the last student, the image window will close and the software will finish grading.
     
@@ -110,9 +112,15 @@ The scanning software depends on precise locations of bubbles and the three blac
 All modification can be done in most pdf editors, without needing to use Illustrator
 + If I have a 50 question exam, I use the 60 question file. I leave the outlined box on the right, and just use a white box to cover up questions 51-60.
 + For open ended questions, put the number and a blank line in the answer box. To use the scanner to grade the open ended questions, the answers for all students must be in the same place!
+  + **Answer blank design tips for best OCR accuracy** (the software uses a handwriting recognition engine to suggest grades for open-ended answers):
+    + Use a **single horizontal underline**, not a full rectangle box. Vertical box borders are misread as parentheses by the OCR engine and degrade accuracy.
+    + Print the line in **light gray** rather than black. Under auto-contrast processing, a light gray line fades out while pencil or pen handwriting stays dark, so the OCR sees mostly just the written word.
+    + Make the blank **at least 6–8 cm wide** so students have room to write legibly and the full word fits within the crop region.
+    + Place any printed label (e.g. "Final Answer:") **above** the blank line, not beside it. This lets you draw a tight crop box in the grading tool that captures only the handwriting area.
+    + When drawing the crop box during grading setup, crop **tightly around the handwriting area** and exclude the printed line and labels — the less extraneous ink in the crop, the better the OCR result.
 + If an open ended question occurs in the middle of an exam (say, \#14), make the answer blank in space on the right, but also cover up the bubbles for question 14. I draw a white box to cover the bubbles, then add a black arrow facing right. Don't forget to tell the scanner to "ignore" that question when you run the scans!
 + You can block out and overwrite anything at the top. E.g. you can cover up the Honor Pledge with a white box, then add a text box of anything else in that space. You can cover up all but the first four columns for the ID numbers and use assigned 4 digit IDS, or cover up the ID numbers all together.
 + In general, you (or the students) can make marks anywhere on the answer sheet as long as it doesn't interfere with the three big black registration marks, the four 'B' bubbles around the outside, or the bubbles for questions (unless those question numbers are listed as ignored, or after the max number of questions to grade).
 
 ### Other Scenarios
-You can get creative with how to use this. For example, let's say you want to have the students draw and label a graph on the answer sheet in the box on the right. That might be difficult to grade with the open ended question grader, so you can score it manually, then grade it with the bubble grader. Let's say you had 20 multiple choice questions, but want to allow up to 10 points for the drawing. Instead of covering up questions 21-30 on the answer sheet leave them there. Make 21-30 all 'A' on your key. After you collect the answer sheets grade the graphs by hand. To award 10 points, *you* fill in 'A' for questions 21-30. To award 6 points, just fill in six A's. You may leave "wrong" answers blank. A rubric could be used to delineate that 21 is for labeling the x-axis, 22 for the y-axis, 23 for one curve, 24 for another, etc. Then scan the answer sheets and let the software do the math. 
+You can get creative with how to use this. For example, let's say you want to have the students draw and label a graph on the answer sheet in the box on the right. That might be difficult to grade with the open ended question grader, so you can score it manually, then grade it with the bubble grader. Let's say you had 20 multiple choice questions, but want to allow up to 10 points for the drawing. Instead of covering up questions 21-30 on the answer sheet leave them there. Make 21-30 all 'A' on your key. After you collect the answer sheets **grade the graphs by hand**. To award 10 points, *you* fill in 'A' for questions 21-30 (using a dry erase marker or wide sharpie makes this easy - remember you are allowed to color outside the lines of a bubble). To award 6 points, just fill in six A's. You may leave "wrong" answers blank. A rubric could be used to delineate that 21 is for labeling the x-axis, 22 for the y-axis, 23 for one curve, 24 for another, etc. Then scan the answer sheets and let the software do the math. 

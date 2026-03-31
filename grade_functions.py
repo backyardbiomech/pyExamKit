@@ -1,10 +1,38 @@
+import re
 import numpy as np
-import cv2
 import pandas as pd
 import fnmatch
 import scan_functions
 import difflib
+import os
 from pathlib import Path
+from PIL import Image as PILImage, ImageDraw, ImageFont
+
+
+def _get_font(size=28):
+    """Return a PIL font of the given size, falling back to the default bitmap font."""
+    import sys
+    candidates = []
+    if sys.platform == 'darwin':
+        candidates = [
+            '/Library/Fonts/Arial.ttf',
+            '/System/Library/Fonts/Supplemental/Arial.ttf',
+            '/System/Library/Fonts/Helvetica.ttc',
+        ]
+    elif sys.platform == 'win32':
+        candidates = ['C:/Windows/Fonts/arial.ttf', 'C:/Windows/Fonts/consola.ttf']
+    else:
+        candidates = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    return ImageFont.load_default(size=size)
 
     
 def getid(idRes, nRes):
@@ -25,13 +53,16 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
     df.index = df.index.map(str)
     df.index.names = [None]
     #create score and partial score columns at the end (overwrite if existing)
-    df['score']=0
-    df['partialscore']=0
+    df['score'] = np.float64(0)
+    df['partialscore'] = np.float64(0)
     #create a bottom row to track number correct per question (overwrite if existing)
-    df.loc['numb_correct']=0
+    df.loc['numb_correct'] = 0
+    # Ensure score/partialscore stay float64 after row addition
+    df['score'] = df['score'].astype(np.float64)
+    df['partialscore'] = df['partialscore'].astype(np.float64)
     #create a new dataframe that matches the results frame, but that contains points gained per question per student (replace answers with points gained
     ptsdf=df.copy(deep=True)
-    ptsdf.loc[:,3:] = 0.0
+    ptsdf.iloc[:, 3:] = 0.0
     #loop through students
     for row in range(1,df.shape[0]-1):
         row=str(row)
@@ -42,24 +73,24 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
         #loop through questions
         for col in df.columns[3:-2]:
             #compare student's answer to key
-            key = df[col][0]
+            key = df.loc['0', col]
             if key == 'ignore':
                 continue
             #if it's an open ended question
             if key == 'CC':
-                ans = df[col][row]
+                ans = df.loc[row, col]
                 if ans == 'CC':
                     score += openVal
                     partscore += openVal
                     ptsdf.loc[row,col] = openVal
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
                 if ans == 'CX':
-                    score =+ openVal / 2
+                    score += openVal / 2
                     partscore += openVal / 2
                     ptsdf.loc[row,col] = openVal / 2
                 # go on to the next question
                 continue
-            ans = df[col][row]
+            ans = df.loc[row, col]
             # catch when ans is '-' meaning no answer was scanned
             if ans == '-':
                     # get scan number (index), name, and L number
@@ -113,109 +144,93 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
                         partscore = partscore + ptscore
                         ptsdf.loc[row,col]=ptscore
                 #calculate the per-question calculation of the number of students selecting the correct answer
-                df.loc['numb_correct',col] = df[col]['numb_correct'] + int(s.ratio())
+                df.loc['numb_correct',col] = df.loc['numb_correct',col] + int(s.ratio())
         #save score and partscore to new columns
         df.loc[row,'score']=score
         df.loc[row,'partialscore']=partscore
     #write the dataframe back to the csv
     df.to_csv(resCsv, index=True, index_label = 'index')
-    ptsdf.to_csv(resCsv.split('.')[0] +'perquestions.csv')
+    _stem = str(Path(resCsv).parent / Path(resCsv).stem)
+    ptsdf.to_csv(_stem + 'perquestions.csv')
     # make a grades csv for upload to canvas, sorted by last name, just names, Lnum, and scores without the key
     cols = ['LastName','FirstName','studentID','partialscore']
     gradesdf = df[cols].copy()
     gradesdf = gradesdf.drop(index='0')
     gradesdf = gradesdf.drop(index='numb_correct')
     gradesdf = gradesdf.sort_values(by=['LastName', 'FirstName','studentID'])
-    gradesdf.to_csv(resCsv.split('.')[0]+'forCanvas.csv')
+    gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
 
 def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr):
     # load results csv
-    df=pd.read_csv(resCsv)
+    df = pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
     df.index = df.index.map(str)
     df.index.names = [None]
-    # load aligned images (not key) in loop with index that will equal row number
+
+    font = _get_font(size=28)
+    # cv2 putText uses bottom-left anchor; Pillow uses top-left, so we subtract this offset
+    TEXT_Y_OFFSET = 26
+
+    # PIL RGB colors (note: cv2 used BGR, so (0,0,255) red in BGR = (255,0,0) in RGB)
+    GREEN = (0, 255, 0)
+    RED   = (255, 0, 0)
+    BLUE  = (0, 0, 255)
+
+    # load aligned images in loop with index matching the results row number
     for row in range(len(aligned_image_list)):
-        img = cv2.imread(aligned_image_list[row], 1)
-        # loop through each question
-        for col in df.columns[3:-2]: 
-            key = df[col][0]
+        pil_img = PILImage.open(aligned_image_list[row]).convert('RGB')
+        draw = ImageDraw.Draw(pil_img)
+
+        for col in df.columns[3:-2]:
+            key = df.loc['0', col]
             if key == 'ignore':
                 continue
-            
+
             key = list(key)
-#           print(key)
-            ans = list(df[col][row])
-            #for open questions
+            ans = list(df.loc[str(row), col])
+
+            # open-ended questions
             if col[0:4] == 'open':
                 coord = 0
                 for lett in ans:
                     markX = qAreas[col][0][0] + coord
                     markY = qAreas[col][1][1]
-                    if lett == 'C':
-                        cv2.putText(img, 'C', 
-                                    (markX, markY),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                    (0,255,0), 3)
-                    if lett == 'X':
-                        cv2.putText(img, 'X', 
-                                    (markX, markY),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                    (0,0,255), 3)
+                    color = GREEN if lett == 'C' else RED
+                    draw.text((markX, markY - TEXT_Y_OFFSET), lett, fill=color, font=font)
                     coord += 30
-            
-            else: # bubble questions
-                #loop through each given answer
+
+            else:  # bubble questions
+                markY = qAreas[col][1][1]
                 for lett in ans:
                     coord = qDict[lett]
-                    markX=qAreas[col][0][0]+coord-8
-                    markY=qAreas[col][1][1]
+                    markX = qAreas[col][0][0] + coord - 8
                     if lett in key:
-                        # if that letter is in the key, mark with green C
-                        cv2.putText(img, 'C',
-                                        (markX, markY),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                        (0,255,0), 2)
+                        draw.text((markX, markY - TEXT_Y_OFFSET), 'C', fill=GREEN, font=font)
                         key.remove(lett)
-                    # if that letter is not in the key, mark with red X
                     elif lett != '-':
-                        cv2.putText(img, 'X',
-                                        (markX, markY),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                        (0,0,255), 2)
-                # if markmissing, and if there are letters in the key not in the answer, add a red M
-                if markmissing and len(key)>0:
-                    markX=qAreas[col][0][0] - 26
-                    cv2.putText(img, 'M',
-                                    (markX, markY),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                    (0, 0, 255), 2)
-                # if student left answer blank and it shouldn't have been
-                if ans == '-' and len(key)>0:
-                    markX=qAreas[col][0][0] - 26
-                    cv2.putText(img, 'M',
-                                    (markX, markY),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                    (0, 0, 255), 2)
-                # if mark correct is selected and the student did not mark the correct answer
-                if markCorr and len(key)>0:
+                        draw.text((markX, markY - TEXT_Y_OFFSET), 'X', fill=RED, font=font)
+
+                if markmissing and len(key) > 0:
+                    markX = qAreas[col][0][0] - 26
+                    draw.text((markX, markY - TEXT_Y_OFFSET), 'M', fill=RED, font=font)
+                if ans == ['-'] and len(key) > 0:
+                    markX = qAreas[col][0][0] - 26
+                    draw.text((markX, markY - TEXT_Y_OFFSET), 'M', fill=RED, font=font)
+                if markCorr and len(key) > 0:
                     for lett in key:
                         coord = qDict[lett]
-                        markX=qAreas[col][0][0]+coord-8
-                        cv2.putText(img, '#',
-                                        (markX, markY),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                        (255,0,0), 2)
-                
-            
-        # get name of student
-        studentName=df['LastName'][row] + '_' + df['FirstName'][row] + '_' + df['studentID'][row] + '.jpg'
-        # save image in marked dir
-        cv2.imwrite(str(markeddir / studentName), img)
-        if row == 0: #this is the key, get the filename
+                        markX = qAreas[col][0][0] + coord - 8
+                        draw.text((markX, markY - TEXT_Y_OFFSET), '#', fill=BLUE, font=font)
+
+        # get name of student and save — sanitize to prevent path traversal
+        def _safe(s):
+            return re.sub(r'[^\w\-]', '_', str(s))
+        studentName = (_safe(df.loc[str(row), 'LastName']) + '_' +
+                       _safe(df.loc[str(row), 'FirstName']) + '_' +
+                       _safe(df.loc[str(row), 'studentID']) + '.jpg')
+        pil_img.save(str(markeddir / studentName), quality=95)
+        if row == 0:
             keyname = markeddir / studentName
-            #keyname = keyname.name
-    #return the path to the marked key to include as the first page in the archive pdf
+
     return keyname
-        

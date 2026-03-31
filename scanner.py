@@ -24,20 +24,22 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
         quests is an integer as the number of questions to grade
         markmissing is a boolean - True if select all that apply, False if not
         openQ is a boolean - True if there are any open ended questions to grade on screen
-        ignnores is a comma separated string of numbers of questions to not scan (for open ended Q's)
+        ignores is a comma separated string of numbers of questions to not scan (for open ended Q's)
+        parent is the Tkinter root window (needed for open-ended question grading popups)
         '''
         self.input_file = input_file
         self.quests = quests
-        self.markmissing = markmissing #means select all that apply questions
+        self.markmissing = markmissing  # means select all that apply questions
         self.openQ = openQ
         self.corrMark = corrmark
+        self.parent = parent
         self.bubbleVal = bubbleVal
         self.openVal = openVal
         if len(ignores)>0:
@@ -77,7 +79,7 @@ class Scanner(object):
             img = Image(self.image_list[i], self.scan_settings)
             print('Processing scan {0:1d}'.format(i))
             #save the aligned image aligned_00i.jpg in ./aligned
-            scan_functions.saveimg(self.image_list, i, img.aligned, self.aligneddir)
+            scan_functions.saveimg(i, img.aligned, self.aligneddir)
             self.qRes=scan_functions.rundots(img.scanimg, 
                                             self.qAreas, self.idAreas, self.nAreas, 
                                             self.ignores, 
@@ -102,7 +104,7 @@ class Scanner(object):
             openQs.openQres is a dataframe containing the two-letter results (CC, CX, XX) for the open ended questions in same format as main results dictionary
             '''
             
-            openQs = OpenQs(self.aligned_image_list)
+            openQs = OpenQs(self.aligned_image_list, parent=self.parent)
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -125,7 +127,7 @@ class Scanner(object):
         print('Saving marked files')
         self.outpdf=FPDF('P','pt','Letter')
         scan_functions.savePdf(self.markeddir, self.outpdf, keyname)
-        self.outpdf.output(str(self.path / 'marked.pdf'), 'F')
+        self.outpdf.output(str(self.path / 'marked.pdf'))
         print('All steps complete!')
 
 
