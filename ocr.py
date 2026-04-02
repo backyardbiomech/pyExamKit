@@ -84,22 +84,33 @@ def _tesseract_ocr(arr: np.ndarray) -> tuple:
     return (' '.join(words), avg_conf)
 
 
-def suggest_grade(student_text: str, key_text: str,
+def suggest_grade(student_text: str, key_texts,
                   conf: float,
                   conf_threshold: float = 0.20,
                   match_threshold: float = 0.80) -> str | None:
     """
     Suggest a grade based on OCR.
+    key_texts may be a single string or a list of acceptable answers.
     Returns 'CC' (full credit), 'CX' (partial), 'XX' (none), or
     None when confidence is too low to suggest (defer to human grader).
     """
-    if conf < conf_threshold or not student_text or not key_text:
+    if conf < conf_threshold or not student_text:
         return None
-    ratio = difflib.SequenceMatcher(
-        None, key_text.strip().lower(), student_text.strip().lower()
-    ).ratio()
-    if ratio >= match_threshold:
-        return 'CC'
-    if ratio >= 0.4:
-        return 'CX'
-    return 'XX'
+    if isinstance(key_texts, str):
+        key_texts = [key_texts]
+    key_texts = [k for k in key_texts if k]
+    if not key_texts:
+        return None
+    _rank = {'CC': 3, 'CX': 2, 'XX': 1, None: 0}
+    best = None
+    student_lower = student_text.strip().lower()
+    for key_text in key_texts:
+        ratio = difflib.SequenceMatcher(
+            None, key_text.strip().lower(), student_lower
+        ).ratio()
+        if ratio >= match_threshold:
+            return 'CC'  # short-circuit on perfect match
+        grade = 'CX' if ratio >= 0.4 else 'XX'
+        if _rank[grade] > _rank[best]:
+            best = grade
+    return best

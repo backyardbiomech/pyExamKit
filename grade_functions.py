@@ -161,6 +161,50 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
     gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
 
+def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict) -> int:
+    """
+    Re-evaluate open-ended question grades in an existing results.csv using
+    updated acceptable_answers and stored transcriptions.
+
+    Only upgrades grades (XX→CC, XX→CX, CX→CC), never downgrades.
+    Returns the total number of grade slots upgraded.
+
+    acceptable_answers: {qk: [str, ...]}
+    transcriptions:     {qk: {str(idx): [text, conf]}}
+    """
+    from ocr import suggest_grade
+    df = pd.read_csv(resCsv)
+    df.set_index(['index'], inplace=True)
+    df.index = df.index.map(str)
+    df.index.names = [None]
+
+    grade_rank = {'CC': 3, 'CX': 2, 'XX': 1, '': 0}
+    total_upgraded = 0
+    open_cols = [c for c in df.columns if c.startswith('openQ_')]
+
+    for qk in open_cols:
+        if qk not in acceptable_answers or qk not in transcriptions:
+            continue
+        acc_list = acceptable_answers[qk]
+        q_trans = transcriptions[qk]   # {str(idx): [text, conf]}
+        for row_str, trans_val in q_trans.items():
+            if row_str not in df.index:
+                continue
+            if row_str in ('0', 'numb_correct'):
+                continue
+            text, conf = trans_val[0], float(trans_val[1])
+            if not text:
+                continue
+            old_grade = df.loc[row_str, qk]
+            new_sug = suggest_grade(text, acc_list, conf)
+            if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
+                df.loc[row_str, qk] = new_sug
+                total_upgraded += 1
+
+    df.to_csv(resCsv, index=True, index_label='index')
+    return total_upgraded
+
+
 def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr):
     # load results csv
     df = pd.read_csv(resCsv)

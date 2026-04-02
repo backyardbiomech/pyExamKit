@@ -1,6 +1,6 @@
 index,LastName,FirstName,studentID,Q001,Q002,Q003,Q004,Q005,Q006,Q007,Q008,Q009,Q010,openQ_1,openQ_2,score,partialscore
 0,KEY--,A--,--------,B,AC,E,ABCDEF,ignore,D,B,F,D,ignore,CC,CC,0.0,0.0
-1,DOE--,JON,00123456,A,AC,E,ACD,ignore,D,B,F,C,ignore,CX,XX,6.0,6.5
-2,J----,BRA,00987654,B,AC,E,ABCD,ignore,D,B,EF,D,ignore,XX,CX,7.0,7.666666666666666
-3,SMITH,JAN,003-----,B,CDE,E,ABCDEF,ignore,E,B,E,D,ignore,CC,CC,9.0,9.0
-numb_correct,0,0,0,2,2,3,1,0,2,3,1,2,0,1,1,0.0,0.0
+1,DOE--,JON,00123456,A,AC,E,ACD,ignore,D,B,F,C,ignore,CC,CC,9.0,9.5
+2,J----,BRA,00987654,B,AC,E,ABCD,ignore,D,B,EF,D,ignore,XX,CC,8.0,8.666666666666666
+3,SMITH,JAN,003-----,B,CDE,E,ABCDEF,ignore,E,B,E,D,ignore,CC,CX,8.0,8.0
+numb_correct,0,0,0,2,2,3,1,0,2,3,1,2,0,2,2,0.0,0.0

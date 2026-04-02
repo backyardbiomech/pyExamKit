@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = ''):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -33,6 +33,9 @@ class Scanner(object):
         openQ is a boolean - True if there are any open ended questions to grade on screen
         ignores is a comma separated string of numbers of questions to not scan (for open ended Q's)
         parent is the Tkinter root window (needed for open-ended question grading popups)
+        ai_ocr is a boolean - True to use the Claude API for handwriting recognition
+        api_key is the Anthropic API key string (empty = read from config file)
+        ai_context is the subject-specific context hint passed to the model
         '''
         self.input_file = input_file
         self.quests = quests
@@ -42,6 +45,10 @@ class Scanner(object):
         self.parent = parent
         self.bubbleVal = bubbleVal
         self.openVal = openVal
+        self.ai_ocr = ai_ocr
+        self.api_key = api_key
+        self.ai_context = ai_context
+        self.preloaded_file = preloaded_file
         if len(ignores)>0:
             ignores=ignores+','
             self.ignores=list(ast.literal_eval(ignores))
@@ -96,6 +103,7 @@ class Scanner(object):
                 self.aligned_image_list.append(str(self.aligneddir / file))
         self.aligned_image_list = sorted(self.aligned_image_list)
         # run the open questions grader
+        openQs = None
         if self.openQ:
             ''' 
             open the key for open question grading, openQs will be object
@@ -104,7 +112,10 @@ class Scanner(object):
             openQs.openQres is a dataframe containing the two-letter results (CC, CX, XX) for the open ended questions in same format as main results dictionary
             '''
             
-            openQs = OpenQs(self.aligned_image_list, parent=self.parent)
+            openQs = OpenQs(self.aligned_image_list, parent=self.parent,
+                            ai_ocr=self.ai_ocr, api_key=self.api_key,
+                            ai_context=self.ai_context,
+                            preloaded_file=self.preloaded_file)
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -116,6 +127,17 @@ class Scanner(object):
         # write resdf to csv
         self.resCsv = str(self.path / 'results.csv')
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
+
+        # Save acceptable answers, transcriptions, and grade config for post-session re-grading
+        if self.openQ and openQs is not None:
+            openQs.save_artifacts(
+                self.resCsv,
+                grade_config={
+                    'bubbleVal': self.bubbleVal,
+                    'openVal': self.openVal,
+                    'selectAll': self.markmissing,
+                }
+            )
         
         # grade the results csv file and save out pts per question csv file
         grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir)

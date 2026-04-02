@@ -17,6 +17,7 @@ dependencies = [
     "transformers>=5.4.0",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
+    "anthropic>=0.40",
 ]
 
 [build-system]
