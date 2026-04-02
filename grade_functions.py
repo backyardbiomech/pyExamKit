@@ -48,7 +48,7 @@ def getid(idRes, nRes):
     
 def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
     #open the csv into a Pandas data frame
-    df=pd.read_csv(resCsv)
+    df=pd.read_csv(resCsv, dtype=object)
     df.set_index(['index'], inplace=True)
     df.index = df.index.map(str)
     df.index.names = [None]
@@ -79,12 +79,14 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
             #if it's an open ended question
             if key == 'CC':
                 ans = df.loc[row, col]
-                if ans == 'CC':
+                # support 'CC: transcription text' format as well as plain 'CC'
+                ans_grade = str(ans)[:2]
+                if ans_grade == 'CC':
                     score += openVal
                     partscore += openVal
                     ptsdf.loc[row,col] = openVal
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
-                if ans == 'CX':
+                if ans_grade == 'CX':
                     score += openVal / 2
                     partscore += openVal / 2
                     ptsdf.loc[row,col] = openVal / 2
@@ -161,7 +163,8 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
     gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
 
-def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict) -> int:
+def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
+                            partial_answers: dict | None = None) -> int:
     """
     Re-evaluate open-ended question grades in an existing results.csv using
     updated acceptable_answers and stored transcriptions.
@@ -171,9 +174,10 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
 
     acceptable_answers: {qk: [str, ...]}
     transcriptions:     {qk: {str(idx): [text, conf]}}
+    partial_answers:    {qk: [str, ...]}  (optional; earn partial credit CX)
     """
     from ocr import suggest_grade
-    df = pd.read_csv(resCsv)
+    df = pd.read_csv(resCsv, dtype=object)
     df.set_index(['index'], inplace=True)
     df.index = df.index.map(str)
     df.index.names = [None]
@@ -183,9 +187,12 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
     open_cols = [c for c in df.columns if c.startswith('openQ_')]
 
     for qk in open_cols:
-        if qk not in acceptable_answers or qk not in transcriptions:
+        if qk not in transcriptions:
             continue
-        acc_list = acceptable_answers[qk]
+        acc_list = acceptable_answers.get(qk, [])
+        partial_list = (partial_answers or {}).get(qk, [])
+        if not acc_list and not partial_list:
+            continue
         q_trans = transcriptions[qk]   # {str(idx): [text, conf]}
         for row_str, trans_val in q_trans.items():
             if row_str not in df.index:
@@ -195,10 +202,13 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
             text, conf = trans_val[0], float(trans_val[1])
             if not text:
                 continue
-            old_grade = df.loc[row_str, qk]
-            new_sug = suggest_grade(text, acc_list, conf)
+            old_grade_cell = str(df.loc[row_str, qk])
+            # support 'CC: transcription text' format as well as plain 'CC'/'CX'/'XX'
+            old_grade = old_grade_cell[:2] if old_grade_cell[:2] in ('CC', 'CX', 'XX') else old_grade_cell
+            new_sug = suggest_grade(text, acc_list, conf,
+                                    partial_texts=partial_list if partial_list else None)
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
-                df.loc[row_str, qk] = new_sug
+                df.loc[row_str, qk] = f'{new_sug}: {text}'
                 total_upgraded += 1
 
     df.to_csv(resCsv, index=True, index_label='index')
@@ -236,8 +246,10 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
 
             # open-ended questions
             if col[0:4] == 'open':
+                # extract just the 2-char grade code (supports 'CC: text' format)
+                grade_code = str(df.loc[str(row), col])[:2]
                 coord = 0
-                for lett in ans:
+                for lett in list(grade_code):
                     markX = qAreas[col][0][0] + coord
                     markY = qAreas[col][1][1]
                     color = GREEN if lett == 'C' else RED

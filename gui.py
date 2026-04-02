@@ -138,6 +138,12 @@ class pyScanUI(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).grid(row=2, column=0, columnspan=3, padx=(0, 4), pady=(4, 2), sticky='w')
 
+        self.reviewPerfectVar = ctk.IntVar(value=0)
+        ctk.CTkCheckBox(self._ai_frame,
+                        text="Review perfect matches? (confirm even high-confidence correct answers)",
+                        variable=self.reviewPerfectVar).grid(
+            row=3, column=0, columnspan=3, padx=0, pady=(4, 2), sticky='w')
+
         self.corrvar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame, text="Mark correct answers on graded sheets?",
                         variable=self.corrvar).grid(
@@ -390,6 +396,7 @@ class pyScanUI(ctk.CTkFrame):
                       'Click "Configure API Key…" to add one.')
             return
         acc_answers_file = self.accAnswersEntry.get().strip() if self.openQvar.get() else ''
+        review_perfect   = bool(self.reviewPerfectVar.get()) if self.openQvar.get() else True
 
         self._log('Starting scan…')
         old_stdout = sys.stdout
@@ -399,7 +406,8 @@ class pyScanUI(ctk.CTkFrame):
                     ignores, thresh, bubbleVal, openVal,
                     parent=self.parent,
                     ai_ocr=use_ai, api_key=api_key, ai_context=ai_context,
-                    preloaded_file=acc_answers_file)
+                    preloaded_file=acc_answers_file,
+                    review_perfect=review_perfect)
         finally:
             sys.stdout = old_stdout
         self._log('Done.')

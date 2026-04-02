@@ -12,11 +12,21 @@ from ocr import attempt_ocr, suggest_grade
 import ai_ocr as _ai_ocr_mod
 
 
-def load_acceptable_answers_file(path: str) -> dict:
+def load_acceptable_answers_file(path: str) -> tuple:
     """
     Parse a CSV or JSON file of pre-defined acceptable answers.
-    Returns {qk: [str, ...]} where qk is always 'openQ_N' form.
-    Returns {} on any error (logs to stdout).
+    Returns (full_credit, partial_credit) where each is {qk: [str, ...]}
+    and qk is always 'openQ_N' form.
+    Returns ({}, {}) on any error (logs to stdout).
+
+    JSON format (per question):
+      {"openQ_1": {"full": ["primary answer"], "partial": ["alias"]}}
+      Old format {"openQ_1": ["answer"]} is still supported (all full credit).
+
+    CSV long format (with optional 'credit' column):
+      question, answer, credit   (credit = 'full' or 'partial'; default full)
+    CSV wide format:
+      question, answer1, answer2, ...   (all treated as full credit)
     """
     def _normalise_key(raw: str) -> str:
         raw = raw.strip()
@@ -30,18 +40,32 @@ def load_acceptable_answers_file(path: str) -> dict:
     p = Path(path)
     if not p.exists():
         print(f'[AccAnswers] File not found: {path}', flush=True)
-        return {}
+        return {}, {}
 
-    result: dict = {}
+    full_result: dict = {}
+    partial_result: dict = {}
     try:
         if p.suffix.lower() == '.json':
             data = json.loads(p.read_text(encoding='utf-8'))
             for raw_key, answers in data.items():
                 qk = _normalise_key(raw_key)
-                if isinstance(answers, list):
-                    result[qk] = [str(a).strip() for a in answers if str(a).strip()]
+                if isinstance(answers, dict):
+                    # New format: {"full": [...], "partial": [...]}
+                    full_list = answers.get('full', [])
+                    part_list = answers.get('partial', [])
+                    if isinstance(full_list, list):
+                        full_result[qk] = [str(a).strip() for a in full_list if str(a).strip()]
+                    elif isinstance(full_list, str) and full_list.strip():
+                        full_result[qk] = [full_list.strip()]
+                    if isinstance(part_list, list):
+                        partial_result[qk] = [str(a).strip() for a in part_list if str(a).strip()]
+                    elif isinstance(part_list, str) and part_list.strip():
+                        partial_result[qk] = [part_list.strip()]
+                elif isinstance(answers, list):
+                    # Old format: all full credit
+                    full_result[qk] = [str(a).strip() for a in answers if str(a).strip()]
                 elif isinstance(answers, str) and answers.strip():
-                    result[qk] = [answers.strip()]
+                    full_result[qk] = [answers.strip()]
         else:
             # CSV — detect wide vs long by checking headers
             with open(p, newline='', encoding='utf-8-sig') as f:
@@ -52,17 +76,26 @@ def load_acceptable_answers_file(path: str) -> dict:
                 q_col = fieldname_map.get('question', 'question')
                 if 'answer' in headers:
                     a_col = fieldname_map.get('answer', 'answer')
-                    # Long format: question, answer
+                    has_credit_col = 'credit' in headers
+                    c_col = fieldname_map.get('credit', 'credit') if has_credit_col else None
+                    # Long format: question, answer[, credit]
                     for row in reader:
                         raw_q = row.get(q_col, '').strip()
                         ans = row.get(a_col, '').strip()
-                        if raw_q and ans:
-                            qk = _normalise_key(raw_q)
-                            result.setdefault(qk, [])
-                            if ans.lower() not in [a.lower() for a in result[qk]]:
-                                result[qk].append(ans)
+                        if not raw_q or not ans:
+                            continue
+                        qk = _normalise_key(raw_q)
+                        credit = row.get(c_col, 'full').strip().lower() if c_col else 'full'
+                        if credit == 'partial':
+                            partial_result.setdefault(qk, [])
+                            if ans.lower() not in [a.lower() for a in partial_result[qk]]:
+                                partial_result[qk].append(ans)
+                        else:
+                            full_result.setdefault(qk, [])
+                            if ans.lower() not in [a.lower() for a in full_result[qk]]:
+                                full_result[qk].append(ans)
                 else:
-                    # Wide format: question, answer1, answer2, ...
+                    # Wide format: question, answer1, answer2, ... (all full credit)
                     ans_cols = [h for h in (reader.fieldnames or [])
                                 if h.strip().lower() != 'question']
                     for row in reader:
@@ -70,17 +103,18 @@ def load_acceptable_answers_file(path: str) -> dict:
                         if not raw_q:
                             continue
                         qk = _normalise_key(raw_q)
-                        result.setdefault(qk, [])
+                        full_result.setdefault(qk, [])
                         for col in ans_cols:
                             val = row.get(col, '').strip()
-                            if val and val.lower() not in [a.lower() for a in result[qk]]:
-                                result[qk].append(val)
+                            if val and val.lower() not in [a.lower() for a in full_result[qk]]:
+                                full_result[qk].append(val)
     except Exception as exc:
         print(f'[AccAnswers] Failed to parse {path}: {exc}', flush=True)
-        return {}
+        return {}, {}
 
-    print(f'[AccAnswers] Loaded pre-defined answers for {len(result)} question(s).', flush=True)
-    return result
+    total = len(set(list(full_result.keys()) + list(partial_result.keys())))
+    print(f'[AccAnswers] Loaded pre-defined answers for {total} question(s).', flush=True)
+    return full_result, partial_result
 
 
 def _pil_to_tkphoto(pil_img, master=None):
@@ -105,14 +139,16 @@ class OpenQs(object):
     '''
 
     def __init__(self, image_list, parent=None, ai_ocr=False, api_key='',
-                 ai_context='', preloaded_file: str = ''):
+                 ai_context='', preloaded_file: str = '', review_perfect: bool = True):
         self.openQcoords = {}
         self.openQkeyimgs = {}
         self.openQkeytext = {}   # OCR text from each key crop
         self._ai_texts: dict[str, dict[int, str]] = {}  # {qkey: {img_idx: text}}
         self.acceptable_answers: dict[str, list] = {}   # {qk: [str, ...]}
+        self.partial_credit_answers: dict[str, list] = {}  # {qk: [str, ...]}
         self._transcriptions: dict[str, dict] = {}      # {qk: {img_idx: (text, conf)}}
         self._preloaded_file = preloaded_file
+        self._review_perfect = review_perfect
 
         # Obtain the Tkinter root window
         if parent is not None:
@@ -139,13 +175,20 @@ class OpenQs(object):
             self.acceptable_answers[qk] = [txt] if txt else []
 
         preloaded: dict = {}
+        preloaded_partial: dict = {}
         if self._preloaded_file:
-            preloaded = load_acceptable_answers_file(self._preloaded_file)
+            preloaded, preloaded_partial = load_acceptable_answers_file(self._preloaded_file)
             for qk, ans_list in preloaded.items():
                 existing_lower = [a.lower() for a in self.acceptable_answers.get(qk, [])]
                 for ans in ans_list:
                     if ans.lower() not in existing_lower:
                         self.acceptable_answers.setdefault(qk, []).append(ans)
+                        existing_lower.append(ans.lower())
+            for qk, ans_list in preloaded_partial.items():
+                existing_lower = [a.lower() for a in self.partial_credit_answers.get(qk, [])]
+                for ans in ans_list:
+                    if ans.lower() not in existing_lower:
+                        self.partial_credit_answers.setdefault(qk, []).append(ans)
                         existing_lower.append(ans.lower())
         if ai_ocr and len(image_list) > 1:
             # Ensure we have an API key — prompt on first use if missing
@@ -185,6 +228,10 @@ class OpenQs(object):
                     _existing_lower = [a.lower() for a in self.acceptable_answers[qk]]
                     if _ans.lower() not in _existing_lower:
                         self.acceptable_answers[qk].append(_ans)
+                for _ans in preloaded_partial.get(qk, []):
+                    _existing_lower = [a.lower() for a in self.partial_credit_answers.get(qk, [])]
+                    if _ans.lower() not in _existing_lower:
+                        self.partial_credit_answers.setdefault(qk, []).append(_ans)
                 print(f'[AI OCR]   {qk}: {len(batch)}/{len(ids) - 1} transcribed.', flush=True)
             print('[AI OCR] Batch transcription complete.', flush=True)
 
@@ -378,12 +425,16 @@ class OpenQs(object):
         self._root.wait_window(win)
 
         # Extract full-resolution key crops and OCR each with local model.
-        # (AI key text will be overwritten by the batch result below when AI OCR is active.)
+        # When AI OCR is active, skip the heavy TrOCR load — the AI batch will
+        # overwrite the key text via label '0' anyway.
         for qk, qv in self.openQcoords.items():
             crop = full_arr[qv[1]:qv[3], qv[0]:qv[2]]
             self.openQkeyimgs[qk] = crop
-            ocr_text, _conf = attempt_ocr(crop)
-            self.openQkeytext[qk] = ocr_text
+            if not getattr(self, '_ai_ocr', False):
+                ocr_text, _conf = attempt_ocr(crop)
+                self.openQkeytext[qk] = ocr_text
+            else:
+                self.openQkeytext[qk] = ''
 
     def _gradeOneAnswer(self, filename, k, v, img_idx=None):
         '''
@@ -410,7 +461,16 @@ class OpenQs(object):
         if img_idx is not None:
             self._transcriptions.setdefault(k, {})[img_idx] = (student_text, ocr_conf)
         _key_list = self.acceptable_answers.get(k) or ([key_text] if key_text else [])
-        suggestion = suggest_grade(student_text, _key_list, ocr_conf)
+        _partial_list = self.partial_credit_answers.get(k, [])
+        suggestion = suggest_grade(student_text, _key_list, ocr_conf,
+                                   partial_texts=_partial_list)
+
+        # Auto-grade perfect matches without showing the window
+        if not self._review_perfect and suggestion == 'CC':
+            return 'CC'
+        # Auto-grade defined partial-credit matches (explicitly defined → no review needed)
+        if _partial_list and suggestion == 'CX':
+            return 'CX'
 
         # Stack key and student crops vertically with a separator
         key_crop = self.openQkeyimgs[k]
@@ -442,9 +502,10 @@ class OpenQs(object):
         win = tk.Toplevel(self._root)
         win.title(f'Grading {k}  —  C: correct   P: partial   X: wrong   B: go back')
         win.resizable(False, False)
+        _win_bg = win.cget('bg')
 
         tk.Label(win, text='KEY (top) ↕ Student (bottom)',
-                 font=('Arial', 10, 'bold')).pack(anchor='w', padx=8, pady=(6, 0))
+                 font=('Arial', 12, 'bold')).pack(anchor='w', padx=8, pady=(6, 0))
         tk_img = _pil_to_tkphoto(pil_stacked, master=win)
         img_lbl = tk.Label(win, image=tk_img)
         img_lbl.pack(padx=8, pady=4)
@@ -453,16 +514,18 @@ class OpenQs(object):
         # ── Editable key text (so grader can correct a mis-read key once) ──
         key_frame = tk.Frame(win)
         key_frame.pack(fill='x', padx=8, pady=(0, 2))
-        tk.Label(key_frame, text='Key answer:', font=('Arial', 9)).pack(side='left')
+        tk.Label(key_frame, text='Key answer:', font=('Arial', 11)).pack(side='left')
         key_var = tk.StringVar(value=key_text)
-        key_entry = tk.Entry(key_frame, textvariable=key_var, width=36, font=('Arial', 10))
+        key_entry = tk.Entry(key_frame, textvariable=key_var, width=36, font=('Arial', 12))
         key_entry.pack(side='left', padx=6)
 
-        # ── Suggestion label (updates as grader edits the key text) ─────────
-        sg_color_map = {'CC': '#1a6e1a', 'CX': '#8b5a00', 'XX': '#8b0000'}
-        sg_word_map  = {'CC': 'CORRECT  (Enter)', 'CX': 'PARTIAL   (Enter)', 'XX': 'WRONG     (Enter)'}
-        sg_label = tk.Label(win, font=('Arial', 11, 'bold'))
-        sg_label.pack(pady=(2, 0))
+        # ── Suggestion label (updates as grader edits the key text) ─────────────────
+        sg_bg_map  = {'CC': '#16a34a', 'CX': '#b45309', 'XX': '#dc2626'}
+        sg_word_map = {'CC': '✓  CORRECT — press Enter',
+                       'CX': '~  PARTIAL — press Enter',
+                       'XX': '✗  WRONG — press Enter'}
+        sg_label = tk.Label(win, font=('Arial', 14, 'bold'), padx=12, pady=6)
+        sg_label.pack(fill='x', padx=8, pady=(4, 2))
 
         current_suggestion = {'val': suggestion}
 
@@ -474,18 +537,19 @@ class OpenQs(object):
             elif edited_key:
                 self.acceptable_answers[k] = [edited_key]
             _key_list = self.acceptable_answers.get(k) or ([edited_key] if edited_key else [])
-            sug = suggest_grade(student_text, _key_list, ocr_conf)
+            _pt_list = self.partial_credit_answers.get(k, [])
+            sug = suggest_grade(student_text, _key_list, ocr_conf, partial_texts=_pt_list)
             current_suggestion['val'] = sug
             if sug:
                 sg_label.config(
-                    text=f'{ocr_source}: "{student_text}"  →  Suggested: {sg_word_map[sug]}',
-                    fg=sg_color_map[sug])
+                    text=f'{ocr_source}: "{student_text}"  →  {sg_word_map[sug]}',
+                    bg=sg_bg_map[sug], fg='white')
             else:
                 if student_text:
                     lbl = f'{ocr_source}: "{student_text}"  —  not confident enough to suggest'
                 else:
                     lbl = 'No text detected — grade manually'
-                sg_label.config(text=lbl, fg='gray40')
+                sg_label.config(text=lbl, bg=_win_bg, fg='gray40')
 
         key_var.trace_add('write', _update_suggestion)
         _update_suggestion()
@@ -493,12 +557,12 @@ class OpenQs(object):
         # ── Acceptable answers panel ───────────────────────────────────────────────
         aa_frame = tk.Frame(win)
         aa_frame.pack(fill='x', padx=8, pady=(0, 4))
-        tk.Label(aa_frame, text='Acceptable answers:', font=('Arial', 9)).pack(
+        tk.Label(aa_frame, text='Acceptable answers:', font=('Arial', 11)).pack(
             side='left', anchor='n', pady=2)
 
         aa_list_frame = tk.Frame(aa_frame)
         aa_list_frame.pack(side='left', padx=6)
-        aa_listbox = tk.Listbox(aa_list_frame, height=3, width=30, font=('Arial', 9),
+        aa_listbox = tk.Listbox(aa_list_frame, height=3, width=30, font=('Arial', 11),
                                 selectmode=tk.SINGLE, exportselection=False,
                                 takefocus=False)
         aa_scrollbar = tk.Scrollbar(aa_list_frame, orient='vertical',
@@ -512,7 +576,7 @@ class OpenQs(object):
 
         regrade_status_var = tk.StringVar(value='')
         regrade_status_lbl = tk.Label(aa_btn_frame, textvariable=regrade_status_var,
-                                      font=('Arial', 8), fg='#1a6e1a',
+                                      font=('Arial', 10), fg='#16a34a',
                                       wraplength=160, justify='left')
 
         def _refresh_aa_listbox():
@@ -545,13 +609,65 @@ class OpenQs(object):
             _update_suggestion()
 
         add_btn_state = 'normal' if (student_text and student_text != '[?]') else 'disabled'
-        tk.Button(aa_btn_frame, text='Add student answer', font=('Arial', 8),
+        tk.Button(aa_btn_frame, text='Add student answer', font=('Arial', 10),
                   state=add_btn_state,
                   command=_add_student_answer).pack(anchor='w', pady=(0, 2))
-        tk.Button(aa_btn_frame, text='Remove selected', font=('Arial', 8),
+        tk.Button(aa_btn_frame, text='Remove selected', font=('Arial', 10),
                   command=_remove_selected_aa).pack(anchor='w', pady=(0, 2))
         regrade_status_lbl.pack(anchor='w')
         _refresh_aa_listbox()
+
+        # ── Partial credit answers panel ──────────────────────────────────────────
+        pa_frame = tk.Frame(win)
+        pa_frame.pack(fill='x', padx=8, pady=(0, 4))
+        tk.Label(pa_frame, text='Partial credit\nanswers:', font=('Arial', 11)).pack(
+            side='left', anchor='n', pady=2)
+
+        pa_list_frame = tk.Frame(pa_frame)
+        pa_list_frame.pack(side='left', padx=6)
+        pa_listbox = tk.Listbox(pa_list_frame, height=3, width=30, font=('Arial', 11),
+                                selectmode=tk.SINGLE, exportselection=False,
+                                takefocus=False)
+        pa_scrollbar = tk.Scrollbar(pa_list_frame, orient='vertical',
+                                    command=pa_listbox.yview)
+        pa_listbox.configure(yscrollcommand=pa_scrollbar.set)
+        pa_listbox.pack(side='left')
+        pa_scrollbar.pack(side='left', fill='y')
+
+        pa_btn_frame = tk.Frame(pa_frame)
+        pa_btn_frame.pack(side='left', padx=4, anchor='n')
+
+        def _refresh_pa_listbox():
+            pa_listbox.delete(0, tk.END)
+            for ans in self.partial_credit_answers.get(k, []):
+                pa_listbox.insert(tk.END, ans)
+
+        def _add_student_as_partial():
+            if not student_text or student_text == '[?]':
+                return
+            count = self._add_acceptable_and_regrade(k, student_text, img_idx, grade='CX')
+            _refresh_pa_listbox()
+            if count > 0:
+                regrade_status_var.set(f'Added partial. {count} previous student(s) upgraded.')
+            else:
+                regrade_status_var.set('Added as partial (no previous upgrades).')
+            _update_suggestion()
+
+        def _remove_selected_pa():
+            sel = pa_listbox.curselection()
+            if not sel:
+                return
+            del self.partial_credit_answers[k][sel[0]]
+            _refresh_pa_listbox()
+            regrade_status_var.set('')
+            _update_suggestion()
+
+        tk.Button(pa_btn_frame, text='Add as partial credit', font=('Arial', 10),
+                  state=add_btn_state,
+                  command=_add_student_as_partial).pack(anchor='w', pady=(0, 2))
+        tk.Button(pa_btn_frame, text='Remove selected', font=('Arial', 10),
+                  command=_remove_selected_pa).pack(anchor='w', pady=(0, 2))
+        _refresh_pa_listbox()
 
         btn_frame = tk.Frame(win)
         btn_frame.pack(fill='x', padx=8, pady=(4, 8))
@@ -597,9 +713,10 @@ class OpenQs(object):
 
     # ------------------------------------------------------------------
     def _add_acceptable_and_regrade(self, qk: str, new_text: str,
-                                     current_idx: int) -> int:
+                                     current_idx: int, grade: str = 'CC') -> int:
         """
-        Add new_text to acceptable_answers[qk] (case-insensitive deduplication).
+        Add new_text to acceptable_answers[qk] (grade='CC', full credit) or
+        partial_credit_answers[qk] (grade='CX', partial credit).
         Re-grades already-graded rows 1..current_idx-1 for qk.
         Only upgrades existing grades (XX→CC, XX→CX, CX→CC).
         Returns the number of grades that were upgraded.
@@ -607,10 +724,11 @@ class OpenQs(object):
         new_text = new_text.strip()
         if not new_text:
             return 0
-        existing_lower = [a.lower() for a in self.acceptable_answers.get(qk, [])]
+        target_dict = self.partial_credit_answers if grade == 'CX' else self.acceptable_answers
+        existing_lower = [a.lower() for a in target_dict.get(qk, [])]
         if new_text.lower() in existing_lower:
             return 0
-        self.acceptable_answers.setdefault(qk, []).append(new_text)
+        target_dict.setdefault(qk, []).append(new_text)
 
         grade_rank = {'CC': 3, 'CX': 2, 'XX': 1, '': 0}
         upgraded = 0
@@ -623,7 +741,12 @@ class OpenQs(object):
                 continue
             old_grade = (self.openQres.loc[prev_idx, qk]
                          if prev_idx in self.openQres.index else '')
-            new_sug = suggest_grade(text, self.acceptable_answers[qk], conf)
+            new_sug = suggest_grade(
+                text,
+                self.acceptable_answers.get(qk, []),
+                conf,
+                partial_texts=self.partial_credit_answers.get(qk, []),
+            )
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
                 self.openQres.loc[prev_idx, qk] = new_sug
                 upgraded += 1
@@ -640,8 +763,15 @@ class OpenQs(object):
         stem = str(Path(csv_path).with_suffix(''))
 
         try:
+            merged_answers: dict = {}
+            for qk in set(list(self.acceptable_answers.keys()) +
+                          list(self.partial_credit_answers.keys())):
+                merged_answers[qk] = {
+                    'full': self.acceptable_answers.get(qk, []),
+                    'partial': self.partial_credit_answers.get(qk, []),
+                }
             Path(stem + '_openq_answers.json').write_text(
-                json.dumps(self.acceptable_answers, indent=2), encoding='utf-8')
+                json.dumps(merged_answers, indent=2), encoding='utf-8')
 
             trans_serialisable = {
                 qk: {str(idx): list(v) for idx, v in per_q.items()}
@@ -682,7 +812,17 @@ class RegradeDialog:
                          parent=self._parent)
             return
 
-        self._acceptable_answers = json.loads(Path(answers_path).read_text(encoding='utf-8'))
+        raw_answers = json.loads(Path(answers_path).read_text(encoding='utf-8'))
+        self._acceptable_answers = {}
+        self._partial_credit_answers = {}
+        for qk, val in raw_answers.items():
+            if isinstance(val, dict):
+                # New format: {"full": [...], "partial": [...]}
+                self._acceptable_answers[qk] = val.get('full', [])
+                self._partial_credit_answers[qk] = val.get('partial', [])
+            elif isinstance(val, list):
+                # Old format: all full credit
+                self._acceptable_answers[qk] = val
         self._transcriptions = (
             json.loads(Path(trans_path).read_text(encoding='utf-8'))
             if Path(trans_path).exists() else {})
@@ -696,14 +836,20 @@ class RegradeDialog:
         win.grab_set()
         self._win = win
 
+        _F  = ('Arial', 12)
+        _FB = ('Arial', 12, 'bold')
+        _FM = ('Arial', 13, 'bold')
+        _FC = ('Courier', 11)
+
         # ── Left panel: question list ─────────────────────────────────────
         left = tk.Frame(win)
         left.pack(side='left', fill='y', padx=8, pady=8)
-        tk.Label(left, text='Questions:', font=('Arial', 10, 'bold')).pack(anchor='w')
-        q_listbox = tk.Listbox(left, width=16, font=('Arial', 10),
+        tk.Label(left, text='Questions:', font=_FM).pack(anchor='w')
+        q_listbox = tk.Listbox(left, width=18, font=_F,
                                exportselection=False)
         q_listbox.pack(fill='both', expand=True)
-        for qk in sorted(self._acceptable_answers.keys()):
+        for qk in sorted(set(list(self._acceptable_answers.keys()) +
+                              list(self._partial_credit_answers.keys()))):
             q_listbox.insert(tk.END, qk)
 
         # ── Right panel: editor + transcriptions ──────────────────────────
@@ -711,16 +857,17 @@ class RegradeDialog:
         right.pack(side='left', fill='both', expand=True, padx=8, pady=8)
 
         tk.Label(right, text='Acceptable answers for selected question:',
-                 font=('Arial', 10, 'bold')).pack(anchor='w')
-        aa_listbox = tk.Listbox(right, height=8, font=('Arial', 10),
+                 font=_FM).pack(anchor='w')
+        aa_listbox = tk.Listbox(right, height=8, font=_F,
                                 exportselection=False)
         aa_listbox.pack(fill='x', pady=(2, 4))
 
         entry_frame = tk.Frame(right)
         entry_frame.pack(fill='x', pady=2)
-        tk.Label(entry_frame, text='New answer:').pack(side='left')
+        tk.Label(entry_frame, text='New answer:', font=_F).pack(side='left')
         new_ans_var = tk.StringVar()
-        new_ans_entry = tk.Entry(entry_frame, textvariable=new_ans_var, width=30)
+        new_ans_entry = tk.Entry(entry_frame, textvariable=new_ans_var,
+                                 width=30, font=_F)
         new_ans_entry.pack(side='left', padx=6)
 
         btn_row = tk.Frame(right)
@@ -742,6 +889,7 @@ class RegradeDialog:
                 return
             current_q['k'] = q_listbox.get(sel[0])
             _refresh_aa()
+            _refresh_pa()
             trans_text.configure(state='normal')
             trans_text.delete('1.0', 'end')
             k = current_q['k']
@@ -784,14 +932,68 @@ class RegradeDialog:
 
         new_ans_entry.bind('<Return>', lambda e: _add_answer())
         tk.Button(btn_row, text='Add', command=_add_answer,
-                  bg='#90EE90').pack(side='left', padx=(0, 4))
+                  bg='#90EE90', font=_F).pack(side='left', padx=(0, 4))
         tk.Button(btn_row, text='Remove selected',
-                  command=_remove_answer).pack(side='left', padx=(0, 4))
+                  command=_remove_answer, font=_F).pack(side='left', padx=(0, 4))
+
+        # ── Partial credit answers ────────────────────────────────────────────────
+        tk.Label(right, text='Partial credit answers (auto-graded CX):',
+                 font=_FB).pack(anchor='w', pady=(6, 0))
+        pa_listbox = tk.Listbox(right, height=4, font=_F, exportselection=False)
+        pa_listbox.pack(fill='x', pady=(2, 4))
+
+        pa_entry_frame = tk.Frame(right)
+        pa_entry_frame.pack(fill='x', pady=2)
+        tk.Label(pa_entry_frame, text='New partial:', font=_F).pack(side='left')
+        new_partial_var = tk.StringVar()
+        new_partial_entry = tk.Entry(pa_entry_frame, textvariable=new_partial_var,
+                                     width=30, font=_F)
+        new_partial_entry.pack(side='left', padx=6)
+
+        pa_btn_row = tk.Frame(right)
+        pa_btn_row.pack(fill='x', pady=2)
+
+        def _refresh_pa():
+            pa_listbox.delete(0, tk.END)
+            k = current_q['k']
+            if not k:
+                return
+            for ans in self._partial_credit_answers.get(k, []):
+                pa_listbox.insert(tk.END, ans)
+
+        def _add_partial():
+            k = current_q['k']
+            if not k:
+                return
+            new = new_partial_var.get().strip()
+            if not new:
+                return
+            existing_lower = [a.lower() for a in
+                              self._partial_credit_answers.get(k, [])]
+            if new.lower() not in existing_lower:
+                self._partial_credit_answers.setdefault(k, []).append(new)
+                _refresh_pa()
+            new_partial_var.set('')
+
+        def _remove_partial():
+            k = current_q['k']
+            if not k:
+                return
+            sel = pa_listbox.curselection()
+            if not sel:
+                return
+            del self._partial_credit_answers[k][sel[0]]
+            _refresh_pa()
+
+        new_partial_entry.bind('<Return>', lambda e: _add_partial())
+        tk.Button(pa_btn_row, text='Add partial', command=_add_partial,
+                  bg='#FFD700', font=_F).pack(side='left', padx=(0, 4))
+        tk.Button(pa_btn_row, text='Remove selected',
+                  command=_remove_partial, font=_F).pack(side='left', padx=(0, 4))
 
         tk.Label(right, text='Student transcriptions (read-only):',
-                 font=('Arial', 9, 'bold')).pack(anchor='w', pady=(6, 0))
-        trans_text = tk.Text(right, height=6, state='disabled',
-                             font=('Courier', 9))
+                 font=_FB).pack(anchor='w', pady=(6, 0))
+        trans_text = tk.Text(right, height=6, state='disabled', font=_FC)
         trans_text.pack(fill='x')
 
         # ── Bottom buttons ────────────────────────────────────────────────
@@ -799,18 +1001,26 @@ class RegradeDialog:
         btn_bottom.pack(fill='x', padx=8, pady=8, side='bottom')
         status_var = tk.StringVar(value='')
         tk.Label(btn_bottom, textvariable=status_var,
-                 fg='#1a6e1a').pack(side='left')
+                 font=_F, fg='#16a34a').pack(side='left')
 
         def _apply():
             import grade_functions
             stem = str(Path(self._csv_path).with_suffix(''))
             try:
-                # Save updated answers JSON
+                # Save updated answers JSON (merged format)
+                merged = {}
+                for qk in set(list(self._acceptable_answers.keys()) +
+                              list(self._partial_credit_answers.keys())):
+                    merged[qk] = {
+                        'full': self._acceptable_answers.get(qk, []),
+                        'partial': self._partial_credit_answers.get(qk, []),
+                    }
                 Path(stem + '_openq_answers.json').write_text(
-                    json.dumps(self._acceptable_answers, indent=2), encoding='utf-8')
+                    json.dumps(merged, indent=2), encoding='utf-8')
                 # Re-grade CSV
                 n = grade_functions.regrade_open_questions(
-                    self._csv_path, self._acceptable_answers, self._transcriptions)
+                    self._csv_path, self._acceptable_answers, self._transcriptions,
+                    partial_answers=self._partial_credit_answers)
             except Exception as exc:
                 status_var.set(f'Error: {exc}')
                 return
@@ -842,7 +1052,7 @@ class RegradeDialog:
             if self._on_complete:
                 self._on_complete(n)
 
-        tk.Button(btn_bottom, text='Apply Re-grading', command=_apply,
-                  bg='#2563eb', fg='white', padx=10).pack(side='right', padx=4)
+        tk.Button(btn_bottom, text='▶  Apply Re-grading', command=_apply,
+                  font=('Arial', 12, 'bold'), padx=10).pack(side='right', padx=4)
         tk.Button(btn_bottom, text='Close', command=win.destroy,
-                  padx=8).pack(side='right', padx=4)
+                  font=_F, padx=8).pack(side='right', padx=4)

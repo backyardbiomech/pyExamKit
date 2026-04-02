@@ -50,7 +50,10 @@ def _trocr_ocr(arr: np.ndarray) -> tuple:
     """TrOCR handwriting model — loads once and caches for the session."""
     global _trocr_processor, _trocr_model
     if _trocr_processor is None:
-        from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+        import logging
+        from transformers import TrOCRProcessor, VisionEncoderDecoderModel, logging as tf_logging
+        tf_logging.set_verbosity_error()
+        logging.getLogger('huggingface_hub').setLevel(logging.ERROR)
         print('[OCR] Loading TrOCR model (first use only)…', flush=True)
         _trocr_processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten')
         _trocr_model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-handwritten')
@@ -87,10 +90,12 @@ def _tesseract_ocr(arr: np.ndarray) -> tuple:
 def suggest_grade(student_text: str, key_texts,
                   conf: float,
                   conf_threshold: float = 0.20,
-                  match_threshold: float = 0.80) -> str | None:
+                  match_threshold: float = 0.80,
+                  partial_texts=None) -> str | None:
     """
     Suggest a grade based on OCR.
-    key_texts may be a single string or a list of acceptable answers.
+    key_texts may be a single string or a list of acceptable answers (full credit).
+    partial_texts, if given, is a list of answers that earn partial credit (CX).
     Returns 'CC' (full credit), 'CX' (partial), 'XX' (none), or
     None when confidence is too low to suggest (defer to human grader).
     """
@@ -99,7 +104,8 @@ def suggest_grade(student_text: str, key_texts,
     if isinstance(key_texts, str):
         key_texts = [key_texts]
     key_texts = [k for k in key_texts if k]
-    if not key_texts:
+    partial_texts = [p for p in (partial_texts or []) if p]
+    if not key_texts and not partial_texts:
         return None
     _rank = {'CC': 3, 'CX': 2, 'XX': 1, None: 0}
     best = None
@@ -113,4 +119,13 @@ def suggest_grade(student_text: str, key_texts,
         grade = 'CX' if ratio >= 0.4 else 'XX'
         if _rank[grade] > _rank[best]:
             best = grade
+    # Explicitly-defined partial-credit answers (threshold 0.70)
+    if partial_texts and _rank.get(best, 0) < _rank['CX']:
+        for pt in partial_texts:
+            ratio = difflib.SequenceMatcher(
+                None, pt.strip().lower(), student_lower
+            ).ratio()
+            if ratio >= 0.70:
+                best = 'CX'
+                break
     return best

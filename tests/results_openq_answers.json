@@ -1,15 +1,25 @@
 {
-  "openQ_1": [
-    "peristalsis",
-    "peristaltic contractions",
-    "peristaltic waves",
-    "peristaltic movement"
-  ],
-  "openQ_2": [
-    "plasma oxygen partial pressure (mmHg)",
-    "partial pressure of oxygen",
-    "PO2",
-    "oxygen partial pressure",
-    "PO2 (mmHg)"
-  ]
+  "openQ_1": {
+    "full": [
+      "peristalsis",
+      "peristaltic contractions",
+      "peristaltic waves",
+      "peristaltic movement"
+    ],
+    "partial": [
+      "parislolais",
+      "chewing"
+    ]
+  },
+  "openQ_2": {
+    "full": [
+      "plasma oxygen partial pressure (mmHg)",
+      "partial pressure of oxygen",
+      "PO2",
+      "oxygen partial pressure"
+    ],
+    "partial": [
+      "PO2 (mmHg)"
+    ]
+  }
 }

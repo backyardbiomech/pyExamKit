@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = ''):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -49,6 +49,7 @@ class Scanner(object):
         self.api_key = api_key
         self.ai_context = ai_context
         self.preloaded_file = preloaded_file
+        self.review_perfect = review_perfect
         if len(ignores)>0:
             ignores=ignores+','
             self.ignores=list(ast.literal_eval(ignores))
@@ -60,10 +61,13 @@ class Scanner(object):
         # self.path is a Path object
         #Get the file path as a Path object
         self.path=Path(input_file).parent
+        # All user-facing outputs go into a single subfolder
+        self.outdir = self.path / 'ExamScanner_outputs'
+        self.outdir.mkdir(exist_ok=True)
         # Make all the necessary folders
         self.aligneddir = self.path / 'aligned'
         self.aligneddir.mkdir(exist_ok = True)
-        self.markeddir = self.path / 'marked'
+        self.markeddir = self.outdir / 'marked'
         self.markeddir.mkdir(exist_ok = True)
         # initialize file and pathnames (and split pdfs into jpgs) 
         self.image_list = init_functions.filenames(input_file)
@@ -115,7 +119,8 @@ class Scanner(object):
             openQs = OpenQs(self.aligned_image_list, parent=self.parent,
                             ai_ocr=self.ai_ocr, api_key=self.api_key,
                             ai_context=self.ai_context,
-                            preloaded_file=self.preloaded_file)
+                            preloaded_file=self.preloaded_file,
+                            review_perfect=self.review_perfect)
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -124,8 +129,23 @@ class Scanner(object):
             # add openQ results to regular results
             self.resdf = pd.concat([self.resdf, openQs.openQres], axis=1)
         
+        # Embed OCR transcription text into open-Q cells for human readability
+        if self.openQ and openQs is not None:
+            for qk, trans_dict in openQs._transcriptions.items():
+                if qk not in self.resdf.columns:
+                    continue
+                for img_idx, trans_val in trans_dict.items():
+                    if img_idx == 0 or img_idx not in self.resdf.index:
+                        continue
+                    text = trans_val[0] if trans_val else ''
+                    if not text:
+                        continue
+                    grade = str(self.resdf.loc[img_idx, qk])
+                    if grade in ('CC', 'CX', 'XX'):
+                        self.resdf.loc[img_idx, qk] = f'{grade}: {text}'
+
         # write resdf to csv
-        self.resCsv = str(self.path / 'results.csv')
+        self.resCsv = str(self.outdir / 'results.csv')
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
 
         # Save acceptable answers, transcriptions, and grade config for post-session re-grading
@@ -149,7 +169,7 @@ class Scanner(object):
         print('Saving marked files')
         self.outpdf=FPDF('P','pt','Letter')
         scan_functions.savePdf(self.markeddir, self.outpdf, keyname)
-        self.outpdf.output(str(self.path / 'marked.pdf'))
+        self.outpdf.output(str(self.outdir / 'marked.pdf'))
         print('All steps complete!')
 
 
