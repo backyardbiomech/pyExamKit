@@ -14,7 +14,6 @@ dist/
 build/
 .github/agents/
 memory/
-*.spec
 
 # Virtual environments
 .venv/
