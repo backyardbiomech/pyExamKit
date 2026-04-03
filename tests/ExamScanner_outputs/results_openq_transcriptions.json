@@ -1,7 +1,7 @@
 {
   "openQ_1": {
     "1": [
-      "parislolais",
+      "peristalsis",
       0.9
     ],
     "2": [
@@ -9,13 +9,13 @@
       0.9
     ],
     "3": [
-      "peistalsis",
+      "parislolais",
       0.9
     ]
   },
   "openQ_2": {
     "1": [
-      "PO2 (mmHg)",
+      "PaCO2 7.6",
       0.9
     ],
     "2": [
@@ -23,7 +23,7 @@
       0.9
     ],
     "3": [
-      "PO2 (7%)",
+      "PO2 (mmHg)",
       0.9
     ]
   }

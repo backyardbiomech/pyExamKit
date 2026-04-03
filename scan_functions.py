@@ -198,11 +198,19 @@ def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
 
 
 def savePdf(markeddir, outpdf, keyname):
-    '''Assemble all marked JPEGs into the given FPDF object.'''
-    filelist = [str(keyname)]
+    '''Assemble all marked JPEGs into the given FPDF object.
+    keyname may be None when using a key file (no key scan image).
+    '''
+    filelist = []
+    if keyname is not None:
+        filelist.append(str(keyname))
+    key_name_str = keyname.name if keyname is not None else None
+    student_pages = []
     for file in os.listdir(str(markeddir)):
-        if fnmatch.fnmatch(file, '*.jpg') and not fnmatch.fnmatch(file, str(keyname.name)):
-            filelist.append(str(markeddir / file))
+        if fnmatch.fnmatch(file, '*.jpg'):
+            if key_name_str is None or not fnmatch.fnmatch(file, key_name_str):
+                student_pages.append(str(markeddir / file))
+    filelist.extend(sorted(student_pages))
     for page in filelist:
         outpdf.add_page()
         outpdf.image(page, 0, 0, 612)

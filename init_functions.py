@@ -5,7 +5,7 @@ import fitz  # pymupdf
 from pathlib import Path
 
 
-def filenames(input_file):
+def filenames(input_file, scan_jpgs_dir=None):
     #Get the file path as a Path object
     filename=Path(input_file)
     #Get the extension
@@ -14,16 +14,11 @@ def filenames(input_file):
     pathname = filename.parent
     # Get the name of the file
     basename = filename.stem
-    #get the name of the file
-    #basename = input_file.split('.')[0] #includes full path, not extension
-    #ext = input_file.split('.')[1] #extension
-    #pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
-    
 
     # open a pdf file containing all of the scans and make jpegs
     if ext.lower() == '.pdf': 
         # write the jpgs, and change input_file to name of key jpg
-        input_file = splitpdf(input_file)
+        input_file = splitpdf(input_file, scan_jpgs_dir=scan_jpgs_dir)
         #Get the file path as a Path object
         filename=Path(input_file)
         #Get the path to the current directory
@@ -44,7 +39,7 @@ def filenames(input_file):
 #         os.mkdir(basename + '_marked')
     return image_list
     
-def splitpdf(input_file):
+def splitpdf(input_file, scan_jpgs_dir=None):
     '''
     Takes a PDF file and renders each page as a JPEG in a scanJPGs subfolder.
     Uses pymupdf (fitz) so it works with any PDF image format (JPEG, PNG, JBIG2, etc.)
@@ -52,8 +47,12 @@ def splitpdf(input_file):
     '''
     filename = Path(input_file)
     pathname = filename.parent
-    jpgdir = pathname / 'scanJPGs'
-    jpgdir.mkdir(exist_ok=True)
+    jpgdir = Path(scan_jpgs_dir) if scan_jpgs_dir else pathname / 'scanJPGs'
+    jpgdir.mkdir(parents=True, exist_ok=True)
+
+    # Clear stale JPEGs from previous runs before writing new ones
+    for old_file in jpgdir.glob('*.jpg'):
+        old_file.unlink()
 
     doc = fitz.open(str(filename))
     key = None

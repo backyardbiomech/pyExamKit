@@ -1,7 +1,6 @@
 import sys
 import io
 from scanner import Scanner
-from keymaker import KeyMaker
 import customtkinter as ctk
 from tkinter import filedialog
 import ai_ocr
@@ -45,7 +44,7 @@ class pyScanUI(ctk.CTkFrame):
         tabs.pack(fill='both', expand=True)
 
         scan_tab   = tabs.add("Scan Exams")
-        key_tab    = tabs.add("Make Key")
+        key_tab    = tabs.add("Build Key")
         regrade_tab = tabs.add("Re-grade")
 
         # ════════════════════════════════════════════════════════
@@ -86,29 +85,15 @@ class pyScanUI(ctk.CTkFrame):
         self._ai_frame.grid(row=5, column=0, columnspan=2, padx=(30, 10), pady=(0, 2), sticky='w')
         self._ai_frame.grid_remove()
 
-        # Acceptable answers file picker
-        acc_file_row = ctk.CTkFrame(self._ai_frame, fg_color='transparent')
-        acc_file_row.grid(row=0, column=0, columnspan=3, padx=0, pady=(2, 2), sticky='w')
-        ctk.CTkLabel(acc_file_row,
-                     text="Acceptable answers file (optional):").grid(
-            row=0, column=0, padx=(0, 6), pady=2, sticky='w')
-        self.accAnswersEntry = ctk.CTkEntry(
-            acc_file_row, width=320,
-            placeholder_text=".json or .csv — leave blank to type answers during grading")
-        self.accAnswersEntry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky='w')
-        ctk.CTkButton(acc_file_row, text="Browse…",
-                      command=self._browse_acc_answers, width=80).grid(
-            row=0, column=2, padx=(0, 4), pady=2, sticky='w')
-
         self.aiOcrVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(self._ai_frame, text="Use AI OCR (Claude) for handwriting recognition",
                         variable=self.aiOcrVar,
                         command=self._toggle_ai_context_row).grid(
-            row=1, column=0, columnspan=3, padx=0, pady=(2, 2), sticky='w')
+            row=0, column=0, columnspan=3, padx=0, pady=(2, 2), sticky='w')
 
         # Context selection row (shown only when AI OCR is checked)
         self._ai_context_row = ctk.CTkFrame(self._ai_frame, fg_color='transparent')
-        self._ai_context_row.grid(row=2, column=0, columnspan=3, padx=(20, 0), pady=(0, 2), sticky='w')
+        self._ai_context_row.grid(row=1, column=0, columnspan=3, padx=(20, 0), pady=(0, 2), sticky='w')
         self._ai_context_row.grid_remove()
 
         ctk.CTkLabel(self._ai_context_row, text="Exam context:").grid(
@@ -144,29 +129,52 @@ class pyScanUI(ctk.CTkFrame):
                         variable=self.reviewPerfectVar).grid(
             row=3, column=0, columnspan=3, padx=0, pady=(4, 2), sticky='w')
 
+        self.saveMarkedVar = ctk.IntVar(value=1)
+        ctk.CTkCheckBox(scan_frame, text="Save marked answer sheets? (marked/ folder + marked.pdf)",
+                        variable=self.saveMarkedVar).grid(
+            row=6, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+
         self.corrvar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame, text="Mark correct answers on graded sheets?",
                         variable=self.corrvar).grid(
-            row=6, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+            row=7, column=0, columnspan=2, padx=10, pady=(0, 4), sticky='w')
+
+        # ── Key File row (optional JSON key file) ────────────────────────
+        key_file_row = ctk.CTkFrame(scan_frame, fg_color='transparent')
+        key_file_row.grid(row=8, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+        ctk.CTkButton(key_file_row, text="Load Key File…",
+                      command=self._browse_key_file, width=180).pack(side='left', padx=(0, 6))
+        self.scanKeyFileEntry = ctk.CTkEntry(
+            key_file_row, width=320,
+            placeholder_text="Optional: .json / .key.csv key file (skips scanning first page as key)")
+        self.scanKeyFileEntry.pack(side='left', padx=(0, 6))
+        ctk.CTkButton(key_file_row, text="Create / Edit…",
+                      command=self._open_key_file_editor, width=110).pack(side='left')
+
+        ctk.CTkLabel(scan_frame, text="Pages per student (multi-page exams):").grid(
+            row=9, column=0, padx=10, pady=4, sticky='w')
+        self.pagesPerStudentEntry = ctk.CTkEntry(scan_frame, width=60)
+        self.pagesPerStudentEntry.insert(0, '1')
+        self.pagesPerStudentEntry.grid(row=9, column=1, padx=10, pady=4, sticky='w')
 
         ctk.CTkLabel(scan_frame, text="Points per bubble question:").grid(
-            row=7, column=0, padx=10, pady=4, sticky='w')
+            row=10, column=0, padx=10, pady=4, sticky='w')
         self.bubbleValEntry = ctk.CTkEntry(scan_frame, width=80)
         self.bubbleValEntry.insert(0, '1')
-        self.bubbleValEntry.grid(row=7, column=1, padx=10, pady=4, sticky='w')
+        self.bubbleValEntry.grid(row=10, column=1, padx=10, pady=4, sticky='w')
 
         ctk.CTkLabel(scan_frame, text="Points per open-ended question:").grid(
-            row=8, column=0, padx=10, pady=4, sticky='w')
+            row=11, column=0, padx=10, pady=4, sticky='w')
         self.openValEntry = ctk.CTkEntry(scan_frame, width=80)
         self.openValEntry.insert(0, '2')
-        self.openValEntry.grid(row=8, column=1, padx=10, pady=4, sticky='w')
+        self.openValEntry.grid(row=11, column=1, padx=10, pady=4, sticky='w')
 
         ctk.CTkLabel(
             scan_frame,
             text="Fill threshold (0.20 = lighter marks, 0.30 = ignore light erases):",
-        ).grid(row=9, column=0, padx=10, pady=4, sticky='w')
+        ).grid(row=12, column=0, padx=10, pady=4, sticky='w')
         thresh_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
-        thresh_frame.grid(row=9, column=1, padx=10, pady=4, sticky='w')
+        thresh_frame.grid(row=12, column=1, padx=10, pady=4, sticky='w')
         self.threshVar = ctk.DoubleVar(value=0.25)
         self.threshSlider = ctk.CTkSlider(thresh_frame, from_=0.10, to=0.40,
                                           variable=self.threshVar,
@@ -179,35 +187,91 @@ class pyScanUI(ctk.CTkFrame):
         ctk.CTkButton(scan_frame, text="Run Scan",
                       command=self.button_go_callback,
                       fg_color='#2563eb', hover_color='#1d4ed8').grid(
-            row=10, column=0, columnspan=2, pady=10)
+            row=13, column=0, columnspan=2, pady=10)
 
         # ════════════════════════════════════════════════════════
-        # TAB 2 — Make Key
+        # TAB 2 — Build Key
         # ════════════════════════════════════════════════════════
         key_frame = ctk.CTkFrame(key_tab, fg_color='transparent')
         key_frame.pack(fill='x', pady=(0, 8))
 
-        ctk.CTkButton(key_frame, text="Choose JPG of blank answer sheet",
-                      command=self.button_keyimg_callback).grid(
-            row=0, column=0, padx=10, pady=4, sticky='w')
-        self.keyImgEntry = ctk.CTkEntry(key_frame, width=400)
-        self.keyImgEntry.grid(row=0, column=1, padx=10, pady=4, sticky='ew')
+        ctk.CTkLabel(key_frame,
+                     text="Build an answer key from a scanned answer sheet:",
+                     font=ctk.CTkFont(weight='bold')).grid(
+            row=0, column=0, columnspan=2, padx=10, pady=(8, 4), sticky='w')
 
-        ctk.CTkButton(key_frame, text="Choose CSV of answers",
-                      command=self.button_keyFile_callback).grid(
-            row=1, column=0, padx=10, pady=4, sticky='w')
-        self.keyFileEntry = ctk.CTkEntry(key_frame, width=400)
-        self.keyFileEntry.grid(row=1, column=1, padx=10, pady=4, sticky='ew')
+        # ── Mode selection ─────────────────────────────────────────────
+        self._buildKeyModeVar = ctk.IntVar(value=0)
+        ctk.CTkRadioButton(
+            key_frame,
+            text="Blank sheet — mark open-ended answer-box locations only",
+            variable=self._buildKeyModeVar, value=0,
+            command=self._toggle_key_filled_frame).grid(
+            row=1, column=0, columnspan=2, padx=10, pady=(2, 1), sticky='w')
+        ctk.CTkRadioButton(
+            key_frame,
+            text="Instructor-filled sheet — auto-scan MC bubbles + OCR handwriting",
+            variable=self._buildKeyModeVar, value=1,
+            command=self._toggle_key_filled_frame).grid(
+            row=2, column=0, columnspan=2, padx=10, pady=(1, 4), sticky='w')
 
-        ctk.CTkLabel(key_frame, text="Exam version letter (A–D):").grid(
-            row=2, column=0, padx=10, pady=4, sticky='w')
-        self.keyVersionEntry = ctk.CTkEntry(key_frame, width=60)
-        self.keyVersionEntry.insert(0, 'A')
-        self.keyVersionEntry.grid(row=2, column=1, padx=10, pady=4, sticky='w')
+        # ── Filled-sheet options (hidden until filled mode is selected) ──
+        self._key_filled_frame = ctk.CTkFrame(key_frame, fg_color='transparent')
+        self._key_filled_frame.grid(row=3, column=0, columnspan=2,
+                                     padx=(30, 10), pady=(0, 4), sticky='w')
+        self._key_filled_frame.grid_remove()
 
-        ctk.CTkButton(key_frame, text="Make the Key",
-                      command=self.button_makekey_callback).grid(
-            row=3, column=0, columnspan=2, pady=10)
+        ctk.CTkLabel(self._key_filled_frame,
+                     text="Number of bubble MC questions:").grid(
+            row=0, column=0, padx=0, pady=2, sticky='w')
+        self._keyBuildNumMCEntry = ctk.CTkEntry(self._key_filled_frame, width=80)
+        self._keyBuildNumMCEntry.grid(row=0, column=1, padx=10, pady=2, sticky='w')
+
+        ctk.CTkLabel(self._key_filled_frame,
+                     text="Questions to skip (comma-separated):").grid(
+            row=1, column=0, padx=0, pady=2, sticky='w')
+        self._keyBuildIgnoreEntry = ctk.CTkEntry(self._key_filled_frame, width=300)
+        self._keyBuildIgnoreEntry.grid(row=1, column=1, padx=10, pady=2, sticky='w')
+
+        self._keyBuildAiVar = ctk.IntVar(value=0)
+        ctk.CTkCheckBox(
+            self._key_filled_frame,
+            text="Use AI OCR (Claude) for handwriting recognition",
+            variable=self._keyBuildAiVar,
+            command=self._toggle_key_build_ai_row).grid(
+            row=2, column=0, columnspan=2, padx=0, pady=(4, 2), sticky='w')
+
+        self._key_build_ai_row = ctk.CTkFrame(self._key_filled_frame,
+                                               fg_color='transparent')
+        self._key_build_ai_row.grid(row=3, column=0, columnspan=2,
+                                     padx=(20, 0), pady=(0, 2), sticky='w')
+        self._key_build_ai_row.grid_remove()
+
+        ctk.CTkLabel(self._key_build_ai_row, text="Exam context:").grid(
+            row=0, column=0, padx=(0, 6), pady=2, sticky='w')
+        self._keyBuildAiContextVar = ctk.StringVar(
+            value=ai_ocr.PRESET_LABELS[0])
+        ctk.CTkOptionMenu(
+            self._key_build_ai_row,
+            values=ai_ocr.PRESET_LABELS,
+            variable=self._keyBuildAiContextVar,
+            command=self._on_key_build_context_change,
+            width=260).grid(row=0, column=1, padx=(0, 8), pady=2, sticky='w')
+        ctk.CTkButton(
+            self._key_build_ai_row, text="Configure API Key…",
+            command=self._open_ai_settings,
+            width=160).grid(row=0, column=2, padx=(0, 4), pady=2, sticky='w')
+
+        self._keyBuildCustomContextEntry = ctk.CTkEntry(
+            self._key_build_ai_row, width=440,
+            placeholder_text="Describe the subject / exam type for the AI model…")
+        self._keyBuildCustomContextEntry.grid(
+            row=1, column=1, columnspan=2, padx=(0, 4), pady=(0, 2), sticky='w')
+        self._keyBuildCustomContextEntry.grid_remove()
+
+        ctk.CTkButton(key_frame, text="Build Key from Exam Scan…",
+                      command=self._open_key_builder).grid(
+            row=4, column=0, columnspan=2, pady=10)
 
         # ════════════════════════════════════════════════════════
         # TAB 3 — Re-grade
@@ -253,18 +317,9 @@ class pyScanUI(ctk.CTkFrame):
             self._ai_frame.grid_remove()
             self._ai_context_row.grid_remove()
 
-    def _browse_acc_answers(self):
-        filename = filedialog.askopenfilename(
-            title='Choose acceptable answers file',
-            filetypes=[('JSON files', '*.json'), ('CSV files', '*.csv'),
-                       ('All files', '*.*')])
-        if filename:
-            self.accAnswersEntry.delete(0, 'end')
-            self.accAnswersEntry.insert(0, filename)
-
     def _browse_regrade_csv(self):
         filename = filedialog.askopenfilename(
-            filetypes=[('CSV files', '*.csv'), ('All files', '*.*')])
+            filetypes=[('CSV files', '*.csv')])
         if filename:
             self.regradeEntry.delete(0, 'end')
             self.regradeEntry.insert(0, filename)
@@ -348,6 +403,84 @@ class pyScanUI(ctk.CTkFrame):
             context = preset_val
         return True, api_key, context
 
+    def _browse_key_file(self):
+        filename = filedialog.askopenfilename(
+            title='Choose exam key file',
+            filetypes=[('CSV key file', '*.csv'),
+                       ('JSON files', '*.json')])
+        if filename:
+            self.scanKeyFileEntry.delete(0, 'end')
+            self.scanKeyFileEntry.insert(0, filename)
+
+    def _open_key_file_editor(self):
+        from openQ import KeyFileEditorDialog
+        current_path = self.scanKeyFileEntry.get().strip()
+        dlg = KeyFileEditorDialog(self.parent, path=current_path)
+        if dlg.saved_path:
+            self.scanKeyFileEntry.delete(0, 'end')
+            self.scanKeyFileEntry.insert(0, dlg.saved_path)
+
+    def _toggle_key_filled_frame(self):
+        if self._buildKeyModeVar.get() == 1:
+            self._key_filled_frame.grid()
+        else:
+            self._keyBuildAiVar.set(0)
+            self._key_filled_frame.grid_remove()
+            self._key_build_ai_row.grid_remove()
+
+    def _toggle_key_build_ai_row(self):
+        if self._keyBuildAiVar.get():
+            self._key_build_ai_row.grid()
+        else:
+            self._key_build_ai_row.grid_remove()
+
+    def _on_key_build_context_change(self, selected: str):
+        if ai_ocr.PRESET_VALUES.get(selected) is None:
+            self._keyBuildCustomContextEntry.grid()
+        else:
+            self._keyBuildCustomContextEntry.grid_remove()
+
+    def _open_key_builder(self):
+        import ast
+        from openQ import KeyBuilderDialog
+        mode = 'filled' if self._buildKeyModeVar.get() == 1 else 'blank'
+        num_mc = 0
+        ignores = None
+        use_ai = False
+        api_key = ''
+        ai_context = ''
+        if mode == 'filled':
+            try:
+                num_mc = int(self._keyBuildNumMCEntry.get().strip() or '0')
+            except ValueError:
+                num_mc = 0
+            raw_ign = self._keyBuildIgnoreEntry.get().strip()
+            if raw_ign:
+                try:
+                    ignores = list(ast.literal_eval(raw_ign + ','))
+                except Exception:
+                    ignores = None
+                    self._log(
+                        f'Warning: could not parse "Questions to skip" value "{raw_ign}" '
+                        '— ignored questions will not be skipped. '
+                        'Use comma-separated numbers, e.g.: 3,7,12')
+            use_ai = bool(self._keyBuildAiVar.get())
+            if use_ai:
+                api_key = ai_ocr.load_config().get('anthropic_api_key', '')
+                selected = self._keyBuildAiContextVar.get()
+                preset_val = ai_ocr.PRESET_VALUES.get(selected)
+                ai_context = (
+                    self._keyBuildCustomContextEntry.get().strip()
+                    if preset_val is None else preset_val)
+        dlg = KeyBuilderDialog(self.parent, mode=mode,
+                               num_mc_questions=num_mc,
+                               ignores=ignores,
+                               use_ai=use_ai,
+                               api_key=api_key,
+                               ai_context=ai_context)
+        if dlg.saved_path:
+            self._log(f'Key saved: {dlg.saved_path}')
+
     def _update_thresh_label(self, value):
         self.threshLabel.configure(text=f'{value:.2f}')
 
@@ -362,32 +495,24 @@ class pyScanUI(ctk.CTkFrame):
         self.fileEntry.delete(0, 'end')
         self.fileEntry.insert(0, filename)
 
-    def button_keyimg_callback(self):
-        filename = filedialog.askopenfilename()
-        self.keyImgEntry.delete(0, 'end')
-        self.keyImgEntry.insert(0, filename)
-
-    def button_keyFile_callback(self):
-        filename = filedialog.askopenfilename()
-        self.keyFileEntry.delete(0, 'end')
-        self.keyFileEntry.insert(0, filename)
-
     def button_go_callback(self):
         input_file  = self.fileEntry.get()
         try:
             quests    = int(self.numQEntry.get())
             bubbleVal = float(self.bubbleValEntry.get())
             openVal   = float(self.openValEntry.get())
+            pages_per_student = max(1, int(self.pagesPerStudentEntry.get() or '1'))
         except ValueError as exc:
             self._log(f'Input error: {exc}. Check number of questions and point values.')
             return
         if not input_file:
             self._log('Please choose an input file first.')
             return
-        markmissing = bool(self.setavar.get())
-        openQ       = bool(self.openQvar.get())
-        corrmark    = bool(self.corrvar.get())
-        ignores     = self.ignoreEntry.get()
+        markmissing  = bool(self.setavar.get())
+        openQ        = bool(self.openQvar.get())
+        save_marked  = bool(self.saveMarkedVar.get())
+        corrmark     = bool(self.corrvar.get())
+        ignores      = self.ignoreEntry.get()
         thresh      = self.threshVar.get()
 
         use_ai, api_key, ai_context = self._get_ai_params()
@@ -395,8 +520,8 @@ class pyScanUI(ctk.CTkFrame):
             self._log('AI OCR is enabled but no API key is configured. '
                       'Click "Configure API Key…" to add one.')
             return
-        acc_answers_file = self.accAnswersEntry.get().strip() if self.openQvar.get() else ''
         review_perfect   = bool(self.reviewPerfectVar.get()) if self.openQvar.get() else True
+        key_file_path    = self.scanKeyFileEntry.get().strip()
 
         self._log('Starting scan…')
         old_stdout = sys.stdout
@@ -406,21 +531,12 @@ class pyScanUI(ctk.CTkFrame):
                     ignores, thresh, bubbleVal, openVal,
                     parent=self.parent,
                     ai_ocr=use_ai, api_key=api_key, ai_context=ai_context,
-                    preloaded_file=acc_answers_file,
-                    review_perfect=review_perfect)
+                    review_perfect=review_perfect,
+                    key_file_path=key_file_path,
+                    pages_per_student=pages_per_student,
+                    save_marked=save_marked)
         finally:
             sys.stdout = old_stdout
         self._log('Done.')
 
-    def button_makekey_callback(self):
-        keyImg     = self.keyImgEntry.get()
-        keyFile    = self.keyFileEntry.get()
-        keyVersion = self.keyVersionEntry.get()
-        self._log('Making key…')
-        old_stdout = sys.stdout
-        sys.stdout = TextRedirector(self.log_box)
-        try:
-            KeyMaker(keyImg, keyFile, keyVersion)
-        finally:
-            sys.stdout = old_stdout
-        self._log('Key created.')
+

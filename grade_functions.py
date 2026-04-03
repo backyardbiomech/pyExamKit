@@ -231,8 +231,11 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     RED   = (255, 0, 0)
     BLUE  = (0, 0, 255)
 
+    keyname = None
     # load aligned images in loop with index matching the results row number
     for row in range(len(aligned_image_list)):
+        if aligned_image_list[row] is None:
+            continue   # synthetic key row — no image to mark
         pil_img = PILImage.open(aligned_image_list[row]).convert('RGB')
         draw = ImageDraw.Draw(pil_img)
 
