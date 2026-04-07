@@ -129,6 +129,14 @@ def _pil_to_tkphoto(pil_img, master=None):
     return tk.PhotoImage(**kwargs)
 
 
+def _openq_sort_key(k: str) -> int:
+    """Numeric sort key for openQ_N keys so openQ_2 sorts before openQ_10."""
+    try:
+        return int(k.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        return 0
+
+
 def _load_aligned_arr(imgpath: str) -> 'np.ndarray':
     """
     Load a scan image (JPEG or PDF) and return the aligned numpy array.
@@ -1650,7 +1658,7 @@ class KeyFileEditorDialog:
         self._q_listbox.delete(0, tk.END)
         all_keys = (
             sorted(self._bubble.keys()) +
-            sorted(self._open_qs.keys())
+            sorted(self._open_qs.keys(), key=_openq_sort_key)
         )
         for k in all_keys:
             self._q_listbox.insert(tk.END, self._q_display_text(k))
@@ -1663,7 +1671,7 @@ class KeyFileEditorDialog:
         sel = self._q_listbox.curselection()
         if not sel:
             return None
-        all_keys = sorted(self._bubble.keys()) + sorted(self._open_qs.keys())
+        all_keys = sorted(self._bubble.keys()) + sorted(self._open_qs.keys(), key=_openq_sort_key)
         idx = sel[0]
         if idx < len(all_keys):
             return all_keys[idx]
@@ -1823,6 +1831,7 @@ class KeyFileEditorDialog:
         self._full_listbox.pack(side='left', fill='x', expand=True)
         for ans in qdata.get('full', []):
             self._full_listbox.insert(tk.END, ans)
+        _full_edit_idx = [None]  # mutable container: index being edited, or None
 
         full_input_frame = tk.Frame(f)
         full_input_frame.pack(fill='x', padx=4, pady=(2, 4))
@@ -1835,6 +1844,15 @@ class KeyFileEditorDialog:
             new = self._full_new_var.get().strip()
             if not new:
                 return
+            if _full_edit_idx[0] is not None:
+                others = [self._full_listbox.get(i) for i in range(self._full_listbox.size())
+                          if i != _full_edit_idx[0]]
+                if new.lower() not in [e.lower() for e in others]:
+                    self._full_listbox.delete(_full_edit_idx[0])
+                    self._full_listbox.insert(_full_edit_idx[0], new)
+                _full_edit_idx[0] = None
+                self._full_new_var.set('')
+                return
             existing = [self._full_listbox.get(i) for i in range(self._full_listbox.size())]
             if new.lower() not in [e.lower() for e in existing]:
                 self._full_listbox.insert(tk.END, new)
@@ -1842,15 +1860,26 @@ class KeyFileEditorDialog:
 
         def _remove_full():
             sel = self._full_listbox.curselection()
-            if sel and sel[0] != 0:
+            if sel:
                 self._full_listbox.delete(sel[0])
+                _full_edit_idx[0] = None
+                self._full_new_var.set('')
+
+        def _on_full_double(event):
+            s = self._full_listbox.curselection()
+            if s:
+                _full_edit_idx[0] = s[0]
+                self._full_new_var.set(self._full_listbox.get(s[0]))
+                full_entry.focus_set()
+                full_entry.select_range(0, tk.END)
 
         full_entry.bind('<Return>', lambda e: _add_full())
+        self._full_listbox.bind('<Double-Button-1>', _on_full_double)
         tk.Button(full_input_frame, text='Add', command=_add_full,
                   font=_F, bg='#bbf7d0').pack(side='left', padx=(0, 4))
         tk.Button(full_input_frame, text='Remove selected', command=_remove_full,
                   font=_F).pack(side='left')
-        tk.Label(f, text='(Cannot remove primary answer [index 0])',
+        tk.Label(f, text='(Double-click an answer to edit it in place)',
                  font=('Arial', 9), fg='gray50').pack(anchor='w', padx=4)
 
         # ── Partial-credit answers ────────────────────────────────────────
@@ -2730,10 +2759,10 @@ class KeyBuilderDialog:
 
     def _refresh_q_list(self, select_key: str | None = None):
         self._q_listbox.delete(0, tk.END)
-        for qk in sorted(self._questions.keys()):
+        for qk in sorted(self._questions.keys(), key=_openq_sort_key):
             self._q_listbox.insert(tk.END, self._q_display_text(qk))
         if select_key:
-            all_keys = sorted(self._questions.keys())
+            all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
             if select_key in all_keys:
                 idx = all_keys.index(select_key)
                 self._q_listbox.selection_clear(0, tk.END)
@@ -2745,7 +2774,7 @@ class KeyBuilderDialog:
         sel = self._q_listbox.curselection()
         if not sel:
             return
-        all_keys = sorted(self._questions.keys())
+        all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
         idx = sel[0]
         if idx >= len(all_keys):
             return
@@ -2780,6 +2809,7 @@ class KeyBuilderDialog:
         self._fl_listbox.pack(side='left', fill='x', expand=True)
         for ans in qd.get('full', []):
             self._fl_listbox.insert(tk.END, ans)
+        _fl_edit_idx = [None]  # mutable container: index being edited, or None
 
         fl_inp = tk.Frame(f)
         fl_inp.pack(fill='x', padx=4, pady=(2, 4))
@@ -2791,6 +2821,15 @@ class KeyBuilderDialog:
             new = self._fl_new_var.get().strip()
             if not new:
                 return
+            if _fl_edit_idx[0] is not None:
+                others = [self._fl_listbox.get(i) for i in range(self._fl_listbox.size())
+                          if i != _fl_edit_idx[0]]
+                if new.lower() not in [e.lower() for e in others]:
+                    self._fl_listbox.delete(_fl_edit_idx[0])
+                    self._fl_listbox.insert(_fl_edit_idx[0], new)
+                _fl_edit_idx[0] = None
+                self._fl_new_var.set('')
+                return
             existing = [self._fl_listbox.get(i) for i in range(self._fl_listbox.size())]
             if new.lower() not in [e.lower() for e in existing]:
                 self._fl_listbox.insert(tk.END, new)
@@ -2798,13 +2837,24 @@ class KeyBuilderDialog:
 
         def _remove_full():
             sel = self._fl_listbox.curselection()
-            if sel and sel[0] != 0:
+            if sel:
                 self._fl_listbox.delete(sel[0])
+                _fl_edit_idx[0] = None
+                self._fl_new_var.set('')
+
+        def _on_fl_double(event):
+            s = self._fl_listbox.curselection()
+            if s:
+                _fl_edit_idx[0] = s[0]
+                self._fl_new_var.set(self._fl_listbox.get(s[0]))
+                fl_entry.focus_set()
+                fl_entry.select_range(0, tk.END)
 
         fl_entry.bind('<Return>', lambda e: _add_full())
+        self._fl_listbox.bind('<Double-Button-1>', _on_fl_double)
         tk.Button(fl_inp, text='Add', command=_add_full, font=_F, bg='#bbf7d0').pack(side='left', padx=(0, 4))
         tk.Button(fl_inp, text='Remove selected', command=_remove_full, font=_F).pack(side='left')
-        tk.Label(f, text='(Cannot remove primary answer [index 0])',
+        tk.Label(f, text='(Double-click an answer to edit it in place)',
                  font=('Arial', 9), fg='gray50').pack(anchor='w', padx=4)
 
         # ── Partial-credit answers ─────────────────────────────────────────
@@ -2859,7 +2909,7 @@ class KeyBuilderDialog:
         # Refresh display text (counts) but preserve whatever is currently selected,
         # not the question being committed — caller may have already changed the selection.
         current_sel = self._q_listbox.curselection()
-        all_keys = sorted(self._questions.keys())
+        all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
         keep_key = all_keys[current_sel[0]] if current_sel and current_sel[0] < len(all_keys) else qk
         self._refresh_q_list(select_key=keep_key)
 
