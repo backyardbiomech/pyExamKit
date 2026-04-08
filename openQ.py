@@ -412,8 +412,8 @@ def save_key_csv(path: str, data: dict) -> None:
         for qk in sorted(bubble.keys()):
             writer.writerow(['bubble', qk, '', '', '', '', '', bubble[qk], ''])
 
-        # Open-ended questions (sorted by key)
-        for qk in sorted(open_qs.keys()):
+        # Open-ended questions (sorted numerically so openQ_2 precedes openQ_10)
+        for qk in sorted(open_qs.keys(), key=_openq_sort_key):
             qdata = open_qs[qk]
             page = qdata.get('page', 1) or 1
             coords = qdata.get('coords')
@@ -2734,7 +2734,7 @@ class KeyBuilderDialog:
                       if qd.get('page') == page_num]
         if not candidates:
             return
-        last_key = sorted(candidates)[-1]
+        last_key = sorted(candidates, key=_openq_sort_key)[-1]
         del self._questions[last_key]
         if self._current_q_key == last_key:
             self._current_q_key = None
@@ -2758,20 +2758,25 @@ class KeyBuilderDialog:
         return f'{qk}  p{page}  ({n_full}F/{n_part}P  box:{has_coords})'
 
     def _refresh_q_list(self, select_key: str | None = None):
+        yview_top = self._q_listbox.yview()[0]  # save scroll fraction before rebuild
         self._q_listbox.delete(0, tk.END)
-        for qk in sorted(self._questions.keys(), key=_openq_sort_key):
+        all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
+        for qk in all_keys:
             self._q_listbox.insert(tk.END, self._q_display_text(qk))
-        if select_key:
-            all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
-            if select_key in all_keys:
-                idx = all_keys.index(select_key)
-                self._q_listbox.selection_clear(0, tk.END)
-                self._q_listbox.selection_set(idx)
-                self._q_listbox.see(idx)
+        if select_key and select_key in all_keys:
+            idx = all_keys.index(select_key)
+            self._q_listbox.selection_clear(0, tk.END)
+            self._q_listbox.selection_set(idx)
+            self._q_listbox.see(idx)
+        else:
+            # No explicit navigation — restore previous scroll position
+            self._q_listbox.yview_moveto(yview_top)
 
     def _on_q_select(self, event=None):
-        self._commit_answer_edit()
+        # Capture the clicked index BEFORE _commit_answer_edit rebuilds the list
+        # (rebuilding resets curselection to the previously committed key).
         sel = self._q_listbox.curselection()
+        self._commit_answer_edit()
         if not sel:
             return
         all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
@@ -2781,6 +2786,9 @@ class KeyBuilderDialog:
         qk = all_keys[idx]
         self._current_q_key = qk
         self._build_answer_editor(qk)
+        # Re-apply selection to clicked row (commit may have moved highlight)
+        self._q_listbox.selection_clear(0, tk.END)
+        self._q_listbox.selection_set(idx)
 
     # ------------------------------------------------------------------
     # Answer editor
@@ -2906,12 +2914,9 @@ class KeyBuilderDialog:
         if hasattr(self, '_pl_listbox'):
             self._questions[qk]['partial'] = [
                 self._pl_listbox.get(i) for i in range(self._pl_listbox.size())]
-        # Refresh display text (counts) but preserve whatever is currently selected,
-        # not the question being committed — caller may have already changed the selection.
-        current_sel = self._q_listbox.curselection()
-        all_keys = sorted(self._questions.keys(), key=_openq_sort_key)
-        keep_key = all_keys[current_sel[0]] if current_sel and current_sel[0] < len(all_keys) else qk
-        self._refresh_q_list(select_key=keep_key)
+        # Refresh display text (counts only) without scrolling or moving selection.
+        # The caller (_on_q_select or similar) is responsible for updating selection.
+        self._refresh_q_list()
 
     # ------------------------------------------------------------------
     # MC answer management

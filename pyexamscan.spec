@@ -1,5 +1,8 @@
 # pyexamscan.spec
-# Build with: uv run pyinstaller pyexamscan.spec
+# Build with: source .venv/bin/activate && python -m PyInstaller pyexamscan.spec -y
+# NOTE: use "python -m PyInstaller" (not bare "pyinstaller") to ensure the venv
+# Python is used for analysis; otherwise conda's Python may be picked up and
+# packages like customtkinter won't be found.
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -17,6 +20,7 @@ a = Analysis(
         *collect_submodules('skimage'),
         *collect_submodules('pandas'),
         *collect_submodules('scipy'),
+        *collect_submodules('customtkinter'),
         'PIL._tkinter_finder',
         'fitz',
     ],
