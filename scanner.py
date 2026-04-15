@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, strictness=0.5):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -32,6 +32,8 @@ class Scanner(object):
         markmissing is a boolean - True if select all that apply, False if not
         openQ is a boolean - True if there are any open ended questions to grade on screen
         ignnores is a comma separated string of numbers of questions to not scan (for open ended Q's)
+        strictness is a float (0-1) controlling how strict partial credit is for bubble questions.
+                   Only applies when select-all-that-apply is used. Higher = stricter (default 0.5)
         '''
         self.input_file = input_file
         self.quests = quests
@@ -40,6 +42,7 @@ class Scanner(object):
         self.corrMark = corrmark
         self.bubbleVal = bubbleVal
         self.openVal = openVal
+        self.strictness = strictness
         if len(ignores)>0:
             ignores=ignores+','
             self.ignores=list(ast.literal_eval(ignores))
@@ -102,7 +105,7 @@ class Scanner(object):
             openQs.openQres is a dataframe containing the two-letter results (CC, CX, XX) for the open ended questions in same format as main results dictionary
             '''
             
-            openQs = OpenQs(self.aligned_image_list)
+            openQs = OpenQs(self.aligned_image_list, self.ignores)
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -116,7 +119,7 @@ class Scanner(object):
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
         
         # grade the results csv file and save out pts per question csv file
-        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir)
+        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir, self.strictness)
         
         # mark questions
         # markeddir = self.image_list[0].rsplit('/',1)[0]+'/marked/'

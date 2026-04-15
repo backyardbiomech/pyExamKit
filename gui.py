@@ -1,4 +1,6 @@
 import sys
+import json
+from pathlib import Path
 from scanner import Scanner
 from keymaker import KeyMaker
 from tkinter import *
@@ -57,6 +59,12 @@ class pyScanUI(Frame):
         self.openValEntry = Entry(self.parent, width = 10)
         self.openValEntry.insert(0, '2')
         self.openValEntry.pack()
+
+        self.strictnessLabel = Label(self.parent, text = 'partial credit strictness (0=most generous, approaching 1=very strict):\nOnly affects select-all-that-apply questions. Default 0.5.')
+        self.strictnessLabel.pack()
+        self.strictnessEntry = Entry(self.parent, width = 10)
+        self.strictnessEntry.insert(0, '0.5')
+        self.strictnessEntry.pack()
         
         self.threshlabel = Label(self.parent, text = "Don't change the value below unless you are having problems. \n Decrease to 0.2 to pick up lighter marks, \n increase to 0.3 to avoid picking up erased marks")
         self.threshlabel.pack()
@@ -92,6 +100,18 @@ class pyScanUI(Frame):
         self.keyVersionEntry = Entry(self.parent, width = 5)
         self.keyVersionEntry.insert(0, 'A')
         self.keyVersionEntry.pack()
+
+        self.keyNumQLabel = Label(self.parent, text = 'Enter number of questions on the exam (stored in key metadata):')
+        self.keyNumQLabel.pack()
+
+        self.keyNumQEntry = Entry(self.parent, width = 10)
+        self.keyNumQEntry.pack()
+
+        self.keyIgnoreLabel = Label(self.parent, text = 'Enter question numbers to skip/ignore (open-ended Qs), comma-separated (stored in key metadata):')
+        self.keyIgnoreLabel.pack()
+
+        self.keyIgnoreEntry = Entry(self.parent, width = 50)
+        self.keyIgnoreEntry.pack()
         
         button_makeKey = Button(self.parent, text = "Make the Key", command = self.button_makekey_callback)
         button_makeKey.pack()
@@ -125,7 +145,26 @@ class pyScanUI(Frame):
         filename = filedialog.askopenfilename()
         self.fileEntry.delete(0,END)
         self.fileEntry.insert(0,filename)
-        
+        # Try to auto-load key metadata from the same directory
+        if filename:
+            meta_path = Path(filename).parent / 'key_metadata.json'
+            if meta_path.exists():
+                try:
+                    with open(meta_path, 'r') as f:
+                        metadata = json.load(f)
+                    num_q = metadata.get('num_questions', '')
+                    skip_q = metadata.get('questions_to_skip', '')
+                    if num_q:
+                        self.numQEntry.delete(0, END)
+                        self.numQEntry.insert(0, str(num_q))
+                    if skip_q:
+                        self.ignoreEntry.delete(0, END)
+                        self.ignoreEntry.insert(0, str(skip_q))
+                    if num_q or skip_q:
+                        print("Key metadata loaded: {} questions, skip: {}".format(num_q, skip_q))
+                except Exception as e:
+                    print("Could not load key metadata: {}".format(e))
+
     def button_keyimg_callback(self):
         filename = filedialog.askopenfilename()
         self.keyImgEntry.delete(0,END)
@@ -151,14 +190,17 @@ class pyScanUI(Frame):
         thresh = float(self.threshEntry.get())
         bubbleVal = float(self.bubbleValEntry.get())
         openVal = float(self.openValEntry.get())
+        strictness = float(self.strictnessEntry.get())
         #main call to start processing
-        Scanner(input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal)
+        Scanner(input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, strictness)
         
     def button_makekey_callback(self):
         keyImg = self.keyImgEntry.get()
         keyFile = self.keyFileEntry.get()
         keyVersion = self.keyVersionEntry.get()
-        KeyMaker(keyImg, keyFile, keyVersion)
+        numQuestions = self.keyNumQEntry.get()
+        questionsToSkip = self.keyIgnoreEntry.get()
+        KeyMaker(keyImg, keyFile, keyVersion, numQuestions, questionsToSkip)
         
 
 #     def button_grade_callback(self):
