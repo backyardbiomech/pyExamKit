@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -38,6 +38,7 @@ class Scanner(object):
         ai_context is the subject-specific context hint passed to the model
         key_file_path is the path to a JSON or CSV exam key file (optional)
         pages_per_student is the number of scanned pages per student (default 1)
+        strictness is a float (0-1) controlling how strict partial credit is for bubble questions.
         '''
         self.input_file = input_file
         self.quests = quests
@@ -55,6 +56,7 @@ class Scanner(object):
         self.review_perfect = review_perfect
         self.key_file_path = key_file_path
         self.pages_per_student = max(1, int(pages_per_student))
+        self.strictness = strictness
         self._key_data = None
         if key_file_path:
             from openQ import load_key_file
@@ -218,7 +220,7 @@ class Scanner(object):
             )
         
         # grade the results csv file and save out pts per question csv file
-        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir)
+        grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir, self.strictness)
         
         # mark questions
         if self.save_marked:

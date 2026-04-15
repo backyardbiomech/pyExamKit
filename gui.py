@@ -1,5 +1,7 @@
 import sys
 import io
+import json
+from pathlib import Path
 from scanner import Scanner
 import customtkinter as ctk
 from tkinter import filedialog
@@ -538,5 +540,4 @@ class pyScanUI(ctk.CTkFrame):
         finally:
             sys.stdout = old_stdout
         self._log('Done.')
-
 
