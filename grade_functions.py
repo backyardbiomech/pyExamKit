@@ -18,7 +18,7 @@ def getid(idRes, nRes):
     return lastName, firstName, studentID
 
     
-def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
+def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5):
     #open the csv into a Pandas data frame
     df=pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
@@ -54,7 +54,7 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
                     ptsdf.loc[row,col] = openVal
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
                 if ans == 'CX':
-                    score =+ openVal / 2
+                    score += openVal / 2
                     partscore += openVal / 2
                     ptsdf.loc[row,col] = openVal / 2
                 # go on to the next question
@@ -95,8 +95,8 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir):
                     ptsdf.loc[row,col] = bubbleVal
                 else:
                     ptsdf.loc[row,col]=0
-                #if anything matches...
-                if 0 < s.ratio() < 1:
+                #if anything matches above the strictness threshold, award partial credit
+                if 0 < s.ratio() < 1 and s.ratio() >= strictness:
                     ptscore=0
                     #each bubble is worth 1/(# of filled bubbles on key) up to 1
                     partial = bubbleVal/len(key)

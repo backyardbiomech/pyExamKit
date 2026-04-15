@@ -1,24 +1,41 @@
+import re
 import numpy as np
 import cv2
 import fnmatch
 import os
 import grade_functions
 import pandas as pd
+try:
+    import tkinter as tk
+    from tkinter import simpledialog
+    _tk_available = True
+except ImportError:
+    _tk_available = False
+
+# Display constants for the open-ended question box labels
+_LABEL_COLOR = (0, 0, 200)   # BGR: red-ish for visibility
+_LABEL_FONT_SCALE = 0.4
 
 class OpenQs(object):
     '''
     a class to store all things regarding open ended questions
     '''
-    def __init__(self, image_list):
+    def __init__(self, image_list, ignores=None):
+        '''
+        image_list: list of aligned image paths
+        ignores: list of integer question numbers that are open-ended (from the "questions to skip" field).
+                 These are used as default labels for the open-ended question boxes.
+        '''
         #make a dictionary to contains coordinates of boxes
         self.openQcoords = {}
+        # store the ignores list for auto-labeling open-ended questions
+        self.ignores = sorted(ignores) if ignores else []
 
         # create self.openQkeyimgs - a dictionary containing images
         self.openQkey(image_list[0])
-        # create list of openQ column names
-        cols = ['openQ_' + str(id) for id in range(1, len(self.openQcoords)+1)]
+        # create list of openQ column names (in insertion order)
+        cols = list(self.openQcoords.keys())
         # initialize a dataFrame to contain results
-        #self.openQres = pd.DataFrame('', index = range(len(image_list)), columns = list(range(1,len(self.openQcoords)+1)))
         self.openQres = pd.DataFrame('', index = range(len(image_list)), columns = cols)
         # set the first row (key) all to 'CC'
         self.openQres.loc[0]='CC'
@@ -40,6 +57,31 @@ class OpenQs(object):
             self.openQidx += 1
         cv2.destroyAllWindows()
     
+    def _get_question_label(self, box_index):
+        '''
+        Return a question label for the given box index (0-based).
+        If the ignores list has an entry at this index, use that number.
+        Otherwise prompt the user.
+        '''
+        if box_index < len(self.ignores):
+            default_num = self.ignores[box_index]
+        else:
+            default_num = box_index + 1
+        # Try to prompt the user via tkinter dialog for a custom number
+        if _tk_available:
+            root = tk.Tk()
+            root.withdraw()
+            result = simpledialog.askinteger(
+                "Open-Ended Question Number",
+                "Enter the question number for this open-ended answer box\n(default: {}):".format(default_num),
+                initialvalue=default_num,
+                parent=root
+            )
+            root.destroy()
+            if result is not None:
+                return 'openQ_' + str(result)
+        return 'openQ_' + str(default_num)
+
     def openQkey(self, imgpath):
         '''
         opens the key as an image an allows drawing of rectangles
@@ -80,9 +122,20 @@ class OpenQs(object):
         elif event == cv2.EVENT_LBUTTONUP:
             ex, ey = x, y
             self.drawing = False
-            #add coordinates to dictionary
-            last=len(self.openQcoords)
-            self.openQcoords['openQ_'+ str(last + 1)]=(int(self.sx/self.dispres), int(self.sy/self.dispres), int(ex/self.dispres), int(ey/self.dispres))
+            #add coordinates to dictionary using the question-number-based label
+            box_index = len(self.openQcoords)
+            label = self._get_question_label(box_index)
+            # ensure no duplicate labels
+            while label in self.openQcoords:
+                # append an incrementing suffix if duplicate
+                m = re.match(r'^(openQ_\d+)(?:_(\d+))?$', label)
+                if m:
+                    base = m.group(1)
+                    count = int(m.group(2)) + 1 if m.group(2) else 2
+                    label = '{}_{}'.format(base, count)
+                else:
+                    label = label + '_2'
+            self.openQcoords[label]=(int(self.sx/self.dispres), int(self.sy/self.dispres), int(ex/self.dispres), int(ey/self.dispres))
             self.drawrects()
             
     def drawrects(self):
@@ -92,6 +145,9 @@ class OpenQs(object):
         for k, v in self.openQcoords.items():
             cv2.rectangle(img, (int(self.dispres * v[0]),int(self.dispres * v[1])), 
                         (int(self.dispres*v[2]), int(self.dispres*v[3])), 60, 1)
+            # label the box with the question name
+            cv2.putText(img, k, (int(self.dispres * v[0]), int(self.dispres * v[1]) - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, _LABEL_FONT_SCALE, _LABEL_COLOR, 1)
             cv2.imshow('image', img)
             
     def gradeOpenQs(self, filename, k, v):
