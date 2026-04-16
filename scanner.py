@@ -347,9 +347,11 @@ class Scanner(object):
                 })
 
         # 8. Grade
+        _point_values = self._key_data.get('point_values') if self._key_data else None
         grade_functions.gradeResults(
             self.resCsv, self.markmissing, self.openQ,
-            self.bubbleVal, self.openVal, self.markeddir, self.strictness)
+            self.bubbleVal, self.openVal, self.markeddir, self.strictness,
+            point_values=_point_values)
 
         # 9. Mark sheets — [None] + first page per student so row indices align with resdf
         #    aligned_image_list[::pps] picks the first page for each student

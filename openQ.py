@@ -299,6 +299,7 @@ def load_key_csv(path: str) -> dict | None:
     bubble_answers: dict = {}
     open_questions: dict = {}
     metadata: dict = {}
+    point_values: dict = {}
 
     try:
         with open(p, newline='', encoding='utf-8-sig') as fh:
@@ -328,6 +329,12 @@ def load_key_csv(path: str) -> dict | None:
                 if row_type == 'bubble':
                     answer = (row.get('answer') or row.get('value') or '').strip()
                     bubble_answers[_norm_bubble_key(question)] = answer
+                    pts_str = (row.get('points') or '').strip()
+                    if pts_str:
+                        try:
+                            point_values[_norm_bubble_key(question)] = float(pts_str)
+                        except ValueError:
+                            pass
 
                 elif row_type == 'open':
                     qk = _norm_open_key(question)
@@ -357,6 +364,13 @@ def load_key_csv(path: str) -> dict | None:
                     for ans in _parse_pipe(row.get('partial_answers') or ''):
                         if ans.lower() not in [a.lower() for a in open_questions[qk]['partial']]:
                             open_questions[qk]['partial'].append(ans)
+                    # Points
+                    pts_str = (row.get('points') or '').strip()
+                    if pts_str:
+                        try:
+                            point_values[_norm_open_key(question)] = float(pts_str)
+                        except ValueError:
+                            pass
 
                 # ── Tall/legacy format ───────────────────────────────────
                 elif row_type == 'open_coords':
@@ -405,6 +419,8 @@ def load_key_csv(path: str) -> dict | None:
     result = {'bubble_answers': bubble_answers, 'open_questions': open_questions}
     if metadata:
         result['metadata'] = metadata
+    if point_values:
+        result['point_values'] = point_values
     return result
 
 

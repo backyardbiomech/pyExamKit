@@ -46,7 +46,7 @@ def getid(idRes, nRes):
     return lastName, firstName, studentID
 
     
-def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5):
+def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5, point_values=None):
     #open the csv into a Pandas data frame
     df=pd.read_csv(resCsv, dtype=object)
     df.set_index(['index'], inplace=True)
@@ -76,20 +76,25 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
             key = df.loc['0', col]
             if key == 'ignore':
                 continue
+            # Per-question point value: use key-file override if available, else default
+            if key == 'CC':
+                q_pts = point_values.get(col, openVal) if point_values else openVal
+            else:
+                q_pts = point_values.get(col, bubbleVal) if point_values else bubbleVal
             #if it's an open ended question
             if key == 'CC':
                 ans = df.loc[row, col]
                 # support 'CC: transcription text' format as well as plain 'CC'
                 ans_grade = str(ans)[:2]
                 if ans_grade == 'CC':
-                    score += openVal
-                    partscore += openVal
-                    ptsdf.loc[row,col] = openVal
+                    score += q_pts
+                    partscore += q_pts
+                    ptsdf.loc[row,col] = q_pts
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
                 if ans_grade == 'CX':
-                    score += openVal / 2
-                    partscore += openVal / 2
-                    ptsdf.loc[row,col] = openVal / 2
+                    score += q_pts / 2
+                    partscore += q_pts / 2
+                    ptsdf.loc[row,col] = q_pts / 2
                 # go on to the next question
                 continue
             ans = df.loc[row, col]
@@ -113,9 +118,9 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
             #if no partial credit calculations necessary
             if not selectAll and not openQ:
                 if ans == key:
-                    score += bubbleVal
-                    partscore += bubbleVal
-                    ptsdf.loc[row,col] = bubbleVal
+                    score += q_pts
+                    partscore += q_pts
+                    ptsdf.loc[row,col] = q_pts
                     df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
             # if necessary to calculate for partial credit:
             else:
@@ -123,16 +128,16 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
                 s = difflib.SequenceMatcher(None, key, ans)
                 #if it's completely right, add one
                 if s.ratio() == 1:
-                    score += bubbleVal
-                    partscore += bubbleVal
-                    ptsdf.loc[row,col] = bubbleVal
+                    score += q_pts
+                    partscore += q_pts
+                    ptsdf.loc[row,col] = q_pts
                 else:
                     ptsdf.loc[row,col]=0
                 #if anything matches above the strictness threshold, award partial credit
                 if 0 < s.ratio() < 1 and s.ratio() >= strictness:
                     ptscore=0
                     #each bubble is worth 1/(# of filled bubbles on key) up to 1
-                    partial = bubbleVal/len(key)
+                    partial = q_pts/len(key)
                     #for each bubble in the student's answer
                     for i in ans:
                         #if it's in the key, add the fractional point
