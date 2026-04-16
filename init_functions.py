@@ -1,12 +1,11 @@
-import numpy as np
-import cv2
 import os
 import fnmatch
 import pandas as pd
+import fitz  # pymupdf
 from pathlib import Path
 
 
-def filenames(input_file):
+def filenames(input_file, scan_jpgs_dir=None):
     #Get the file path as a Path object
     filename=Path(input_file)
     #Get the extension
@@ -15,16 +14,11 @@ def filenames(input_file):
     pathname = filename.parent
     # Get the name of the file
     basename = filename.stem
-    #get the name of the file
-    #basename = input_file.split('.')[0] #includes full path, not extension
-    #ext = input_file.split('.')[1] #extension
-    #pathname = basename.rsplit('/',1)[0]+'/' #just the path to the directory
-    
 
     # open a pdf file containing all of the scans and make jpegs
     if ext.lower() == '.pdf': 
         # write the jpgs, and change input_file to name of key jpg
-        input_file = splitpdf(input_file)
+        input_file = splitpdf(input_file, scan_jpgs_dir=scan_jpgs_dir)
         #Get the file path as a Path object
         filename=Path(input_file)
         #Get the path to the current directory
@@ -45,59 +39,33 @@ def filenames(input_file):
 #         os.mkdir(basename + '_marked')
     return image_list
     
-def splitpdf(input_file):
+def splitpdf(input_file, scan_jpgs_dir=None):
     '''
-    takes in a pdf file, splits it out to jpgs in jpgdir (Path object), with same base name
+    Takes a PDF file and renders each page as a JPEG in a scanJPGs subfolder.
+    Uses pymupdf (fitz) so it works with any PDF image format (JPEG, PNG, JBIG2, etc.)
+    Returns the path to the first image (the key).
     '''
-    #Get the file path as a Path object
-    filename=Path(input_file)
-    #Get the path to the current directory
+    filename = Path(input_file)
     pathname = filename.parent
-    # Get the name of the file
-    basename = filename.stem
-    # make a new folder to put the jpegs in
-    jpgdir = Path(pathname) / 'scanJPGs'
-    jpgdir.mkdir(exist_ok = True)
-    
-    pdf = open(input_file, 'rb').read()
-    # find the image in the pdf
-    #stuff about bytes
-    startmark = b"\xff\xd8"
-    startfix = 0
-    endmark = b"\xff\xd9"
-    endfix = 2
-    i = 0
-    njpg = 0
-    while True:
-        #find the next image in the pdf
-        istream = pdf.find(b"stream", i)
-        if istream < 0:
-            break
-        istart = pdf.find(startmark, istream, istream+20)
-        if istart < 0:
-            i = istream+20
-            continue
-        iend = pdf.find(b"endstream", istart)
-        if iend < 0:
-            raise Exception("Didn't find end of stream!")
-        iend = pdf.find(endmark, iend-20)
-        if iend < 0:
-            raise Exception("Didn't find end of JPG!")
-        istart += startfix
-        iend += endfix
-        #extract the image bytes
-        jpg = pdf[istart:iend]
-        #convert image bytes to image array
-        nparr = np.fromstring(jpg, np.uint8)
-        jpg_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        #save jpg
-        savename = str(jpgdir / '_scan_')+'{0:03d}'.format(njpg)+'.jpg'
-        #savename=basename + '_scan_'+'{0:03d}'.format(njpg)+'.jpg'
-        cv2.imwrite(savename, jpg_np)
-        if njpg == 0:
+    jpgdir = Path(scan_jpgs_dir) if scan_jpgs_dir else pathname / 'scanJPGs'
+    jpgdir.mkdir(parents=True, exist_ok=True)
+
+    # Clear stale JPEGs from previous runs before writing new ones
+    for old_file in jpgdir.glob('*.jpg'):
+        old_file.unlink()
+
+    doc = fitz.open(str(filename))
+    key = None
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        # Render at 200 dpi (scale factor: 200/72 ≈ 2.78)
+        mat = fitz.Matrix(200 / 72, 200 / 72)
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+        savename = str(jpgdir / '_scan_{:03d}.jpg'.format(page_num))
+        pix.save(savename)
+        if page_num == 0:
             key = savename
-        njpg += 1
-        i = iend
+    doc.close()
     return key
     
 def makeAreaDict(quests):
@@ -223,5 +191,5 @@ def makeResDf(quests, scans):
     for i in range(1,(quests)+1):
         foo = 'Q' + format(i,'03d')
         cols.append(foo)
-    resdf = pd.DataFrame(0, index=range(scans),columns=cols)
+    resdf = pd.DataFrame('', index=range(scans), columns=cols)
     return resdf

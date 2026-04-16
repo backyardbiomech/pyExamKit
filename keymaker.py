@@ -2,6 +2,7 @@ from fpdf import FPDF
 import sys
 import os
 import fnmatch
+import json
 import pandas as pd
 import numpy as np
 import ast
@@ -23,16 +24,20 @@ class KeyMaker(object):
     KeyMaker takes in a csv of anwers and an image file for the key and outputs a filled in answer key
     '''
     
-    def __init__(self, keyImg, keyFile, keyVersion):
+    def __init__(self, keyImg, keyFile, keyVersion, numQuestions='', questionsToSkip=''):
         '''
         retrieve values from the gui (or call from command line)
         keyImg is path to a jpg of the answer sheet
         keyFile is the path to a CSV of the answers
         keyVersion is 'A', 'B', 'C'... as the version of the answer sheet. Defaults to 'A'
+        numQuestions is an integer (or string) for the number of questions on the exam
+        questionsToSkip is a comma-separated string of question numbers to skip (open-ended Qs)
         '''
         self.keyImg = keyImg
         self.keyFile = keyFile
         self.keyVersion = keyVersion
+        self.numQuestions = str(numQuestions).strip()
+        self.questionsToSkip = str(questionsToSkip).strip()
         self.path = Path(self.keyFile).parent
         # pull settings into keymaker object
         self.scan_settings=Settings()
@@ -78,7 +83,7 @@ class KeyMaker(object):
         width=1224
         wpercent = width/img.size[0]
         height = int((float(img.size[1]) * float(wpercent)))
-        img = img.resize((width, height), PIL.Image.ANTIALIAS)
+        img = img.resize((width, height), PIL.Image.LANCZOS)
         
         verDict={'A':(122,262), 'B':(148,262),'C':(176,262),'D':(202,262)}
         #copy the image for drawing
@@ -102,6 +107,15 @@ class KeyMaker(object):
         #save the image
         img2.save(outname)
         print("Key saved as " + outname)
+        # save metadata (num questions, questions to skip) alongside the key image
+        metadata = {
+            'num_questions': self.numQuestions,
+            'questions_to_skip': self.questionsToSkip
+        }
+        metaname = str(self.path.joinpath('key_metadata.json'))
+        with open(metaname, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        print("Key metadata saved as " + metaname)
         
     def makeAreas(self):
         # make a dictionary containing the location of all of the questions#first column first 15

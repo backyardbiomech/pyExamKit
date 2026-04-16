@@ -1,0 +1,7 @@
+index,LastName,FirstName,studentID,Q001,Q002,Q003,Q004,Q005,Q006,Q007,Q008,Q009,Q010,openQ_5,openQ_10,openQ_11,score,partialscore
+0,KEY,,,B,AC,E,ABCDEF,ignore,D,B,F,D,ignore,CC,CC,CC,0.0,0.0
+1,KEY--,A--,--------,B,AC,E,ABCDEF,ignore,D,B,F,D,ignore,CC: peristalsis,CC: plasma oxygen partial pressure (mmHg),CC: KEYA,14.0,14.0
+2,DOE--,JON,00123456,A,AC,E,ACD,ignore,D,B,F,C,ignore,CC: paristalsis,CC: PO2 (mmHg),XX,9.0,9.5
+3,J----,BRA,00987654,B,AC,E,ABCD,ignore,D,B,EF,D,ignore,XX: chewing,CC: PO2 (mmHg),XX,8.0,8.666666666666666
+4,SMITH,JAN,003-----,B,CDE,E,ABCDEF,ignore,E,B,E,D,ignore,CC: peristalsis,CX: PO2 / [?],XX,8.0,8.0
+numb_correct,0,0,0,3,3,4,2,0,3,4,2,3,0,3,3,1,0.0,0.0
