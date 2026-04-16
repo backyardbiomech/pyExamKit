@@ -1,0 +1,43 @@
+{
+  "openQ_5": {
+    "full": [
+      "peristalsis"
+    ],
+    "partial": [
+      "paristalsis"
+    ],
+    "coords": [
+      322,
+      690,
+      728,
+      764
+    ]
+  },
+  "openQ_11": {
+    "full": [
+      "KEYA"
+    ],
+    "partial": [],
+    "coords": [
+      882,
+      1414,
+      1100,
+      1500
+    ]
+  },
+  "openQ_10": {
+    "full": [
+      "plasma oxygen partial pressure (mmHg)",
+      "pO2 (mmHg)"
+    ],
+    "partial": [
+      "pO2 (%)"
+    ],
+    "coords": [
+      528,
+      1310,
+      968,
+      1404
+    ]
+  }
+}

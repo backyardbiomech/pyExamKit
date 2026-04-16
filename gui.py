@@ -55,36 +55,48 @@ class pyScanUI(ctk.CTkFrame):
         scan_frame = ctk.CTkFrame(scan_tab, fg_color='transparent')
         scan_frame.pack(fill='x', pady=(0, 8))
 
+        # ── Key File row — load first so its metadata auto-fills fields below ──
+        key_file_row = ctk.CTkFrame(scan_frame, fg_color='transparent')
+        key_file_row.grid(row=0, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+        ctk.CTkButton(key_file_row, text="Load Key File…",
+                      command=self._browse_key_file, width=180).pack(side='left', padx=(0, 6))
+        self.scanKeyFileEntry = ctk.CTkEntry(
+            key_file_row, width=400,
+            placeholder_text="Load the key CSV built in the 'Build Key' tab (auto-fills question count & skips)")
+        self.scanKeyFileEntry.pack(side='left', padx=(0, 6))
+        ctk.CTkButton(key_file_row, text="Create / Edit…",
+                      command=self._open_key_file_editor, width=110).pack(side='left')
+
         ctk.CTkButton(scan_frame, text="Choose PDF of scans or JPG of key",
                       command=self.button_browse_callback).grid(
-            row=0, column=0, padx=10, pady=4, sticky='w')
+            row=1, column=0, padx=10, pady=4, sticky='w')
         self.fileEntry = ctk.CTkEntry(scan_frame, width=400)
-        self.fileEntry.grid(row=0, column=1, padx=10, pady=4, sticky='ew')
+        self.fileEntry.grid(row=1, column=1, padx=10, pady=4, sticky='ew')
 
         ctk.CTkLabel(scan_frame, text="Number of questions to grade:").grid(
-            row=1, column=0, padx=10, pady=4, sticky='w')
+            row=2, column=0, padx=10, pady=4, sticky='w')
         self.numQEntry = ctk.CTkEntry(scan_frame, width=80)
-        self.numQEntry.grid(row=1, column=1, padx=10, pady=4, sticky='w')
+        self.numQEntry.grid(row=2, column=1, padx=10, pady=4, sticky='w')
 
         ctk.CTkLabel(scan_frame, text="Question numbers to ignore (comma-separated):").grid(
-            row=2, column=0, padx=10, pady=4, sticky='w')
+            row=3, column=0, padx=10, pady=4, sticky='w')
         self.ignoreEntry = ctk.CTkEntry(scan_frame, width=300)
-        self.ignoreEntry.grid(row=2, column=1, padx=10, pady=4, sticky='w')
+        self.ignoreEntry.grid(row=3, column=1, padx=10, pady=4, sticky='w')
 
         self.setavar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame, text="Select-all-that-apply questions?",
                         variable=self.setavar).grid(
-            row=3, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+            row=4, column=0, columnspan=2, padx=10, pady=4, sticky='w')
 
         self.openQvar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame, text="Open-ended questions to grade on-screen? (with OCR assist)",
                         variable=self.openQvar,
                         command=self._toggle_ai_frame).grid(
-            row=4, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+            row=5, column=0, columnspan=2, padx=10, pady=4, sticky='w')
 
         # ── AI OCR sub-frame (shown only when open-ended is checked) ──────
         self._ai_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
-        self._ai_frame.grid(row=5, column=0, columnspan=2, padx=(30, 10), pady=(0, 2), sticky='w')
+        self._ai_frame.grid(row=6, column=0, columnspan=2, padx=(30, 10), pady=(0, 2), sticky='w')
         self._ai_frame.grid_remove()
 
         self.aiOcrVar = ctk.IntVar(value=0)
@@ -134,24 +146,12 @@ class pyScanUI(ctk.CTkFrame):
         self.saveMarkedVar = ctk.IntVar(value=1)
         ctk.CTkCheckBox(scan_frame, text="Save marked answer sheets? (marked/ folder + marked.pdf)",
                         variable=self.saveMarkedVar).grid(
-            row=6, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+            row=7, column=0, columnspan=2, padx=10, pady=4, sticky='w')
 
         self.corrvar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame, text="Mark correct answers on graded sheets?",
                         variable=self.corrvar).grid(
-            row=7, column=0, columnspan=2, padx=10, pady=(0, 4), sticky='w')
-
-        # ── Key File row (optional JSON key file) ────────────────────────
-        key_file_row = ctk.CTkFrame(scan_frame, fg_color='transparent')
-        key_file_row.grid(row=8, column=0, columnspan=2, padx=10, pady=4, sticky='w')
-        ctk.CTkButton(key_file_row, text="Load Key File…",
-                      command=self._browse_key_file, width=180).pack(side='left', padx=(0, 6))
-        self.scanKeyFileEntry = ctk.CTkEntry(
-            key_file_row, width=320,
-            placeholder_text="Optional: .json / .key.csv key file (skips scanning first page as key)")
-        self.scanKeyFileEntry.pack(side='left', padx=(0, 6))
-        ctk.CTkButton(key_file_row, text="Create / Edit…",
-                      command=self._open_key_file_editor, width=110).pack(side='left')
+            row=8, column=0, columnspan=2, padx=10, pady=(0, 4), sticky='w')
 
         ctk.CTkLabel(scan_frame, text="Pages per student (multi-page exams):").grid(
             row=9, column=0, padx=10, pady=4, sticky='w')
@@ -186,10 +186,25 @@ class pyScanUI(ctk.CTkFrame):
         self.threshLabel = ctk.CTkLabel(thresh_frame, text='0.25', width=40)
         self.threshLabel.pack(side='left', padx=6)
 
+        ctk.CTkLabel(
+            scan_frame,
+            text="Partial credit strictness (0=generous, 1=strict; open-ended questions only):",
+        ).grid(row=13, column=0, padx=10, pady=4, sticky='w')
+        strictness_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
+        strictness_frame.grid(row=13, column=1, padx=10, pady=4, sticky='w')
+        self.strictnessVar = ctk.DoubleVar(value=0.5)
+        self.strictnessSlider = ctk.CTkSlider(strictness_frame, from_=0.0, to=1.0,
+                                              variable=self.strictnessVar,
+                                              command=self._update_strictness_label,
+                                              width=200)
+        self.strictnessSlider.pack(side='left')
+        self.strictnessLabel = ctk.CTkLabel(strictness_frame, text='0.50', width=40)
+        self.strictnessLabel.pack(side='left', padx=6)
+
         ctk.CTkButton(scan_frame, text="Run Scan",
                       command=self.button_go_callback,
                       fg_color='#2563eb', hover_color='#1d4ed8').grid(
-            row=13, column=0, columnspan=2, pady=10)
+            row=14, column=0, columnspan=2, pady=10)
 
         # ════════════════════════════════════════════════════════
         # TAB 2 — Build Key
@@ -413,6 +428,28 @@ class pyScanUI(ctk.CTkFrame):
         if filename:
             self.scanKeyFileEntry.delete(0, 'end')
             self.scanKeyFileEntry.insert(0, filename)
+            self._load_key_metadata(filename)
+
+    def _load_key_metadata(self, path: str):
+        """Read metadata from a key file and populate num questions / skip fields."""
+        try:
+            from openQ import load_key_file
+            data = load_key_file(path)
+            if data is None:
+                return
+            meta = data.get('metadata', {})
+            num_q = meta.get('num_questions')
+            skip_q = meta.get('questions_to_skip', '')
+            if num_q:
+                self.numQEntry.delete(0, 'end')
+                self.numQEntry.insert(0, str(num_q))
+            if skip_q:
+                self.ignoreEntry.delete(0, 'end')
+                self.ignoreEntry.insert(0, str(skip_q))
+            if num_q or skip_q:
+                self._log(f'Key metadata loaded: {num_q} questions, skip: {skip_q}')
+        except Exception as exc:
+            self._log(f'Could not read key metadata: {exc}')
 
     def _open_key_file_editor(self):
         from openQ import KeyFileEditorDialog
@@ -486,6 +523,9 @@ class pyScanUI(ctk.CTkFrame):
     def _update_thresh_label(self, value):
         self.threshLabel.configure(text=f'{value:.2f}')
 
+    def _update_strictness_label(self, value):
+        self.strictnessLabel.configure(text=f'{value:.2f}')
+
     def _log(self, message):
         self.log_box.configure(state='normal')
         self.log_box.insert('end', message + '\n')
@@ -515,7 +555,8 @@ class pyScanUI(ctk.CTkFrame):
         save_marked  = bool(self.saveMarkedVar.get())
         corrmark     = bool(self.corrvar.get())
         ignores      = self.ignoreEntry.get()
-        thresh      = self.threshVar.get()
+        thresh       = self.threshVar.get()
+        strictness   = self.strictnessVar.get()
 
         use_ai, api_key, ai_context = self._get_ai_params()
         if use_ai and not api_key:
@@ -536,7 +577,8 @@ class pyScanUI(ctk.CTkFrame):
                     review_perfect=review_perfect,
                     key_file_path=key_file_path,
                     pages_per_student=pages_per_student,
-                    save_marked=save_marked)
+                    save_marked=save_marked,
+                    strictness=strictness)
         finally:
             sys.stdout = old_stdout
         self._log('Done.')

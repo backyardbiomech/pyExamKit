@@ -150,10 +150,18 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         #save score and partscore to new columns
         df.loc[row,'score']=score
         df.loc[row,'partialscore']=partscore
+        ptsdf.loc[row,'score'] = score
+        ptsdf.loc[row,'partialscore'] = partscore
     #write the dataframe back to the csv
     df.to_csv(resCsv, index=True, index_label = 'index')
     _stem = str(Path(resCsv).parent / Path(resCsv).stem)
     ptsdf.to_csv(_stem + 'perquestions.csv')
+    try:
+        _xlsx_path = _stem + '_gradebook.xlsx'
+        save_gradebook_xlsx(_xlsx_path, df, ptsdf)
+        print(f'Gradebook saved \u2192 {_xlsx_path}')
+    except Exception as _exc:
+        print(f'[gradeResults] Could not save gradebook xlsx: {_exc}')
     # make a grades csv for upload to canvas, sorted by last name, just names, Lnum, and scores without the key
     cols = ['LastName','FirstName','studentID','partialscore']
     gradesdf = df[cols].copy()
@@ -162,6 +170,122 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     gradesdf = gradesdf.sort_values(by=['LastName', 'FirstName','studentID'])
     gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
+
+def save_gradebook_xlsx(xlsx_path: str, df, ptsdf) -> None:
+    """
+    Write an xlsx gradebook with live SUM formulas.
+
+    Layout (one sheet "Gradebook"):
+      Row 1 — frozen header: LastName | FirstName | studentID |
+               Q Answer (Key: X) | Q Pts | ... | Total
+      Row 2 — KEY row (yellow): raw key answers
+      Rows 3+ — students: answer + points per question;
+                 Total cell is =SUM(...) formula so editing a Pts cell updates Total
+
+    df    — full results DataFrame (index '0' = key row)
+    ptsdf — points DataFrame (same shape; question cells contain float points)
+    """
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    # Question columns: everything after name cols (LastName/FirstName/studentID),
+    # before the score/partialscore summary columns at the end.
+    q_cols = list(df.columns[3:-2])
+    n_q = len(q_cols)
+
+    # Student row indices — string '1'...'N'; exclude key row '0' and 'numb_correct'
+    student_indices = [str(i) for i in range(1, df.shape[0] - 1)]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Gradebook'
+
+    # Column layout:
+    #   cols 1-3  : LastName, FirstName, studentID
+    #   col 4+2*i : student answer for question i (0-based)
+    #   col 5+2*i : points for question i
+    #   col 4+2*n_q : Total
+    total_col_num = 4 + 2 * n_q  # 1-based
+
+    def pts_col_num(qi: int) -> int:
+        return 5 + 2 * qi
+
+    # ── Row 1: header ──────────────────────────────────────────────────────
+    header = ['LastName', 'FirstName', 'studentID']
+    for qi, qc in enumerate(q_cols):
+        key_val = str(df.loc['0', qc])
+        if key_val == 'CC':
+            key_label = f'{qc}\n(open-ended)'
+        elif key_val in ('ignore', 'nan', ''):
+            key_label = f'{qc}\n(ignored)'
+        else:
+            key_label = f'{qc}\n(Key: {key_val})'
+        header.append(key_label)
+        header.append(f'{qc} Pts')
+    header.append('Total')
+    ws.append(header)
+
+    hdr_fill = PatternFill('solid', fgColor='BDD7EE')
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
+        cell.fill = hdr_fill
+    ws.row_dimensions[1].height = 36
+
+    # ── Row 2: KEY row ──────────────────────────────────────────────────────
+    key_row = ['KEY', '', '']
+    for qi, qc in enumerate(q_cols):
+        key_row.append(str(df.loc['0', qc]))
+        key_row.append('')
+    key_row.append('')
+    ws.append(key_row)
+
+    key_fill = PatternFill('solid', fgColor='FFFF99')
+    for cell in ws[2]:
+        cell.font = Font(bold=True)
+        cell.fill = key_fill
+
+    # ── Rows 3+: student rows ───────────────────────────────────────────────
+    for row_str in student_indices:
+        row_data = [
+            str(df.loc[row_str, 'LastName']),
+            str(df.loc[row_str, 'FirstName']),
+            str(df.loc[row_str, 'studentID']),
+        ]
+        for qi, qc in enumerate(q_cols):
+            ans = str(df.loc[row_str, qc])
+            try:
+                pts = float(ptsdf.loc[row_str, qc])
+            except (ValueError, TypeError, KeyError):
+                pts = 0.0
+            row_data.append(ans)
+            row_data.append(pts)
+        row_data.append('')  # placeholder for formula
+        ws.append(row_data)
+
+        excel_row = ws.max_row
+        sum_refs = ','.join(
+            f'{get_column_letter(pts_col_num(qi))}{excel_row}'
+            for qi in range(n_q)
+        )
+        ws.cell(row=excel_row, column=total_col_num).value = (
+            f'=SUM({sum_refs})' if sum_refs else 0
+        )
+
+    # ── Freeze header + key rows, set column widths ─────────────────────────
+    ws.freeze_panes = 'A3'
+
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 14
+    ws.column_dimensions['C'].width = 14
+    for qi in range(n_q):
+        ws.column_dimensions[get_column_letter(4 + 2 * qi)].width = 18
+        ws.column_dimensions[get_column_letter(5 + 2 * qi)].width = 8
+    ws.column_dimensions[get_column_letter(total_col_num)].width = 10
+
+    wb.save(xlsx_path)
+
 
 def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
                             partial_answers: dict | None = None) -> int:

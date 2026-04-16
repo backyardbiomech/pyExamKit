@@ -298,6 +298,7 @@ def load_key_csv(path: str) -> dict | None:
 
     bubble_answers: dict = {}
     open_questions: dict = {}
+    metadata: dict = {}
 
     try:
         with open(p, newline='', encoding='utf-8-sig') as fh:
@@ -309,6 +310,18 @@ def load_key_csv(path: str) -> dict | None:
 
                 question = (row.get('question') or '').strip()
                 if not question:
+                    continue
+
+                # ── Metadata row ─────────────────────────────────────────
+                if row_type == 'metadata':
+                    value = (row.get('answer') or '').strip()
+                    if question == 'num_questions' and value:
+                        try:
+                            metadata['num_questions'] = int(value)
+                        except ValueError:
+                            pass
+                    elif question == 'questions_to_skip' and value:
+                        metadata['questions_to_skip'] = value
                     continue
 
                 # ── Wide format ──────────────────────────────────────────
@@ -389,24 +402,37 @@ def load_key_csv(path: str) -> dict | None:
 
     print(f'[KeyFile] Loaded CSV key: {len(bubble_answers)} bubble answer(s), '
           f'{len(open_questions)} open question(s).', flush=True)
-    return {'bubble_answers': bubble_answers, 'open_questions': open_questions}
+    result = {'bubble_answers': bubble_answers, 'open_questions': open_questions}
+    if metadata:
+        result['metadata'] = metadata
+    return result
 
 
 def save_key_csv(path: str, data: dict) -> None:
     """
     Write a CSV exam key file in wide format (one row per question).
     Columns: type, question, page, x1, y1, x2, y2, answer, partial_answers
-      bubble rows: type=bubble, answer=letter(s), all coordinate columns blank
-      open rows:   type=open, answer=pipe-separated full-credit answers,
-                   partial_answers=pipe-separated partial-credit answers
+      metadata rows: type=metadata, question=field_name, answer=value
+      bubble rows:   type=bubble, answer=letter(s), all coordinate columns blank
+      open rows:     type=open, answer=pipe-separated full-credit answers,
+                     partial_answers=pipe-separated partial-credit answers
     """
     bubble = data.get('bubble_answers', {})
     open_qs = data.get('open_questions', {})
+    meta = data.get('metadata', {})
 
     with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
         writer = csv.writer(fh)
         writer.writerow(['type', 'question', 'page', 'x1', 'y1', 'x2', 'y2',
                          'answer', 'partial_answers'])
+
+        # Metadata rows (num_questions, questions_to_skip)
+        if meta.get('num_questions'):
+            writer.writerow(['metadata', 'num_questions', '', '', '', '', '',
+                             meta['num_questions'], ''])
+        if meta.get('questions_to_skip'):
+            writer.writerow(['metadata', 'questions_to_skip', '', '', '', '', '',
+                             meta['questions_to_skip'], ''])
 
         # Bubble answers (sorted by question key)
         for qk in sorted(bubble.keys()):
@@ -447,7 +473,8 @@ class OpenQs(object):
     def __init__(self, image_list, parent=None, ai_ocr=False, api_key='',
                  ai_context='', preloaded_file: str = '', review_perfect: bool = True,
                  key_file_data: dict | None = None, key_file_path: str = '',
-                 pages_per_student: int = 1):
+                 pages_per_student: int = 1, ignores=None):
+        self._ignores: list[int] = sorted(ignores) if ignores else []
         self.openQcoords = {}
         self.openQkeyimgs = {}
         self.openQkeytext = {}   # OCR text from each key crop
@@ -617,12 +644,12 @@ class OpenQs(object):
 
         _pps = self._pages_per_student
         _n_students = max(1, (len(image_list) - 1) // _pps)
-        cols = ['openQ_' + str(i) for i in range(1, len(self.openQcoords) + 1)]
+        cols = sorted(self.openQcoords.keys(), key=_openq_sort_key)
         self.openQres = pd.DataFrame('', index=range(_n_students + 1), columns=cols)
         self.openQres.loc[0] = 'CC'
 
         # Phase 2: grade each student's answers for each open-ended question
-        openqs = sorted(list(self.openQcoords))
+        openqs = sorted(list(self.openQcoords), key=_openq_sort_key)
         qi = 0
         while qi < len(openqs):
             if qi < 0:
@@ -651,6 +678,32 @@ class OpenQs(object):
             if went_back_q:
                 continue   # restart outer loop at new qi
             qi += 1
+
+    def _get_question_label(self, box_index: int, parent=None) -> str:
+        '''
+        Return a question label for a newly drawn box (0-based index).
+        If the ignores list has a number at this index, use it as the default.
+        Prompts the user via a Tkinter dialog so they can override.
+        '''
+        if box_index < len(self._ignores):
+            default_num = self._ignores[box_index]
+        else:
+            default_num = box_index + 1
+        dlg_parent = parent if parent is not None else self._root
+        try:
+            from tkinter import simpledialog
+            dlg_parent.lift()
+            result = simpledialog.askinteger(
+                'Open-Ended Question Number',
+                f'Enter the question number for this open-ended answer box\n(default: {default_num}):',
+                initialvalue=default_num,
+                parent=dlg_parent,
+            )
+            if result is not None:
+                return 'openQ_' + str(result)
+        except Exception:
+            pass
+        return 'openQ_' + str(default_num)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -784,8 +837,15 @@ class OpenQs(object):
             ex, ey = event.x, event.y
             if abs(ex - state['sx']) < 5 or abs(ey - state['sy']) < 5:
                 return   # ignore tiny accidental clicks
-            last = len(coords)
-            qk = 'openQ_' + str(last + 1)
+            box_index = len(coords)
+            qk = self._get_question_label(box_index, parent=win)
+            # ensure no duplicate labels
+            while qk in coords:
+                try:
+                    base, num = qk.rsplit('_', 1)
+                    qk = f'{base}_{int(num) + 1}'
+                except ValueError:
+                    qk = qk + '_2'
             x1 = int(min(state['sx'], ex) / dispres)
             y1 = int(min(state['sy'], ey) / dispres)
             x2 = int(max(state['sx'], ex) / dispres)
@@ -898,6 +958,11 @@ class OpenQs(object):
         win = tk.Toplevel(self._root)
         win.title(f'Grading {k}  —  C: correct   P: partial   X: wrong   B: go back')
         win.resizable(False, False)
+        # Pin every grading window to the same screen position so they don't cascade.
+        # On the first call _grading_win_geometry is unset; we let the window land
+        # wherever the WM puts it, then record that position for all future calls.
+        if hasattr(self, '_grading_win_geometry') and self._grading_win_geometry:
+            win.geometry(self._grading_win_geometry)
         _win_bg = win.cget('bg')
 
         if key_crop is not None:
@@ -1093,6 +1158,8 @@ class OpenQs(object):
             # Persist any key text correction for subsequent students
             self.openQkeytext[k] = key_var.get()
             result['grade'] = g
+            # Capture position before destroying — picks up any move the user made.
+            self._grading_win_geometry = f'+{win.winfo_x()}+{win.winfo_y()}'
             win.destroy()
 
         tk.Button(btn_frame, text='Correct  [C]', bg='#90EE90', width=14,
@@ -2125,6 +2192,14 @@ class KeyFileEditorDialog:
 
     def _to_data(self) -> dict:
         self._commit_current_edit()
+        _skip_ns = []
+        for qk in self._open_qs:
+            try:
+                _skip_ns.append(int(qk.split('_')[-1]))
+            except ValueError:
+                pass
+        _skip_str = ','.join(str(n) for n in sorted(_skip_ns))
+        _total = sum(1 for v in self._bubble.values() if v != 'ignore')
         return {
             'bubble_answers': dict(self._bubble),
             'open_questions': {
@@ -2135,6 +2210,10 @@ class KeyFileEditorDialog:
                     'page': qdata.get('page', 1),
                 }
                 for qk, qdata in self._open_qs.items()
+            },
+            'metadata': {
+                'num_questions': _total,
+                'questions_to_skip': _skip_str,
             },
         }
 
@@ -2575,15 +2654,43 @@ class KeyBuilderDialog:
         dispres = page_data['dispres']
         page_num = self._current_page_idx + 1
 
-        # Auto-name next question key
+        # Determine default question number using ignores list
         existing_ns = []
         for k in self._questions:
             try:
                 existing_ns.append(int(k.split('_')[-1]))
             except ValueError:
                 pass
-        next_n = max(existing_ns, default=0) + 1
-        qk = f'openQ_{next_n}'
+        box_index = len(self._questions)
+        if self._ignores and box_index < len(self._ignores):
+            default_n = int(self._ignores[box_index])
+        else:
+            # Also consider the highest bubble question number so that open-ended
+            # questions drawn after all skip slots continue from beyond the last bubble.
+            bubble_ns = []
+            for bk in self._bubble:
+                try:
+                    bubble_ns.append(int(bk[1:]))  # 'Q010' → 10
+                except (ValueError, IndexError):
+                    pass
+            default_n = max(existing_ns + bubble_ns, default=0) + 1
+
+        # Prompt user to confirm/override the question number
+        from tkinter import simpledialog as _sd
+        self._win.lift()
+        chosen = _sd.askinteger(
+            'Open-Ended Question Number',
+            f'Enter the question number for this answer box\n(default: {default_n}):',
+            initialvalue=default_n,
+            parent=self._win,
+        )
+        if chosen is None:
+            return  # user cancelled — discard the drawn box
+        qk = f'openQ_{chosen}'
+        # avoid duplicate keys by incrementing
+        while qk in self._questions:
+            chosen += 1
+            qk = f'openQ_{chosen}'
 
         x1 = int(min(sx, ex) / dispres)
         y1 = int(min(sy, ey) / dispres)
@@ -3001,6 +3108,14 @@ class KeyBuilderDialog:
         if not path:
             return
         try:
+            _skip_ns = []
+            for qk in self._questions:
+                try:
+                    _skip_ns.append(int(qk.split('_')[-1]))
+                except ValueError:
+                    pass
+            _skip_str = ','.join(str(n) for n in sorted(_skip_ns))
+            _total = self._num_mc_questions
             save_key_file(path, {
                 'bubble_answers': dict(self._bubble),
                 'open_questions': {
@@ -3011,6 +3126,10 @@ class KeyBuilderDialog:
                         'page': qd.get('page', 1),
                     }
                     for qk, qd in self._questions.items()
+                },
+                'metadata': {
+                    'num_questions': _total,
+                    'questions_to_skip': _skip_str,
                 },
             })
             self.saved_path = path

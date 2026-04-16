@@ -151,7 +151,8 @@ class Scanner(object):
                             ai_ocr=self.ai_ocr, api_key=self.api_key,
                             ai_context=self.ai_context,
                             preloaded_file=self.preloaded_file,
-                            review_perfect=self.review_perfect)
+                            review_perfect=self.review_perfect,
+                            ignores=self.ignores)
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -194,10 +195,15 @@ class Scanner(object):
                     'page': 1,
                 }
         _key_csv_path = str(self.outdir / 'exam_key.csv')
+        _skip_str = ','.join(str(n) for n in self.ignores) if self.ignores else ''
         try:
             _save_key_file(_key_csv_path, {
                 'bubble_answers': _bubble_ans,
                 'open_questions': _open_qs,
+                'metadata': {
+                    'num_questions': self.quests,
+                    'questions_to_skip': _skip_str,
+                },
             })
             print(f'[Scanner] Key saved → {_key_csv_path}', flush=True)
             print('[Scanner] Load this file in "Key File" next time to skip re-scanning the key sheet.', flush=True)
@@ -291,10 +297,25 @@ class Scanner(object):
                 key_file_data=self._key_data,
                 key_file_path=self.key_file_path,
                 pages_per_student=self.pages_per_student,
+                ignores=self.ignores,
             )
             for k, v in openQs.openQcoords.items():
                 self.qAreas[k] = ((v[0], v[1]), (v[2], v[3]))
             self.resdf = pd.concat([self.resdf, openQs.openQres], axis=1)
+            # Re-save key file with any answers the grader typed in during review
+            if self.key_file_path:
+                try:
+                    from openQ import load_key_file as _lkf, save_key_file as _skf
+                    _kd = _lkf(self.key_file_path) or {}
+                    for _qk, _oq in _kd.get('open_questions', {}).items():
+                        if openQs.acceptable_answers.get(_qk):
+                            _oq['full'] = list(openQs.acceptable_answers[_qk])
+                        if openQs.partial_credit_answers.get(_qk):
+                            _oq['partial'] = list(openQs.partial_credit_answers[_qk])
+                    _skf(self.key_file_path, _kd)
+                    print(f'[Scanner] Key file updated with graded answers → {self.key_file_path}', flush=True)
+                except Exception as _exc:
+                    print(f'[Scanner] Could not update key file: {_exc}', flush=True)
 
         # 5. Embed OCR transcriptions
         if self.openQ and openQs is not None:
@@ -328,7 +349,7 @@ class Scanner(object):
         # 8. Grade
         grade_functions.gradeResults(
             self.resCsv, self.markmissing, self.openQ,
-            self.bubbleVal, self.openVal, self.markeddir)
+            self.bubbleVal, self.openVal, self.markeddir, self.strictness)
 
         # 9. Mark sheets — [None] + first page per student so row indices align with resdf
         #    aligned_image_list[::pps] picks the first page for each student

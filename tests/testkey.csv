@@ -1,4 +1,6 @@
 ﻿type,question,page,x1,y1,x2,y2,answer,partial_answers
+metadata,num_questions,,,,,,10,
+metadata,questions_to_skip,,,,,,"5,10,11",
 bubble,Q001,,,,,,B,
 bubble,Q002,,,,,,AC,
 bubble,Q003,,,,,,E,
@@ -9,5 +11,6 @@ bubble,Q007,,,,,,B,
 bubble,Q008,,,,,,F,
 bubble,Q009,,,,,,D,
 bubble,Q010,,,,,,ignore,
-open,openQ_1,1,324,688,726,778,peristalsis|wave contractions,paristalsis|smooth muscle
-open,openQ_2,1,526,1302,972,1406,plasma oxygen partial pressure (mmHg)|PO2 (mmHg),PO2
+open,openQ_5,1,322,690,728,764,peristalsis,paristalsis
+open,openQ_10,1,528,1310,968,1404,plasma oxygen partial pressure (mmHg)|pO2 (mmHg),pO2 (%)
+open,openQ_11,1,882,1414,1100,1500,KEYA,
