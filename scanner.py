@@ -24,7 +24,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5, version_question: int = 0, version_key_paths: dict | None = None):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -57,6 +57,19 @@ class Scanner(object):
         self.key_file_path = key_file_path
         self.pages_per_student = max(1, int(pages_per_student))
         self.strictness = strictness
+        # ── Multi-version support ──────────────────────────────────────────────
+        self.version_question = version_question
+        self.version_keys: dict[str, dict] = {}
+        if version_key_paths:
+            from openQ import load_key_file as _lkf_ver
+            for _ver, _vpath in version_key_paths.items():
+                if _vpath:
+                    _vkd = _lkf_ver(_vpath)
+                    if _vkd:
+                        self.version_keys[_ver.upper()] = _vkd
+                    else:
+                        print(f'[Scanner] Warning: could not load key for version {_ver}: {_vpath}',
+                              flush=True)
         self._key_data = None
         if key_file_path:
             from openQ import load_key_file
@@ -95,9 +108,9 @@ class Scanner(object):
         # initialize the pandas dataframe to contain results
         # In key-file mode we need one extra row for the synthetic key row 0.
         # For multi-page, there are pages_per_student images per student.
-        if self.key_file_path and self._key_data:
+        if (self.key_file_path and self._key_data) or (self.version_keys and self.version_question):
             n_actual_students = len(self.image_list) // self.pages_per_student
-            n_rows = n_actual_students + 1  # +1 for synthetic key row 0
+            n_rows = n_actual_students + 1  # +1 for placeholder row 0
         else:
             n_rows = len(self.image_list)
         self.resdf = init_functions.makeResDf(quests, n_rows)
@@ -108,10 +121,124 @@ class Scanner(object):
         self.run()
         
     def run(self):
-        if self.key_file_path and self._key_data:
+        if self.version_keys and self.version_question:
+            self._run_multi_version()
+        elif self.key_file_path and self._key_data:
             self._run_with_key_file()
         else:
             self._run_scan_key()
+
+    def _run_multi_version(self):
+        """
+        Scan all student sheets, detect each student's exam version from the
+        version question bubble, then grade (and optionally mark) each version
+        group against its own key file. Outputs are separated by version.
+        """
+        pps = self.pages_per_student
+        ver_qk = 'Q' + format(self.version_question, '03d')
+
+        # 1. Scan all pages (no key row — all rows are students)
+        for i in range(len(self.image_list)):
+            img = Image(self.image_list[i], self.scan_settings)
+            print(f'Processing scan {i + 1}')
+            scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
+            if i % pps == 0:   # first page per student — scan MC bubbles
+                student_row = i // pps + 1
+                self.qRes = scan_functions.rundots(
+                    img.scanimg,
+                    self.qAreas, self.idAreas, self.nAreas,
+                    self.ignores,
+                    self.Qdict, self.Idict, self.Ndict)
+                for k, v in self.qRes.items():
+                    self.resdf.loc[student_row, k] = v
+
+        # 2. Build sorted aligned image list (files numbered 1..N)
+        n_scanned = len(self.image_list)
+        self.aligned_image_list = sorted(
+            str(self.aligneddir / f'aligned_{i:03d}.jpg')
+            for i in range(1, n_scanned + 1)
+            if (self.aligneddir / f'aligned_{i:03d}.jpg').exists())
+
+        # 3. Determine each student's version from the version question column
+        #    resdf uses integer index (from makeResDf range()), so use ints here
+        n_students = len(self.image_list) // pps
+        student_rows = list(range(1, n_students + 1))
+
+        version_groups: dict[str, list[int]] = {}
+        for row_idx in student_rows:
+            if ver_qk in self.resdf.columns:
+                raw_ver = str(self.resdf.loc[row_idx, ver_qk]).strip()
+            else:
+                raw_ver = '-'
+            ver_letter = raw_ver[0].upper() if raw_ver and raw_ver != '-' else None
+            if ver_letter and ver_letter in self.version_keys:
+                version_groups.setdefault(ver_letter, []).append(row_idx)
+            else:
+                name = self.resdf.loc[row_idx, 'LastName']
+                print(f'[MultiVersion] Student row {row_idx} ({name}) has unrecognized '
+                      f'version answer "{raw_ver}" — skipped.', flush=True)
+
+        if not version_groups:
+            print('[MultiVersion] No students matched any loaded version key. '
+                  'Check the version question number and key files.', flush=True)
+            return
+
+        # 4. Grade (and optionally mark) each version group separately
+        for ver in sorted(version_groups):
+            row_indices = version_groups[ver]
+            kd = self.version_keys[ver]
+            print(f'\n[MultiVersion] Version {ver}: {len(row_indices)} student(s).')
+
+            # Build key row dict from version key data
+            key_row_data: dict = {'LastName': 'KEY', 'FirstName': '', 'studentID': ''}
+            for qk, ans in kd.get('bubble_answers', {}).items():
+                key_row_data[qk] = ans
+            if self.ignores:
+                for q_num in self.ignores:
+                    iqk = 'Q' + format(q_num, '03d')
+                    key_row_data[iqk] = 'ignore'
+
+            # Build sub-DataFrame: row '0' = key, rows '1'..'M' = students for this version
+            sub_students = self.resdf.loc[row_indices].copy()
+            sub_students.index = [str(i + 1) for i in range(len(row_indices))]
+
+            key_series = pd.Series(key_row_data, name='0').reindex(sub_students.columns).fillna('')
+            sub_df = pd.concat([key_series.to_frame().T, sub_students])
+            sub_df.index.name = None
+
+            # Save version-specific results CSV
+            ver_csv = str(self.outdir / f'results_version{ver}.csv')
+            sub_df.to_csv(ver_csv, index=True, index_label='index')
+
+            # Grade (bubble-only; openQ=False)
+            _point_values = kd.get('point_values')
+            grade_functions.gradeResults(
+                ver_csv, self.markmissing, False,
+                self.bubbleVal, self.openVal, self.markeddir, self.strictness,
+                point_values=_point_values)
+
+            # Mark sheets if requested
+            if self.save_marked:
+                imgs_for_ver = []
+                for orig_row in row_indices:
+                    img_idx = (orig_row - 1) * pps  # 0-based into aligned_image_list
+                    if 0 <= img_idx < len(self.aligned_image_list):
+                        imgs_for_ver.append(self.aligned_image_list[img_idx])
+
+                marked_list = [None] + imgs_for_ver  # None at [0] = synthetic key placeholder
+                ver_markeddir = self.outdir / f'marked_version{ver}'
+                ver_markeddir.mkdir(exist_ok=True)
+
+                keyname = grade_functions.markSheets(
+                    ver_csv, marked_list, ver_markeddir,
+                    self.qAreas, self.Qdict, self.markmissing, self.corrMark)
+
+                print(f'Saving marked files for version {ver}')
+                ver_pdf = FPDF('P', 'pt', 'Letter')
+                scan_functions.savePdf(ver_markeddir, ver_pdf, keyname)
+                ver_pdf.output(str(self.outdir / f'marked_version{ver}.pdf'))
+
+        print('All steps complete!')
 
     def _run_scan_key(self):
         # Run the scanner on each file

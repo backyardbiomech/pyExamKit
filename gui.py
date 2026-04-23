@@ -206,6 +206,43 @@ class pyScanUI(ctk.CTkFrame):
                       fg_color='#2563eb', hover_color='#1d4ed8').grid(
             row=14, column=0, columnspan=2, pady=10)
 
+        # ── Multiple exam versions ──────────────────────────────────────────────
+        self.multiVersionVar = ctk.IntVar(value=0)
+        ctk.CTkCheckBox(scan_frame,
+                        text="Multiple exam versions? (A/B/C/D versions graded separately)",
+                        variable=self.multiVersionVar,
+                        command=self._toggle_version_frame).grid(
+            row=15, column=0, columnspan=2, padx=10, pady=(8, 2), sticky='w')
+
+        self._version_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
+        self._version_frame.grid(row=16, column=0, columnspan=2,
+                                 padx=(30, 10), pady=(0, 8), sticky='w')
+        self._version_frame.grid_remove()
+
+        ctk.CTkLabel(self._version_frame,
+                     text="Version question number:").grid(
+            row=0, column=0, padx=(0, 6), pady=2, sticky='w')
+        self.versionQEntry = ctk.CTkEntry(self._version_frame, width=80,
+                                          placeholder_text="e.g. 64")
+        self.versionQEntry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky='w')
+        ctk.CTkLabel(self._version_frame,
+                     text="(students fill A/B/C/D on this question to identify their version)",
+                     font=ctk.CTkFont(size=11), text_color='gray').grid(
+            row=0, column=2, padx=(0, 4), pady=2, sticky='w')
+
+        self._version_key_entries: dict[str, ctk.CTkEntry] = {}
+        for _vi, _ver in enumerate(['A', 'B', 'C', 'D']):
+            ctk.CTkLabel(self._version_frame,
+                         text=f"Version {_ver} key file:").grid(
+                row=_vi + 1, column=0, padx=(0, 6), pady=2, sticky='w')
+            _entry = ctk.CTkEntry(self._version_frame, width=350,
+                                  placeholder_text=f"Key CSV for version {_ver} (leave blank to skip)")
+            _entry.grid(row=_vi + 1, column=1, padx=(0, 6), pady=2, sticky='w')
+            ctk.CTkButton(self._version_frame, text="Browse…",
+                          command=lambda v=_ver: self._browse_version_key(v),
+                          width=80).grid(row=_vi + 1, column=2, padx=(0, 2), pady=2, sticky='w')
+            self._version_key_entries[_ver] = _entry
+
         # ════════════════════════════════════════════════════════
         # TAB 2 — Build Key
         # ════════════════════════════════════════════════════════
@@ -333,6 +370,23 @@ class pyScanUI(ctk.CTkFrame):
             self.aiOcrVar.set(0)
             self._ai_frame.grid_remove()
             self._ai_context_row.grid_remove()
+
+    def _toggle_version_frame(self):
+        """Show or hide the multiple-versions sub-frame."""
+        if self.multiVersionVar.get():
+            self._version_frame.grid()
+        else:
+            self._version_frame.grid_remove()
+
+    def _browse_version_key(self, ver: str):
+        """Browse for a key file for the given version letter."""
+        path = filedialog.askopenfilename(
+            title=f'Select key file for version {ver}',
+            filetypes=[('CSV key files', '*.csv'), ('JSON key files', '*.json')])
+        if path:
+            entry = self._version_key_entries[ver]
+            entry.delete(0, 'end')
+            entry.insert(0, path)
 
     def _browse_regrade_csv(self):
         filename = filedialog.askopenfilename(
@@ -566,6 +620,27 @@ class pyScanUI(ctk.CTkFrame):
         review_perfect   = bool(self.reviewPerfectVar.get()) if self.openQvar.get() else True
         key_file_path    = self.scanKeyFileEntry.get().strip()
 
+        # ── Multi-version params ───────────────────────────────────────────────
+        version_question = 0
+        version_key_paths: dict[str, str] = {}
+        if self.multiVersionVar.get():
+            vq_str = self.versionQEntry.get().strip()
+            try:
+                version_question = int(vq_str)
+                if version_question < 1:
+                    raise ValueError('must be >= 1')
+            except ValueError:
+                self._log('Version question number must be a positive integer (e.g. 64). Please fix and retry.')
+                return
+            for ver, entry in self._version_key_entries.items():
+                p = entry.get().strip()
+                if p:
+                    version_key_paths[ver] = p
+            if not version_key_paths:
+                self._log('Multiple versions is checked but no version key files are loaded. '
+                          'Browse for at least one version key file.')
+                return
+
         self._log('Starting scan…')
         old_stdout = sys.stdout
         sys.stdout = TextRedirector(self.log_box)
@@ -578,7 +653,9 @@ class pyScanUI(ctk.CTkFrame):
                     key_file_path=key_file_path,
                     pages_per_student=pages_per_student,
                     save_marked=save_marked,
-                    strictness=strictness)
+                    strictness=strictness,
+                    version_question=version_question,
+                    version_key_paths=version_key_paths or None)
         finally:
             sys.stdout = old_stdout
         self._log('Done.')
