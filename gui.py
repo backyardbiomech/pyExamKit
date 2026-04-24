@@ -38,7 +38,9 @@ class pyScanUI(ctk.CTkFrame):
 
     def __initUI(self):
         self.parent.title("Python ExamScan")
-        self.parent.resizable(False, False)
+        self.parent.resizable(True, True)
+        self.parent.geometry('840x860')
+        self.parent.minsize(700, 580)
         self.pack(fill='both', expand=True, padx=16, pady=16)
 
         # ── Tab view ──────────────────────────────────────────────────────
@@ -52,8 +54,8 @@ class pyScanUI(ctk.CTkFrame):
         # ════════════════════════════════════════════════════════
         # TAB 1 — Scan Exams
         # ════════════════════════════════════════════════════════
-        scan_frame = ctk.CTkFrame(scan_tab, fg_color='transparent')
-        scan_frame.pack(fill='x', pady=(0, 8))
+        scan_frame = ctk.CTkScrollableFrame(scan_tab, fg_color='transparent')
+        scan_frame.pack(fill='both', expand=True, pady=(0, 8))
 
         # ── Key File row — load first so its metadata auto-fills fields below ──
         key_file_row = ctk.CTkFrame(scan_frame, fg_color='transparent')
@@ -206,16 +208,24 @@ class pyScanUI(ctk.CTkFrame):
                       fg_color='#2563eb', hover_color='#1d4ed8').grid(
             row=14, column=0, columnspan=2, pady=10)
 
+        # ── Re-use aligned images ───────────────────────────────────────────────
+        self.reuseAlignedVar = ctk.IntVar(value=0)
+        ctk.CTkCheckBox(
+            scan_frame,
+            text="Skip alignment — re-use existing aligned images (fast threshold re-scan)",
+            variable=self.reuseAlignedVar,
+        ).grid(row=15, column=0, columnspan=2, padx=10, pady=(0, 4), sticky='w')
+
         # ── Multiple exam versions ──────────────────────────────────────────────
         self.multiVersionVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame,
                         text="Multiple exam versions? (A/B/C/D versions graded separately)",
                         variable=self.multiVersionVar,
                         command=self._toggle_version_frame).grid(
-            row=15, column=0, columnspan=2, padx=10, pady=(8, 2), sticky='w')
+            row=16, column=0, columnspan=2, padx=10, pady=(8, 2), sticky='w')
 
         self._version_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
-        self._version_frame.grid(row=16, column=0, columnspan=2,
+        self._version_frame.grid(row=17, column=0, columnspan=2,
                                  padx=(30, 10), pady=(0, 8), sticky='w')
         self._version_frame.grid_remove()
 
@@ -231,6 +241,7 @@ class pyScanUI(ctk.CTkFrame):
             row=0, column=2, padx=(0, 4), pady=2, sticky='w')
 
         self._version_key_entries: dict[str, ctk.CTkEntry] = {}
+        self._version_key_paths: dict[str, str] = {}
         for _vi, _ver in enumerate(['A', 'B', 'C', 'D']):
             ctk.CTkLabel(self._version_frame,
                          text=f"Version {_ver} key file:").grid(
@@ -239,7 +250,7 @@ class pyScanUI(ctk.CTkFrame):
                                   placeholder_text=f"Key CSV for version {_ver} (leave blank to skip)")
             _entry.grid(row=_vi + 1, column=1, padx=(0, 6), pady=2, sticky='w')
             ctk.CTkButton(self._version_frame, text="Browse…",
-                          command=lambda v=_ver: self._browse_version_key(v),
+                          command=lambda e=_entry, v=_ver: self._browse_version_key(v, e),
                           width=80).grid(row=_vi + 1, column=2, padx=(0, 2), pady=2, sticky='w')
             self._version_key_entries[_ver] = _entry
 
@@ -378,15 +389,15 @@ class pyScanUI(ctk.CTkFrame):
         else:
             self._version_frame.grid_remove()
 
-    def _browse_version_key(self, ver: str):
+    def _browse_version_key(self, ver: str, entry: 'ctk.CTkEntry'):
         """Browse for a key file for the given version letter."""
         path = filedialog.askopenfilename(
             title=f'Select key file for version {ver}',
             filetypes=[('CSV key files', '*.csv'), ('JSON key files', '*.json')])
         if path:
-            entry = self._version_key_entries[ver]
+            self._version_key_paths[ver] = path
             entry.delete(0, 'end')
-            entry.insert(0, path)
+            entry.insert(0, Path(path).name)
 
     def _browse_regrade_csv(self):
         filename = filedialog.askopenfilename(
@@ -633,13 +644,17 @@ class pyScanUI(ctk.CTkFrame):
                 self._log('Version question number must be a positive integer (e.g. 64). Please fix and retry.')
                 return
             for ver, entry in self._version_key_entries.items():
-                p = entry.get().strip()
+                # Use full path from _version_key_paths; fall back to entry text
+                # (entry only shows basename, so direct entry.get() is not sufficient)
+                p = self._version_key_paths.get(ver, '').strip() or entry.get().strip()
                 if p:
                     version_key_paths[ver] = p
             if not version_key_paths:
                 self._log('Multiple versions is checked but no version key files are loaded. '
                           'Browse for at least one version key file.')
                 return
+
+        reuse_aligned = bool(self.reuseAlignedVar.get())
 
         self._log('Starting scan…')
         old_stdout = sys.stdout
@@ -655,7 +670,8 @@ class pyScanUI(ctk.CTkFrame):
                     save_marked=save_marked,
                     strictness=strictness,
                     version_question=version_question,
-                    version_key_paths=version_key_paths or None)
+                    version_key_paths=version_key_paths or None,
+                    reuse_aligned=reuse_aligned)
         finally:
             sys.stdout = old_stdout
         self._log('Done.')

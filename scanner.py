@@ -5,6 +5,8 @@ import fnmatch
 import pandas as pd
 import ast
 from pathlib import Path
+import numpy as np
+from PIL import Image as PILImage
 
 from dicts import Dicts
 from settings import Settings
@@ -24,7 +26,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5, version_question: int = 0, version_key_paths: dict | None = None):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5, version_question: int = 0, version_key_paths: dict | None = None, reuse_aligned: bool = False):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -57,6 +59,7 @@ class Scanner(object):
         self.key_file_path = key_file_path
         self.pages_per_student = max(1, int(pages_per_student))
         self.strictness = strictness
+        self.reuse_aligned = reuse_aligned
         # ── Multi-version support ──────────────────────────────────────────────
         self.version_question = version_question
         self.version_keys: dict[str, dict] = {}
@@ -100,9 +103,20 @@ class Scanner(object):
         self.aligneddir.mkdir(exist_ok = True)
         self.markeddir = self.outdir / 'marked'
         self.markeddir.mkdir(exist_ok = True)
-        # initialize file and pathnames (and split pdfs into jpgs) 
-        self.image_list = init_functions.filenames(
-            input_file, scan_jpgs_dir=self.app_data_dir / 'scanJPGs')
+        # initialize file and pathnames (and split pdfs into jpgs)
+        if self.reuse_aligned:
+            _existing = sorted(self.aligneddir.glob('aligned_*.jpg'))
+            if not _existing:
+                print('[Scanner] reuse_aligned: no aligned images found in '
+                      f'{self.aligneddir} — falling back to full scan.', flush=True)
+                self.reuse_aligned = False
+            else:
+                self.image_list = [str(p) for p in _existing]
+                print(f'[Scanner] Re-using {len(self.image_list)} existing aligned images. '
+                      'Skipping PDF split and alignment.', flush=True)
+        if not self.reuse_aligned:
+            self.image_list = init_functions.filenames(
+                input_file, scan_jpgs_dir=self.app_data_dir / 'scanJPGs')
         # intialize the output pdf which the scanner object will write to
         self.outpdf=FPDF('P','pt','Letter')
         # initialize the pandas dataframe to contain results
@@ -120,6 +134,13 @@ class Scanner(object):
         self.Ndict, self.Idict, self.Qdict = init_functions.makeResDict()
         self.run()
         
+    def _load_scanimg(self, path):
+        """Load a saved aligned JPEG and return its thresholded scanimg array.
+        Used in reuse_aligned mode — skips registration and warping."""
+        with PILImage.open(path) as pil:
+            arr = np.array(pil.convert('RGB'))
+        return scan_functions.autothresh(arr, self.scan_settings)
+
     def run(self):
         if self.version_keys and self.version_question:
             self._run_multi_version()
@@ -139,13 +160,18 @@ class Scanner(object):
 
         # 1. Scan all pages (no key row — all rows are students)
         for i in range(len(self.image_list)):
-            img = Image(self.image_list[i], self.scan_settings)
-            print(f'Processing scan {i + 1}')
-            scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
+            if self.reuse_aligned:
+                print(f'Re-scanning (threshold only) {i + 1}')
+                scanimg = self._load_scanimg(self.image_list[i])
+            else:
+                img = Image(self.image_list[i], self.scan_settings)
+                print(f'Processing scan {i + 1}')
+                scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
+                scanimg = img.scanimg
             if i % pps == 0:   # first page per student — scan MC bubbles
                 student_row = i // pps + 1
                 self.qRes = scan_functions.rundots(
-                    img.scanimg,
+                    scanimg,
                     self.qAreas, self.idAreas, self.nAreas,
                     self.ignores,
                     self.Qdict, self.Idict, self.Ndict)
@@ -238,21 +264,49 @@ class Scanner(object):
                 scan_functions.savePdf(ver_markeddir, ver_pdf, keyname)
                 ver_pdf.output(str(self.outdir / f'marked_version{ver}.pdf'))
 
+        # ── Combined forCanvas CSV (all versions, sorted by last name) ────────
+        combined_frames = []
+        for ver in sorted(version_groups):
+            ver_csv = str(self.outdir / f'results_version{ver}.csv')
+            try:
+                vdf = pd.read_csv(ver_csv, dtype=object)
+                vdf.set_index('index', inplace=True)
+                vdf.index = vdf.index.map(str)
+                # drop key row and numb_correct row
+                vdf = vdf.drop(index=[r for r in ('0', 'numb_correct') if r in vdf.index])
+                sub = vdf[['LastName', 'FirstName', 'studentID', 'partialscore']].copy()
+                sub.insert(3, 'version', ver)
+                combined_frames.append(sub)
+            except Exception as _exc:
+                print(f'[MultiVersion] Could not read {ver_csv} for combined output: {_exc}',
+                      flush=True)
+        if combined_frames:
+            combined = pd.concat(combined_frames, ignore_index=True)
+            combined = combined.sort_values(by=['LastName', 'FirstName', 'studentID'])
+            combined_path = str(self.outdir / 'results_all_versions_forCanvas.csv')
+            combined.to_csv(combined_path, index=False)
+            print(f'Combined output saved → {combined_path}')
+
         print('All steps complete!')
 
     def _run_scan_key(self):
         # Run the scanner on each file
         # will scan dots and save out aligned image for future use)
         for i in range(len(self.image_list)):
-            # create image object, which will load and align image
-            # makes img.aligned, img.scanimg
-            img = Image(self.image_list[i], self.scan_settings)
-            print('Processing scan {0:1d}'.format(i))
-            #save the aligned image aligned_00i.jpg in ./aligned
-            scan_functions.saveimg(i, img.aligned, self.aligneddir)
-            self.qRes=scan_functions.rundots(img.scanimg, 
-                                            self.qAreas, self.idAreas, self.nAreas, 
-                                            self.ignores, 
+            if self.reuse_aligned:
+                print('Re-scanning (threshold only) {0:1d}'.format(i))
+                scanimg = self._load_scanimg(self.image_list[i])
+            else:
+                # create image object, which will load and align image
+                # makes img.aligned, img.scanimg
+                img = Image(self.image_list[i], self.scan_settings)
+                print('Processing scan {0:1d}'.format(i))
+                #save the aligned image aligned_00i.jpg in ./aligned
+                scan_functions.saveimg(i, img.aligned, self.aligneddir)
+                scanimg = img.scanimg
+            self.qRes=scan_functions.rundots(scanimg,
+                                            self.qAreas, self.idAreas, self.nAreas,
+                                            self.ignores,
                                             self.Qdict, self.Idict, self.Ndict)
             # save results dictionary data to data frame
             for k, v in self.qRes.items():
@@ -386,14 +440,19 @@ class Scanner(object):
         # 2. Scan all images; for multi-page, only run MC bubble scan on first page per student
         pps = self.pages_per_student
         for i in range(len(self.image_list)):
-            img = Image(self.image_list[i], self.scan_settings)
-            print('Processing scan {:1d}'.format(i + 1))
-            scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
+            if self.reuse_aligned:
+                print('Re-scanning (threshold only) {:1d}'.format(i + 1))
+                scanimg = self._load_scanimg(self.image_list[i])
+            else:
+                img = Image(self.image_list[i], self.scan_settings)
+                print('Processing scan {:1d}'.format(i + 1))
+                scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
+                scanimg = img.scanimg
             page_within = i % pps
             if page_within == 0:   # first page per student — scan MC bubbles
                 student_row = i // pps + 1
                 self.qRes = scan_functions.rundots(
-                    img.scanimg,
+                    scanimg,
                     self.qAreas, self.idAreas, self.nAreas,
                     self.ignores,
                     self.Qdict, self.Idict, self.Ndict)
