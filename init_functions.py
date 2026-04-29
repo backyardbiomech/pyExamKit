@@ -28,7 +28,7 @@ def filenames(input_file, scan_jpgs_dir=None):
     # create list of files beginning with key   
     image_list.append(input_file)
     #for all the files in the current directory
-    for file in os.listdir(str(pathname)):
+    for file in sorted(os.listdir(str(pathname))):
         # if the file is a jpg and not the key
         if ((fnmatch.fnmatch(file, '*.jpg') or fnmatch.fnmatch(file,'*.jpeg')) and not 
                 fnmatch.fnmatch(str(pathname / file),input_file)):

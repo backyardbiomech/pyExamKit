@@ -129,12 +129,21 @@ def _pil_to_tkphoto(pil_img, master=None):
     return tk.PhotoImage(**kwargs)
 
 
-def _openq_sort_key(k: str) -> int:
-    """Numeric sort key for openQ_N keys so openQ_2 sorts before openQ_10."""
-    try:
-        return int(k.rsplit('_', 1)[-1])
-    except (ValueError, IndexError):
-        return 0
+def _openq_sort_key(k: str) -> tuple:
+    """Sort key for openQ_N labels so openQ_2 sorts before openQ_10,
+    and openQ_1A/openQ_1B sort between openQ_1 and openQ_2."""
+    suffix = k.rsplit('_', 1)[-1] if '_' in k else k
+    num_part = ''
+    alpha_part = suffix
+    for i, c in enumerate(suffix):
+        if c.isdigit():
+            num_part += c
+        else:
+            alpha_part = suffix[i:]
+            break
+    else:
+        alpha_part = ''
+    return (int(num_part) if num_part else 0, alpha_part.lower())
 
 
 def _load_aligned_arr(imgpath: str) -> 'np.ndarray':
@@ -489,7 +498,8 @@ class OpenQs(object):
     def __init__(self, image_list, parent=None, ai_ocr=False, api_key='',
                  ai_context='', preloaded_file: str = '', review_perfect: bool = True,
                  key_file_data: dict | None = None, key_file_path: str = '',
-                 pages_per_student: int = 1, ignores=None):
+                 pages_per_student: int = 1, ignores=None, strictness: float = 0.0,
+                 output_csv_path: str = ''):
         self._ignores: list[int] = sorted(ignores) if ignores else []
         self.openQcoords = {}
         self.openQkeyimgs = {}
@@ -498,12 +508,14 @@ class OpenQs(object):
         self.acceptable_answers: dict[str, list] = {}   # {qk: [str, ...]}
         self.partial_credit_answers: dict[str, list] = {}  # {qk: [str, ...]}
         self._transcriptions: dict[str, dict] = {}      # {qk: {img_idx: (text, conf)}}
+        self._output_csv_path = output_csv_path
         self._preloaded_file = preloaded_file
         self._review_perfect = review_perfect
         self._key_file_mode = key_file_data is not None
         self._key_file_path = key_file_path
         self._pages_per_student = max(1, int(pages_per_student))
         self._q_pages: dict[str, int] = {}
+        self._strictness: float = float(strictness)
 
         # Obtain the Tkinter root window
         if parent is not None:
@@ -537,7 +549,7 @@ class OpenQs(object):
                 self.openQkeyimgs[qk] = None   # no key scan image
             # If any questions are missing coords, show draw UI on first available student image
             missing_coords = [qk for qk in open_qs if qk not in self.openQcoords]
-            if missing_coords or not open_qs:
+            if missing_coords:
                 first_student = next((img for img in image_list if img is not None), None)
                 coords_before = set(self.openQcoords.keys())
                 self._openQkey(first_student)
@@ -601,6 +613,11 @@ class OpenQs(object):
                     if ans.lower() not in existing_lower:
                         self.partial_credit_answers.setdefault(qk, []).append(ans)
                         existing_lower.append(ans.lower())
+        # Load any saved progress / AI-OCR cache from a previous interrupted session
+        _loaded_cache = self._load_progress_cache()
+        _current_questions = set(self.openQcoords.keys())
+        _cache_questions = set(_loaded_cache.get('questions', [])) if _loaded_cache else set()
+
         if ai_ocr and len(image_list) > 1:
             # Ensure we have an API key — prompt on first use if missing
             if not api_key:
@@ -611,52 +628,82 @@ class OpenQs(object):
                 print('[AI OCR] No API key provided — skipping AI OCR.', flush=True)
                 ai_ocr = False
         if ai_ocr and len(image_list) > 1:
-            print('[AI OCR] Running batch handwriting recognition…', flush=True)
-            _pps = self._pages_per_student
-            _n_students = max(1, (len(image_list) - 1) // _pps)
-            for qk, qv in self.openQcoords.items():
-                crops, ids = [], []
-                # Include key image as id '0' when available (not in key-file mode)
-                if image_list[0] is not None:
-                    key_arr = np.array(PILImage.open(image_list[0]).convert('RGB'))
-                    crops.append(key_arr[qv[1]:qv[3], qv[0]:qv[2]])
-                    ids.append('0')
-                _page = self._q_pages.get(qk, 1)
-                for s_idx in range(_n_students):
-                    actual_pos = 1 + s_idx * _pps + (_page - 1)
-                    if actual_pos >= len(image_list):
-                        continue
-                    img_file = image_list[actual_pos]
-                    if img_file is None:
-                        continue
-                    arr = np.array(PILImage.open(img_file).convert('RGB'))
-                    crops.append(arr[qv[1]:qv[3], qv[0]:qv[2]])
-                    ids.append(str(s_idx + 1))  # 1-indexed student id = resdf row
-                batch = _ai_ocr_mod.recognize_batch(
-                    crops, ids,
-                    context=ai_context,
-                    api_key=api_key,
-                )
-                # '0' is the key image; remaining entries are students
-                ai_key_txt = batch.pop('0', '')
-                if ai_key_txt:
-                    self.openQkeytext[qk] = ai_key_txt
-                self._ai_texts[qk] = {int(sid): text for sid, text in batch.items()}
-                # Step 4b: re-sync acceptable_answers with the AI-read key text
-                # Only overwrite primary answer when NOT in key-file mode
+            # Use cached AI transcriptions when available to avoid repeat API charges
+            if (_loaded_cache and _loaded_cache.get('ai_texts')
+                    and _cache_questions == _current_questions):
+                print('[AI OCR] Loading cached AI transcriptions (no API call)…', flush=True)
+                _cp = self._progress_cache_path()
+                if _cp:
+                    print(f'[AI OCR] Cache file: {_cp}', flush=True)
+                    print('[AI OCR] Delete that file to force a fresh API run.', flush=True)
+                self._ai_texts = {
+                    qk: {int(sid): text for sid, text in per_q.items()}
+                    for qk, per_q in _loaded_cache['ai_texts'].items()
+                }
+                for qk, kt in _loaded_cache.get('key_texts', {}).items():
+                    if kt:
+                        self.openQkeytext[qk] = kt
+                # Re-sync acceptable_answers with cached AI key text (non-key-file mode)
                 if not self._key_file_mode:
-                    actual_key = self.openQkeytext[qk]
-                    self.acceptable_answers[qk] = [actual_key] if actual_key else []
-                    for _ans in preloaded.get(qk, []):
-                        _existing_lower = [a.lower() for a in self.acceptable_answers[qk]]
-                        if _ans.lower() not in _existing_lower:
-                            self.acceptable_answers[qk].append(_ans)
-                    for _ans in preloaded_partial.get(qk, []):
-                        _existing_lower = [a.lower() for a in self.partial_credit_answers.get(qk, [])]
-                        if _ans.lower() not in _existing_lower:
-                            self.partial_credit_answers.setdefault(qk, []).append(_ans)
-                print(f'[AI OCR]   {qk}: {len(batch)}/{len(ids) - 1} transcribed.', flush=True)
-            print('[AI OCR] Batch transcription complete.', flush=True)
+                    for qk in self.openQcoords:
+                        actual_key = self.openQkeytext.get(qk, '')
+                        self.acceptable_answers[qk] = [actual_key] if actual_key else []
+                        for _ans in preloaded.get(qk, []):
+                            if _ans.lower() not in [a.lower() for a in self.acceptable_answers[qk]]:
+                                self.acceptable_answers[qk].append(_ans)
+                        for _ans in preloaded_partial.get(qk, []):
+                            if _ans.lower() not in [a.lower() for a in
+                                                    self.partial_credit_answers.get(qk, [])]:
+                                self.partial_credit_answers.setdefault(qk, []).append(_ans)
+            else:
+                print('[AI OCR] Running batch handwriting recognition…', flush=True)
+                _pps = self._pages_per_student
+                _n_students = max(1, (len(image_list) - 1) // _pps)
+                for qk, qv in self.openQcoords.items():
+                    crops, ids = [], []
+                    # Include key image as id '0' when available (not in key-file mode)
+                    if image_list[0] is not None:
+                        key_arr = np.array(PILImage.open(image_list[0]).convert('RGB'))
+                        crops.append(key_arr[qv[1]:qv[3], qv[0]:qv[2]])
+                        ids.append('0')
+                    _page = self._q_pages.get(qk, 1)
+                    for s_idx in range(_n_students):
+                        actual_pos = 1 + s_idx * _pps + (_page - 1)
+                        if actual_pos >= len(image_list):
+                            continue
+                        img_file = image_list[actual_pos]
+                        if img_file is None:
+                            continue
+                        arr = np.array(PILImage.open(img_file).convert('RGB'))
+                        crops.append(arr[qv[1]:qv[3], qv[0]:qv[2]])
+                        ids.append(str(s_idx + 1))  # 1-indexed student id = resdf row
+                    batch = _ai_ocr_mod.recognize_batch(
+                        crops, ids,
+                        context=ai_context,
+                        api_key=api_key,
+                    )
+                    # '0' is the key image; remaining entries are students
+                    ai_key_txt = batch.pop('0', '')
+                    if ai_key_txt:
+                        self.openQkeytext[qk] = ai_key_txt
+                    self._ai_texts[qk] = {int(sid): text for sid, text in batch.items()}
+                    # Step 4b: re-sync acceptable_answers with the AI-read key text
+                    # Only overwrite primary answer when NOT in key-file mode
+                    if not self._key_file_mode:
+                        actual_key = self.openQkeytext[qk]
+                        self.acceptable_answers[qk] = [actual_key] if actual_key else []
+                        for _ans in preloaded.get(qk, []):
+                            _existing_lower = [a.lower() for a in self.acceptable_answers[qk]]
+                            if _ans.lower() not in _existing_lower:
+                                self.acceptable_answers[qk].append(_ans)
+                        for _ans in preloaded_partial.get(qk, []):
+                            _existing_lower = [a.lower() for a in self.partial_credit_answers.get(qk, [])]
+                            if _ans.lower() not in _existing_lower:
+                                self.partial_credit_answers.setdefault(qk, []).append(_ans)
+                    print(f'[AI OCR]   {qk}: {len(batch)}/{_n_students} transcribed.', flush=True)
+                print('[AI OCR] Batch transcription complete.', flush=True)
+                # Save AI results immediately so a crash during grading won't cost API tokens
+                self._save_progress_cache(questions=_current_questions)
 
         _pps = self._pages_per_student
         _n_students = max(1, (len(image_list) - 1) // _pps)
@@ -666,14 +713,72 @@ class OpenQs(object):
 
         # Phase 2: grade each student's answers for each open-ended question
         openqs = sorted(list(self.openQcoords), key=_openq_sort_key)
-        qi = 0
+
+        # ── Resume logic ──────────────────────────────────────────────────
+        _start_qi = 0
+        _start_s_idx = 0
+        _has_saved_grades = (_loaded_cache is not None
+                             and bool(_loaded_cache.get('grades'))
+                             and _cache_questions == _current_questions)
+        if _has_saved_grades:
+            _last_qi = _loaded_cache.get('last_qi', 0)
+            _last_s_idx = _loaded_cache.get('last_s_idx', 0)
+
+            def _restore_grades_from_cache():
+                for _rqk, _per_student in _loaded_cache.get('grades', {}).items():
+                    if _rqk in self.openQres.columns:
+                        for _rs, _rgrade in _per_student.items():
+                            try:
+                                _ri = int(_rs)
+                                if _ri in self.openQres.index and _rgrade:
+                                    self.openQres.loc[_ri, _rqk] = _rgrade
+                            except ValueError:
+                                pass
+                for _rqk, _per_q in _loaded_cache.get('transcriptions', {}).items():
+                    self._transcriptions[_rqk] = {
+                        int(idx): tuple(v) for idx, v in _per_q.items()
+                    }
+
+            if _last_qi >= len(openqs):
+                # Grading was already complete but cache was not deleted (crash after final
+                # save but before _delete_progress_cache).  Silently restore and skip loop.
+                _restore_grades_from_cache()
+                _start_qi = len(openqs)
+                self._delete_progress_cache()
+                print('[OpenQ] Restored completed grading session from cache.', flush=True)
+            else:
+                _resume_msg = (
+                    f'A previous grading session was interrupted.\n'
+                    f'Next to grade: question {_last_qi + 1}/{len(openqs)}, '
+                    f'student {_last_s_idx + 1}/{_n_students}.\n\n'
+                    f'Resume from where you left off?'
+                )
+                _do_resume = tkinter.messagebox.askyesno(
+                    'Resume Grading?', _resume_msg, parent=self._root)
+                if _do_resume:
+                    _restore_grades_from_cache()
+                    _start_qi = _last_qi
+                    _start_s_idx = _last_s_idx
+                    print(f'[OpenQ] Resuming from question {_start_qi + 1}, '
+                          f'student {_start_s_idx + 1}.', flush=True)
+                else:
+                    self._delete_progress_cache()
+        # ─────────────────────────────────────────────────────────────────
+
+        qi = _start_qi
+        _resume_first_q = (_start_qi > 0 or _start_s_idx > 0)
         while qi < len(openqs):
             if qi < 0:
                 qi = 0
             k = openqs[qi]
             v = self.openQcoords[k]
             _page = self._q_pages.get(k, 1)
-            s_idx = 0
+            # On the first question of a resume, start from the saved student index
+            if _resume_first_q and qi == _start_qi:
+                s_idx = _start_s_idx
+            else:
+                s_idx = 0
+            _resume_first_q = False
             went_back_q = False
             while s_idx < _n_students:
                 if s_idx < 0:
@@ -690,36 +795,126 @@ class OpenQs(object):
                         break
                     continue
                 self.openQres.loc[s_idx + 1, k] = grade
+                # Save progress after each answer so a crash can be recovered
+                _next_s = s_idx + 1
+                _next_qi = qi
+                if _next_s >= _n_students:
+                    _next_qi = qi + 1
+                    _next_s = 0
+                self._save_progress_cache(qi=_next_qi, s_idx=_next_s, openqs=openqs,
+                                          questions=_current_questions)
                 s_idx += 1
             if went_back_q:
                 continue   # restart outer loop at new qi
             qi += 1
+        # Grading complete — remove the progress cache
+        self._delete_progress_cache()
+
+    # ------------------------------------------------------------------
+    # Progress-cache helpers (resume after crash / AI-token reuse)
+    # ------------------------------------------------------------------
+
+    def _progress_cache_path(self) -> 'Path | None':
+        if not self._output_csv_path:
+            return None
+        app_data = Path(self._output_csv_path).parent / 'app_data'
+        stem = Path(self._output_csv_path).stem
+        return app_data / f'{stem}_openq_progress.json'
+
+    def _load_progress_cache(self) -> 'dict | None':
+        p = self._progress_cache_path()
+        if p is None or not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+
+    def _save_progress_cache(self, qi: int = 0, s_idx: int = 0,
+                             openqs: 'list | None' = None,
+                             questions: 'set | None' = None) -> None:
+        """Persist AI OCR results and/or grading progress to the cache file.
+
+        Called with just *questions* immediately after AI batch (no grade data yet).
+        Called with all four arguments after each graded answer.
+        """
+        p = self._progress_cache_path()
+        if p is None:
+            return
+        try:
+            p.parent.mkdir(exist_ok=True)
+            data: dict = {
+                'questions': sorted(questions or set(self.openQcoords.keys())),
+                'ai_texts': {
+                    qk: {str(sid): text for sid, text in per_q.items()}
+                    for qk, per_q in self._ai_texts.items()
+                },
+                'key_texts': dict(self.openQkeytext),
+            }
+            if openqs is not None:
+                grades: dict = {}
+                if self.openQres is not None:
+                    for col in self.openQres.columns:
+                        grades[col] = {}
+                        for row_idx in self.openQres.index:
+                            if row_idx == 0:
+                                continue
+                            val = str(self.openQres.loc[row_idx, col])
+                            if val:
+                                grades[col][str(row_idx)] = val
+                trans_serialisable = {
+                    qk: {str(idx): list(v) for idx, v in per_q.items()}
+                    for qk, per_q in self._transcriptions.items()
+                }
+                data.update({
+                    'transcriptions': trans_serialisable,
+                    'grades': grades,
+                    'last_qi': qi,
+                    'last_s_idx': s_idx,
+                    'questions_order': openqs,
+                })
+            p.write_text(json.dumps(data, indent=2), encoding='utf-8')
+        except Exception as exc:
+            print(f'[OpenQ] Could not save progress cache: {exc}', flush=True)
+
+    def _delete_progress_cache(self) -> None:
+        p = self._progress_cache_path()
+        if p is not None:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _get_question_label(self, box_index: int, parent=None) -> str:
         '''
         Return a question label for a newly drawn box (0-based index).
         If the ignores list has a number at this index, use it as the default.
         Prompts the user via a Tkinter dialog so they can override.
+        Labels may be plain numbers (1, 2) or alphanumeric (1A, 1B, 2A).
         '''
         if box_index < len(self._ignores):
-            default_num = self._ignores[box_index]
+            default_label = str(self._ignores[box_index])
         else:
-            default_num = box_index + 1
+            default_label = str(box_index + 1)
         dlg_parent = parent if parent is not None else self._root
         try:
             from tkinter import simpledialog
             dlg_parent.lift()
-            result = simpledialog.askinteger(
-                'Open-Ended Question Number',
-                f'Enter the question number for this open-ended answer box\n(default: {default_num}):',
-                initialvalue=default_num,
+            result = simpledialog.askstring(
+                'Open-Ended Question Label',
+                f'Enter the label for this open-ended answer box (e.g. 1, 1A, 2B):\n(default: {default_label})',
+                initialvalue=default_label,
                 parent=dlg_parent,
             )
             if result is not None:
-                return 'openQ_' + str(result)
+                label = result.strip()
+                if label:
+                    if label.startswith('openQ_'):
+                        return label
+                    return 'openQ_' + label
         except Exception:
             pass
-        return 'openQ_' + str(default_num)
+        return 'openQ_' + default_label
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -819,6 +1014,8 @@ class OpenQs(object):
             'tk_img': None,
         }
         coords = self.openQcoords  # reference to the instance dict
+        _preloaded_keys = set(coords.keys())   # keys that existed before this dialog opened
+        _drawn_order: list = []                # tracks draw order so Undo removes last-drawn only
 
         def redraw(current_rect=None):
             img = dispimg.copy()
@@ -857,23 +1054,31 @@ class OpenQs(object):
             qk = self._get_question_label(box_index, parent=win)
             # ensure no duplicate labels
             while qk in coords:
-                try:
-                    base, num = qk.rsplit('_', 1)
-                    qk = f'{base}_{int(num) + 1}'
-                except ValueError:
+                parts = qk.rsplit('_', 1)
+                if len(parts) == 2:
+                    try:
+                        qk = parts[0] + '_' + str(int(parts[1]) + 1)
+                    except ValueError:
+                        qk = qk + '_2'
+                else:
                     qk = qk + '_2'
             x1 = int(min(state['sx'], ex) / dispres)
             y1 = int(min(state['sy'], ey) / dispres)
             x2 = int(max(state['sx'], ex) / dispres)
             y2 = int(max(state['sy'], ey) / dispres)
             coords[qk] = (x1, y1, x2, y2)
+            _drawn_order.append(qk)
             redraw()
 
         def undo():
-            if coords:
-                last_key = sorted(coords.keys())[-1]
-                del coords[last_key]
-                redraw()
+            # Only undo newly drawn boxes — never remove preloaded (existing) coords
+            while _drawn_order and _drawn_order[-1] not in coords:
+                _drawn_order.pop()  # clean up any already-removed entries
+            if _drawn_order:
+                last_drawn = _drawn_order.pop()
+                if last_drawn not in _preloaded_keys:
+                    del coords[last_drawn]
+                    redraw()
 
         def done():
             win.destroy()
@@ -911,7 +1116,26 @@ class OpenQs(object):
         The key OCR text is editable so the grader can correct it once if needed.
         Returns one of 'CC', 'CX', 'XX', or 'back'.
         '''
-        full_arr = np.array(PILImage.open(filename).convert('RGB'))
+        if filename is None:
+            print(f'[OpenQ] No image available for student {img_idx} — grading as XX.',
+                  flush=True)
+            return 'XX'
+        while True:
+            try:
+                full_arr = np.array(PILImage.open(filename).convert('RGB'))
+                break
+            except Exception as _img_exc:
+                _retry = tkinter.messagebox.askretrycancel(
+                    'Image Load Error',
+                    f'Cannot open image for student {img_idx}:\n{filename}\n\n'
+                    f'Error: {_img_exc}\n\n'
+                    'This may be a cloud-sync delay (e.g. Box Drive). '
+                    'Click Retry to try again, or Cancel to skip this '
+                    'student (grade XX).',
+                    parent=self._root,
+                )
+                if not _retry:
+                    return 'XX'
         student_crop = full_arr[v[1]:v[3], v[0]:v[2]]
 
         # Use AI-transcribed text when available, otherwise fall back to local OCR.
@@ -930,13 +1154,14 @@ class OpenQs(object):
         _key_list = self.acceptable_answers.get(k) or ([key_text] if key_text else [])
         _partial_list = self.partial_credit_answers.get(k, [])
         suggestion = suggest_grade(student_text, _key_list, ocr_conf,
-                                   partial_texts=_partial_list)
+                                   partial_texts=_partial_list,
+                                   partial_threshold=self._strictness if self._strictness > 0 else None)
 
         # Auto-grade perfect matches without showing the window
         if not self._review_perfect and suggestion == 'CC':
             return 'CC'
-        # Auto-grade defined partial-credit matches (explicitly defined → no review needed)
-        if _partial_list and suggestion == 'CX':
+        # Auto-grade CX suggestions (explicit partial-answer match or spelling-threshold match)
+        if suggestion == 'CX' and (_partial_list or self._strictness > 0):
             return 'CX'
 
         # Build display image — stack key crop (if available) above student crop
@@ -1036,7 +1261,8 @@ class OpenQs(object):
                 self.acceptable_answers[k] = [edited_key]
             _key_list = self.acceptable_answers.get(k) or ([edited_key] if edited_key else [])
             _pt_list = self.partial_credit_answers.get(k, [])
-            sug = suggest_grade(student_text, _key_list, ocr_conf, partial_texts=_pt_list)
+            sug = suggest_grade(student_text, _key_list, ocr_conf, partial_texts=_pt_list,
+                               partial_threshold=self._strictness if self._strictness > 0 else None)
             current_suggestion['val'] = sug
             if sug:
                 sg_label.config(
@@ -1086,25 +1312,39 @@ class OpenQs(object):
         def _add_student_answer():
             if not student_text or student_text == '[?]':
                 return
-            count = self._add_acceptable_and_regrade(k, student_text, img_idx)
+            edited = tkinter.simpledialog.askstring(
+                'Add Correct Answer',
+                'Edit answer before adding:',
+                initialvalue=student_text,
+                parent=win,
+            )
+            if edited is None:
+                return
+            edited = edited.strip()
+            if not edited:
+                return
+            count = self._add_acceptable_and_regrade(k, edited, img_idx)
             _refresh_aa_listbox()
             if count > 0:
                 regrade_status_var.set(f'Added. {count} previous student(s) upgraded.')
             else:
                 regrade_status_var.set('Added (no previous upgrades).')
             _update_suggestion()
+            self._write_answers_to_key_file()
 
         def _remove_selected_aa():
             sel = aa_listbox.curselection()
             if not sel:
                 return
             idx_sel = sel[0]
-            if idx_sel == 0:
-                return  # don't allow removing the primary answer
             del self.acceptable_answers[k][idx_sel]
+            # If the primary was removed, sync the key entry field to the new primary
+            if idx_sel == 0:
+                key_var.set(self.acceptable_answers[k][0] if self.acceptable_answers.get(k) else '')
             _refresh_aa_listbox()
             regrade_status_var.set('')
             _update_suggestion()
+            self._write_answers_to_key_file()
 
         add_btn_state = 'normal' if (student_text and student_text != '[?]') else 'disabled'
         tk.Button(aa_btn_frame, text='Add student answer', font=('Arial', 10),
@@ -1143,13 +1383,25 @@ class OpenQs(object):
         def _add_student_as_partial():
             if not student_text or student_text == '[?]':
                 return
-            count = self._add_acceptable_and_regrade(k, student_text, img_idx, grade='CX')
+            edited = tkinter.simpledialog.askstring(
+                'Add Partial Credit Answer',
+                'Edit answer before adding:',
+                initialvalue=student_text,
+                parent=win,
+            )
+            if edited is None:
+                return
+            edited = edited.strip()
+            if not edited:
+                return
+            count = self._add_acceptable_and_regrade(k, edited, img_idx, grade='CX')
             _refresh_pa_listbox()
             if count > 0:
                 regrade_status_var.set(f'Added partial. {count} previous student(s) upgraded.')
             else:
                 regrade_status_var.set('Added as partial (no previous upgrades).')
             _update_suggestion()
+            self._write_answers_to_key_file()
 
         def _remove_selected_pa():
             sel = pa_listbox.curselection()
@@ -1159,6 +1411,7 @@ class OpenQs(object):
             _refresh_pa_listbox()
             regrade_status_var.set('')
             _update_suggestion()
+            self._write_answers_to_key_file()
 
         tk.Button(pa_btn_frame, text='Add as partial credit', font=('Arial', 10),
                   state=add_btn_state,
@@ -1205,6 +1458,8 @@ class OpenQs(object):
                 return
             if current_suggestion['val']:
                 set_grade(current_suggestion['val'])
+            elif not student_text:
+                set_grade('XX')
         win.bind('<Return>', _on_return)
 
         win.focus_force()
@@ -1212,6 +1467,36 @@ class OpenQs(object):
         return result['grade'] if result['grade'] is not None else 'XX'
 
     # ------------------------------------------------------------------
+    def _write_answers_to_key_file(self) -> None:
+        """Immediately persist acceptable/partial answers back to the key file.
+        No-op when not in key-file mode or no path is set."""
+        if not (self._key_file_mode and self._key_file_path):
+            return
+        try:
+            current_key = load_key_file(self._key_file_path) or {}
+            if not current_key:
+                print('[OpenQ] Key file re-read returned empty — skipping answer update '
+                      'to avoid overwriting existing data.', flush=True)
+                return
+            open_qs = dict(current_key.get('open_questions', {}))
+            for qk in set(list(self.acceptable_answers.keys()) +
+                          list(self.partial_credit_answers.keys()) +
+                          list(self.openQcoords.keys())):
+                entry = dict(open_qs.get(qk, {}))
+                entry['full'] = self.acceptable_answers.get(qk, [])
+                entry['partial'] = self.partial_credit_answers.get(qk, [])
+                coords = self.openQcoords.get(qk)
+                if coords:
+                    entry['coords'] = list(coords)
+                if 'page' not in entry:
+                    entry['page'] = self._q_pages.get(qk, 1)
+                open_qs[qk] = entry
+            current_key['open_questions'] = open_qs
+            save_key_file(self._key_file_path, current_key)
+            print(f'[OpenQ] Key file updated \u2192 {self._key_file_path}', flush=True)
+        except Exception as _kexc:
+            print(f'[OpenQ] Could not update key file: {_kexc}', flush=True)
+
     def _add_acceptable_and_regrade(self, qk: str, new_text: str,
                                      current_idx: int, grade: str = 'CC') -> int:
         """
@@ -1246,6 +1531,7 @@ class OpenQs(object):
                 self.acceptable_answers.get(qk, []),
                 conf,
                 partial_texts=self.partial_credit_answers.get(qk, []),
+                partial_threshold=self._strictness if self._strictness > 0 else None,
             )
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
                 self.openQres.loc[prev_idx, qk] = new_sug
@@ -1266,22 +1552,19 @@ class OpenQs(object):
 
         try:
             merged_answers: dict = {}
-            for qk in set(list(self.acceptable_answers.keys()) +
-                          list(self.partial_credit_answers.keys())):
+            all_qks = sorted(
+                set(list(self.acceptable_answers.keys()) +
+                    list(self.partial_credit_answers.keys()) +
+                    list(self.openQcoords.keys())),
+                key=_openq_sort_key)
+            for qk in all_qks:
                 coords = self.openQcoords.get(qk)
                 merged_answers[qk] = {
                     'full': self.acceptable_answers.get(qk, []),
                     'partial': self.partial_credit_answers.get(qk, []),
                     'coords': list(coords) if coords else None,
+                    'page': self._q_pages.get(qk, 1),
                 }
-            # Also save coords for any questions that have them but no answers yet
-            for qk, coords in self.openQcoords.items():
-                if qk not in merged_answers:
-                    merged_answers[qk] = {
-                        'full': [],
-                        'partial': [],
-                        'coords': list(coords),
-                    }
             Path(stem + '_openq_answers.json').write_text(
                 json.dumps(merged_answers, indent=2), encoding='utf-8')
 
@@ -1297,27 +1580,7 @@ class OpenQs(object):
                     json.dumps(grade_config, indent=2), encoding='utf-8')
 
             # Write updated acceptable/partial answers back to the key file
-            if self._key_file_mode and self._key_file_path:
-                try:
-                    current_key = load_key_file(self._key_file_path) or {}
-                    open_qs = dict(current_key.get('open_questions', {}))
-                    for qk in set(list(self.acceptable_answers.keys()) +
-                                  list(self.partial_credit_answers.keys()) +
-                                  list(self.openQcoords.keys())):
-                        entry = dict(open_qs.get(qk, {}))
-                        entry['full'] = self.acceptable_answers.get(qk, [])
-                        entry['partial'] = self.partial_credit_answers.get(qk, [])
-                        coords = self.openQcoords.get(qk)
-                        if coords:
-                            entry['coords'] = list(coords)
-                        if 'page' not in entry:
-                            entry['page'] = self._q_pages.get(qk, 1)
-                        open_qs[qk] = entry
-                    current_key['open_questions'] = open_qs
-                    save_key_file(self._key_file_path, current_key)
-                    print(f'[OpenQ] Key file updated → {self._key_file_path}', flush=True)
-                except Exception as _kexc:
-                    print(f'[OpenQ] Could not update key file: {_kexc}', flush=True)
+            self._write_answers_to_key_file()
         except Exception as exc:
             print(f'[OpenQ] save_artifacts failed: {exc}', flush=True)
 
@@ -1330,10 +1593,11 @@ class RegradeDialog:
     and gradeResults() when the user clicks Apply.
     """
 
-    def __init__(self, parent, csv_path: str, on_complete=None):
+    def __init__(self, parent, csv_path: str, on_complete=None, strictness: float = 0.0):
         self._parent = parent
         self._csv_path = csv_path
         self._on_complete = on_complete
+        self._strictness = float(strictness)
 
         # Prefer new app_data/ layout; fall back to old layout for existing runs
         app_data_dir = Path(csv_path).parent / 'app_data'
@@ -1393,7 +1657,8 @@ class RegradeDialog:
                                exportselection=False)
         q_listbox.pack(fill='both', expand=True)
         for qk in sorted(set(list(self._acceptable_answers.keys()) +
-                              list(self._partial_credit_answers.keys()))):
+                              list(self._partial_credit_answers.keys())),
+                         key=_openq_sort_key):
             q_listbox.insert(tk.END, qk)
 
         # ── Right panel: editor + transcriptions ──────────────────────────
@@ -1469,8 +1734,8 @@ class RegradeDialog:
             if not k:
                 return
             sel = aa_listbox.curselection()
-            if not sel or sel[0] == 0:
-                return  # don't remove primary
+            if not sel:
+                return
             del self._acceptable_answers[k][sel[0]]
             _refresh_aa()
 
@@ -1564,7 +1829,8 @@ class RegradeDialog:
                 # Re-grade CSV
                 n = grade_functions.regrade_open_questions(
                     self._csv_path, self._acceptable_answers, self._transcriptions,
-                    partial_answers=self._partial_credit_answers)
+                    partial_answers=self._partial_credit_answers,
+                    strictness=self._strictness)
             except Exception as exc:
                 status_var.set(f'Error: {exc}')
                 return
