@@ -413,6 +413,7 @@ class pyScanUI(ctk.CTkFrame):
             return
         from openQ import RegradeDialog
         RegradeDialog(self.parent, csv_path,
+                      strictness=self.strictnessVar.get(),
                       on_complete=lambda n: self._log(
                           f'Re-grading complete: {n} grade(s) upgraded.'))
 
@@ -504,15 +505,31 @@ class pyScanUI(ctk.CTkFrame):
                 return
             meta = data.get('metadata', {})
             num_q = meta.get('num_questions')
+            # Fall back to counting bubble_answers when metadata is absent
+            if num_q is None:
+                num_q = len(data.get('bubble_answers', {}))
             skip_q = meta.get('questions_to_skip', '')
-            if num_q:
-                self.numQEntry.delete(0, 'end')
-                self.numQEntry.insert(0, str(num_q))
+            self.numQEntry.delete(0, 'end')
+            self.numQEntry.insert(0, str(num_q))
             if skip_q:
                 self.ignoreEntry.delete(0, 'end')
                 self.ignoreEntry.insert(0, str(skip_q))
-            if num_q or skip_q:
-                self._log(f'Key metadata loaded: {num_q} questions, skip: {skip_q}')
+            # Auto-update pages per student from the highest page number in open questions
+            open_qs = data.get('open_questions', {})
+            pages_note = ''
+            if open_qs:
+                max_page = max((int(qdata.get('page', 1) or 1) for qdata in open_qs.values()), default=1)
+                current_pps = int(self.pagesPerStudentEntry.get() or '1')
+                if max_page > current_pps:
+                    self.pagesPerStudentEntry.delete(0, 'end')
+                    self.pagesPerStudentEntry.insert(0, str(max_page))
+                    pages_note = f', pages/student set to {max_page}'
+                # Auto-check "open-ended questions" checkbox when the key has open questions
+                if not self.openQvar.get():
+                    self.openQvar.set(1)
+                    self._toggle_ai_frame()
+            skip_info = f', skip: {skip_q}' if skip_q else ''
+            self._log(f'Key metadata loaded: {num_q} questions{skip_info}{pages_note}')
         except Exception as exc:
             self._log(f'Could not read key metadata: {exc}')
 
@@ -605,7 +622,7 @@ class pyScanUI(ctk.CTkFrame):
     def button_go_callback(self):
         input_file  = self.fileEntry.get()
         try:
-            quests    = int(self.numQEntry.get())
+            quests    = int(self.numQEntry.get() or '0')
             bubbleVal = float(self.bubbleValEntry.get())
             openVal   = float(self.openValEntry.get())
             pages_per_student = max(1, int(self.pagesPerStudentEntry.get() or '1'))

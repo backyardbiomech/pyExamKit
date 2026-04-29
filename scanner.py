@@ -125,6 +125,9 @@ class Scanner(object):
         if (self.key_file_path and self._key_data) or (self.version_keys and self.version_question):
             n_actual_students = len(self.image_list) // self.pages_per_student
             n_rows = n_actual_students + 1  # +1 for placeholder row 0
+        elif self.pages_per_student > 1:
+            # scan-key mode, multi-page: index 0 is the key (1 page), rest are student pages
+            n_rows = (len(self.image_list) - 1) // self.pages_per_student + 1
         else:
             n_rows = len(self.image_list)
         self.resdf = init_functions.makeResDf(quests, n_rows)
@@ -292,6 +295,7 @@ class Scanner(object):
     def _run_scan_key(self):
         # Run the scanner on each file
         # will scan dots and save out aligned image for future use)
+        pps = self.pages_per_student
         for i in range(len(self.image_list)):
             if self.reuse_aligned:
                 print('Re-scanning (threshold only) {0:1d}'.format(i))
@@ -304,13 +308,16 @@ class Scanner(object):
                 #save the aligned image aligned_00i.jpg in ./aligned
                 scan_functions.saveimg(i, img.aligned, self.aligneddir)
                 scanimg = img.scanimg
-            self.qRes=scan_functions.rundots(scanimg,
-                                            self.qAreas, self.idAreas, self.nAreas,
-                                            self.ignores,
-                                            self.Qdict, self.Idict, self.Ndict)
-            # save results dictionary data to data frame
-            for k, v in self.qRes.items():
-                self.resdf.loc[i,k]=v
+            # For multi-page: only run bubble scan on key (i=0) and first page per student
+            if i == 0 or (i - 1) % pps == 0:
+                student_row = 0 if i == 0 else (i - 1) // pps + 1
+                self.qRes=scan_functions.rundots(scanimg,
+                                                self.qAreas, self.idAreas, self.nAreas,
+                                                self.ignores,
+                                                self.Qdict, self.Idict, self.Ndict)
+                # save results dictionary data to data frame
+                for k, v in self.qRes.items():
+                    self.resdf.loc[student_row, k] = v
         #get the aligned image dir
         self.aligned_image_list = []
         for file in os.listdir(str(self.aligneddir)):
@@ -333,7 +340,10 @@ class Scanner(object):
                             ai_context=self.ai_context,
                             preloaded_file=self.preloaded_file,
                             review_perfect=self.review_perfect,
-                            ignores=self.ignores)
+                            pages_per_student=pps,
+                            ignores=self.ignores,
+                            strictness=self.strictness,
+                            output_csv_path=str(self.outdir / 'results.csv'))
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -411,7 +421,16 @@ class Scanner(object):
         
         # mark questions
         if self.save_marked:
-            keyname = grade_functions.markSheets(self.resCsv, self.aligned_image_list, self.markeddir, self.qAreas, self.Qdict, self.markmissing, self.corrMark)
+            # Build q_pages: open-ended questions may be on page > 1
+            q_pages = {}
+            if self.openQ and openQs is not None:
+                q_pages.update(openQs._q_pages)
+            # Pass the full aligned_image_list so markSheets can access all pages per student.
+            # Layout: [0]=key page, [(r-1)*pps+1 .. r*pps]=student r's pages (r 1-based)
+            keyname = grade_functions.markSheets(
+                self.resCsv, self.aligned_image_list, self.markeddir,
+                self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                pages_per_student=pps, q_pages=q_pages)
             # intialize the output pdf
             print('Saving marked files')
             self.outpdf=FPDF('P','pt','Letter')
@@ -484,6 +503,8 @@ class Scanner(object):
                 key_file_path=self.key_file_path,
                 pages_per_student=self.pages_per_student,
                 ignores=self.ignores,
+                strictness=self.strictness,
+                output_csv_path=str(self.outdir / 'results.csv'),
             )
             for k, v in openQs.openQcoords.items():
                 self.qAreas[k] = ((v[0], v[1]), (v[2], v[3]))
@@ -493,6 +514,11 @@ class Scanner(object):
                 try:
                     from openQ import load_key_file as _lkf, save_key_file as _skf
                     _kd = _lkf(self.key_file_path) or {}
+                    if not _kd:
+                        print('[Scanner] Key file re-read returned empty — skipping '
+                              'answer update to avoid overwriting existing data.',
+                              flush=True)
+                        raise ValueError('empty key file re-read')
                     for _qk, _oq in _kd.get('open_questions', {}).items():
                         if openQs.acceptable_answers.get(_qk):
                             _oq['full'] = list(openQs.acceptable_answers[_qk])
@@ -539,15 +565,19 @@ class Scanner(object):
             self.bubbleVal, self.openVal, self.markeddir, self.strictness,
             point_values=_point_values)
 
-        # 9. Mark sheets — [None] + first page per student so row indices align with resdf
-        #    aligned_image_list[::pps] picks the first page for each student
-        #    (pps=1 degenerates to all images — fully backward compatible)
+        # 9. Mark sheets — None at [0] for synthetic key row, then all student pages in order
         if self.save_marked:
-            first_page_imgs = self.aligned_image_list[::self.pages_per_student]
-            marked_list = [None] + first_page_imgs
+            # Build q_pages: open-ended questions may be on page > 1
+            q_pages = {}
+            if self.openQ and openQs is not None:
+                q_pages.update(openQs._q_pages)
+            # [None] at index 0 = synthetic key row (no image); then all student pages
+            # Layout: [None, s1_p1, s1_p2, s2_p1, s2_p2, ...]
+            marked_list = [None] + self.aligned_image_list
             keyname = grade_functions.markSheets(
                 self.resCsv, marked_list, self.markeddir,
-                self.qAreas, self.Qdict, self.markmissing, self.corrMark)
+                self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                pages_per_student=pps, q_pages=q_pages)
 
             # 10. Save PDF
             print('Saving marked files')

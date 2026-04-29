@@ -1,4 +1,5 @@
 import re
+import json
 import numpy as np
 import pandas as pd
 import fnmatch
@@ -163,7 +164,23 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     ptsdf.to_csv(_stem + 'perquestions.csv')
     try:
         _xlsx_path = _stem + '_gradebook.xlsx'
-        save_gradebook_xlsx(_xlsx_path, df, ptsdf)
+        # Load open-ended question answers for gradebook display
+        # (save_artifacts writes this file before gradeResults is called)
+        _open_q_answers = None
+        try:
+            _app_data = Path(resCsv).parent / 'app_data'
+            _ans_file = _app_data / (Path(resCsv).stem + '_openq_answers.json')
+            if _ans_file.exists():
+                _raw = json.loads(_ans_file.read_text(encoding='utf-8'))
+                _open_q_answers = {}
+                for _qk, _v in _raw.items():
+                    if isinstance(_v, dict):
+                        _open_q_answers[_qk] = _v.get('full', [])
+                    elif isinstance(_v, list):
+                        _open_q_answers[_qk] = _v
+        except Exception:
+            pass
+        save_gradebook_xlsx(_xlsx_path, df, ptsdf, open_q_answers=_open_q_answers)
         print(f'Gradebook saved \u2192 {_xlsx_path}')
     except Exception as _exc:
         print(f'[gradeResults] Could not save gradebook xlsx: {_exc}')
@@ -176,19 +193,22 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
 
-def save_gradebook_xlsx(xlsx_path: str, df, ptsdf) -> None:
+def save_gradebook_xlsx(xlsx_path: str, df, ptsdf, open_q_answers: dict | None = None) -> None:
     """
     Write an xlsx gradebook with live SUM formulas.
 
     Layout (one sheet "Gradebook"):
       Row 1 — frozen header: LastName | FirstName | studentID |
                Q Answer (Key: X) | Q Pts | ... | Total
-      Row 2 — KEY row (yellow): raw key answers
+      Row 2 — KEY row (yellow): raw key answers; for open-ended questions,
+               pipe-separated acceptable answers from open_q_answers (if provided)
       Rows 3+ — students: answer + points per question;
                  Total cell is =SUM(...) formula so editing a Pts cell updates Total
 
     df    — full results DataFrame (index '0' = key row)
     ptsdf — points DataFrame (same shape; question cells contain float points)
+    open_q_answers — {qk: [answer_str, ...]} of full-credit answers for open-ended
+                     questions; used to populate the KEY row (optional)
     """
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill
@@ -241,7 +261,13 @@ def save_gradebook_xlsx(xlsx_path: str, df, ptsdf) -> None:
     # ── Row 2: KEY row ──────────────────────────────────────────────────────
     key_row = ['KEY', '', '']
     for qi, qc in enumerate(q_cols):
-        key_row.append(str(df.loc['0', qc]))
+        key_val = str(df.loc['0', qc])
+        if key_val == 'CC' and open_q_answers and qc in open_q_answers:
+            answers = open_q_answers[qc]
+            key_display = ' | '.join(answers) if answers else 'CC'
+        else:
+            key_display = key_val
+        key_row.append(key_display)
         key_row.append('')
     key_row.append('')
     ws.append(key_row)
@@ -293,7 +319,8 @@ def save_gradebook_xlsx(xlsx_path: str, df, ptsdf) -> None:
 
 
 def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
-                            partial_answers: dict | None = None) -> int:
+                            partial_answers: dict | None = None,
+                            strictness: float = 0.0) -> int:
     """
     Re-evaluate open-ended question grades in an existing results.csv using
     updated acceptable_answers and stored transcriptions.
@@ -335,7 +362,8 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
             # support 'CC: transcription text' format as well as plain 'CC'/'CX'/'XX'
             old_grade = old_grade_cell[:2] if old_grade_cell[:2] in ('CC', 'CX', 'XX') else old_grade_cell
             new_sug = suggest_grade(text, acc_list, conf,
-                                    partial_texts=partial_list if partial_list else None)
+                                    partial_texts=partial_list if partial_list else None,
+                                    partial_threshold=strictness if strictness > 0 else None)
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
                 df.loc[row_str, qk] = f'{new_sug}: {text}'
                 total_upgraded += 1
@@ -344,12 +372,27 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
     return total_upgraded
 
 
-def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr):
+def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr,
+               pages_per_student=1, q_pages=None):
+    """Mark student answer sheets with correct/incorrect indicators.
+
+    aligned_image_list layout (both single- and multi-page):
+      index 0          — key image (scan-key mode) or None (key-file mode)
+      index (r-1)*pps+1 .. r*pps — all pages for student row r (1-based)
+
+    pages_per_student — number of scanned pages per student (default 1)
+    q_pages           — {question_key: page_number (1-based)} for open-ended
+                        questions that live on a page other than page 1.
+                        Bubble questions always default to page 1.
+    """
     # load results csv
     df = pd.read_csv(resCsv)
     df.set_index(['index'], inplace=True)
     df.index = df.index.map(str)
     df.index.names = [None]
+
+    if q_pages is None:
+        q_pages = {}
 
     font = _get_font(size=28)
     # cv2 putText uses bottom-left anchor; Pillow uses top-left, so we subtract this offset
@@ -361,12 +404,41 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     BLUE  = (0, 0, 255)
 
     keyname = None
-    # load aligned images in loop with index matching the results row number
-    for row in range(len(aligned_image_list)):
-        if aligned_image_list[row] is None:
-            continue   # synthetic key row — no image to mark
-        pil_img = PILImage.open(aligned_image_list[row]).convert('RGB')
-        draw = ImageDraw.Draw(pil_img)
+
+    # Iterate over CSV rows (skip 'numb_correct' which has no image)
+    row_strs = [r for r in df.index if r != 'numb_correct']
+    for row_str in row_strs:
+        # Resolve which page images belong to this row
+        if row_str == '0':
+            # Key row — uses the single entry at index 0 (may be None in key-file mode)
+            page_imgs = [aligned_image_list[0] if aligned_image_list else None]
+        elif pages_per_student == 1:
+            r = int(row_str)
+            img = aligned_image_list[r] if r < len(aligned_image_list) else None
+            page_imgs = [img]
+        else:
+            r = int(row_str)
+            start = (r - 1) * pages_per_student + 1
+            page_imgs = list(aligned_image_list[start:start + pages_per_student])
+            # Pad with None if fewer images were found than expected
+            while len(page_imgs) < pages_per_student:
+                page_imgs.append(None)
+
+        # Skip rows that have no images at all (e.g. synthetic key row in key-file mode)
+        if all(p is None for p in page_imgs):
+            continue
+
+        # Open each page image and create a draw handle
+        pil_pages = []
+        draws = []
+        for p in page_imgs:
+            if p is None or not os.path.exists(p):
+                pil_pages.append(None)
+                draws.append(None)
+            else:
+                pil_img = PILImage.open(p).convert('RGB')
+                pil_pages.append(pil_img)
+                draws.append(ImageDraw.Draw(pil_img))
 
         for col in df.columns[3:-2]:
             key = df.loc['0', col]
@@ -374,12 +446,18 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                 continue
 
             key = list(key)
-            ans = list(df.loc[str(row), col])
+            ans = list(df.loc[row_str, col])
+
+            # Determine which page image to draw on (1-based page → 0-based index)
+            page_idx = max(0, q_pages.get(col, 1) - 1)
+            if page_idx >= len(draws) or draws[page_idx] is None:
+                continue
+            draw = draws[page_idx]
 
             # open-ended questions
             if col[0:4] == 'open':
                 # extract just the 2-char grade code (supports 'CC: text' format)
-                grade_code = str(df.loc[str(row), col])[:2]
+                grade_code = str(df.loc[row_str, col])[:2]
                 coord = 0
                 for lett in list(grade_code):
                     markX = qAreas[col][0][0] + coord
@@ -411,14 +489,21 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                         markX = qAreas[col][0][0] + coord - 8
                         draw.text((markX, markY - TEXT_Y_OFFSET), '#', fill=BLUE, font=font)
 
-        # get name of student and save — sanitize to prevent path traversal
+        # Save each page — sanitize name to prevent path traversal
         def _safe(s):
             return re.sub(r'[^\w\-]', '_', str(s))
-        studentName = (_safe(df.loc[str(row), 'LastName']) + '_' +
-                       _safe(df.loc[str(row), 'FirstName']) + '_' +
-                       _safe(df.loc[str(row), 'studentID']) + '.jpg')
-        pil_img.save(str(markeddir / studentName), quality=95)
-        if row == 0:
-            keyname = markeddir / studentName
+        name_base = (_safe(df.loc[row_str, 'LastName']) + '_' +
+                     _safe(df.loc[row_str, 'FirstName']) + '_' +
+                     _safe(df.loc[row_str, 'studentID']))
+        for page_num, pil_img in enumerate(pil_pages, 1):
+            if pil_img is None:
+                continue
+            if pages_per_student == 1:
+                filename = name_base + '.jpg'
+            else:
+                filename = name_base + f'_p{page_num}.jpg'
+            pil_img.save(str(markeddir / filename), quality=95)
+            if row_str == '0' and page_num == 1:
+                keyname = markeddir / filename
 
     return keyname
