@@ -349,21 +349,21 @@ def load_key_csv(path: str) -> dict | None:
                     qk = _norm_open_key(question)
                     if qk not in open_questions:
                         open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
-                    # Coordinates
+                    # Coordinates (float-safe: CSV may store ints as "1.0")
                     try:
-                        x1 = int(row.get('x1') or 0)
-                        y1 = int(row.get('y1') or 0)
-                        x2 = int(row.get('x2') or 0)
-                        y2 = int(row.get('y2') or 0)
+                        x1 = int(float(row.get('x1') or 0))
+                        y1 = int(float(row.get('y1') or 0))
+                        x2 = int(float(row.get('x2') or 0))
+                        y2 = int(float(row.get('y2') or 0))
                         if any(c != 0 for c in (x1, y1, x2, y2)):
                             open_questions[qk]['coords'] = [x1, y1, x2, y2]
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, OverflowError):
                         pass
-                    # Page
+                    # Page (float-safe)
                     try:
                         pv = (row.get('page') or '').strip()
-                        open_questions[qk]['page'] = max(1, int(pv)) if pv else 1
-                    except (ValueError, TypeError):
+                        open_questions[qk]['page'] = max(1, int(float(pv))) if pv else 1
+                    except (ValueError, TypeError, OverflowError):
                         pass
                     # Full-credit answers (pipe-separated)
                     for ans in _parse_pipe(row.get('answer') or ''):
@@ -387,18 +387,18 @@ def load_key_csv(path: str) -> dict | None:
                     if qk not in open_questions:
                         open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
                     try:
-                        x1 = int(row.get('x1') or 0)
-                        y1 = int(row.get('y1') or 0)
-                        x2 = int(row.get('x2') or 0)
-                        y2 = int(row.get('y2') or 0)
+                        x1 = int(float(row.get('x1') or 0))
+                        y1 = int(float(row.get('y1') or 0))
+                        x2 = int(float(row.get('x2') or 0))
+                        y2 = int(float(row.get('y2') or 0))
                         if any(c != 0 for c in (x1, y1, x2, y2)):
                             open_questions[qk]['coords'] = [x1, y1, x2, y2]
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, OverflowError):
                         pass
                     try:
                         pv = (row.get('page') or '').strip()
-                        open_questions[qk]['page'] = max(1, int(pv)) if pv else 1
-                    except (ValueError, TypeError):
+                        open_questions[qk]['page'] = max(1, int(float(pv))) if pv else 1
+                    except (ValueError, TypeError, OverflowError):
                         pass
 
                 elif row_type == 'open_full':
