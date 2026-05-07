@@ -296,11 +296,11 @@ class Scanner(object):
         # Run the scanner on each file
         # will scan dots and save out aligned image for future use)
         pps = self.pages_per_student
-        has_bubbles = bool(self.qAreas)
         for i in range(len(self.image_list)):
+            is_first_page = (i == 0 or (i - 1) % pps == 0)
             if self.reuse_aligned:
-                if not has_bubbles:
-                    continue  # aligned images already exist; nothing to threshold or scan
+                if not is_first_page:
+                    continue  # aligned images already exist; only scan first page per student
                 print('Re-scanning (threshold only) {0:1d}'.format(i))
                 scanimg = self._load_scanimg(self.image_list[i])
             else:
@@ -310,8 +310,8 @@ class Scanner(object):
                 print('Processing scan {0:1d}'.format(i))
                 #save the aligned image aligned_00i.jpg in ./aligned
                 scan_functions.saveimg(i, img.aligned, self.aligneddir)
-                if not has_bubbles:
-                    continue  # aligned image saved; no bubbles to scan
+                if not is_first_page:
+                    continue  # aligned image saved; only scan first page per student
                 scanimg = img.scanimg
             # For multi-page: only run bubble scan on key (i=0) and first page per student
             if i == 0 or (i - 1) % pps == 0:
@@ -463,19 +463,19 @@ class Scanner(object):
 
         # 2. Scan all images; for multi-page, only run MC bubble scan on first page per student
         pps = self.pages_per_student
-        has_bubbles = bool(self.qAreas)
         for i in range(len(self.image_list)):
+            is_first_page = (i % pps == 0)
             if self.reuse_aligned:
-                if not has_bubbles:
-                    continue  # aligned images already exist; nothing to threshold or scan
+                if not is_first_page:
+                    continue  # aligned images already exist; only scan first page per student
                 print('Re-scanning (threshold only) {:1d}'.format(i + 1))
                 scanimg = self._load_scanimg(self.image_list[i])
             else:
                 img = Image(self.image_list[i], self.scan_settings)
                 print('Processing scan {:1d}'.format(i + 1))
                 scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
-                if not has_bubbles:
-                    continue  # aligned image saved; no bubbles to scan
+                if not is_first_page:
+                    continue  # aligned image saved; only scan first page per student
                 scanimg = img.scanimg
             page_within = i % pps
             if page_within == 0:   # first page per student — scan MC bubbles

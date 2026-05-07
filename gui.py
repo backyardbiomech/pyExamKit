@@ -219,7 +219,7 @@ class pyScanUI(ctk.CTkFrame):
         # ── Multiple exam versions ──────────────────────────────────────────────
         self.multiVersionVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(scan_frame,
-                        text="Multiple exam versions? (A/B/C/D versions graded separately)",
+                        text="Multiple exam versions? (A/B/C/D/E/F versions graded separately)",
                         variable=self.multiVersionVar,
                         command=self._toggle_version_frame).grid(
             row=16, column=0, columnspan=2, padx=10, pady=(8, 2), sticky='w')
@@ -236,13 +236,13 @@ class pyScanUI(ctk.CTkFrame):
                                           placeholder_text="e.g. 64")
         self.versionQEntry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky='w')
         ctk.CTkLabel(self._version_frame,
-                     text="(students fill A/B/C/D on this question to identify their version)",
+                     text="(students fill A/B/C/D/E/F on this question to identify their version)",
                      font=ctk.CTkFont(size=11), text_color='gray').grid(
             row=0, column=2, padx=(0, 4), pady=2, sticky='w')
 
         self._version_key_entries: dict[str, ctk.CTkEntry] = {}
         self._version_key_paths: dict[str, str] = {}
-        for _vi, _ver in enumerate(['A', 'B', 'C', 'D']):
+        for _vi, _ver in enumerate(['A', 'B', 'C', 'D', 'E', 'F']):
             ctk.CTkLabel(self._version_frame,
                          text=f"Version {_ver} key file:").grid(
                 row=_vi + 1, column=0, padx=(0, 6), pady=2, sticky='w')

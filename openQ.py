@@ -423,6 +423,12 @@ def load_key_csv(path: str) -> dict | None:
         print(f'[KeyFile] Failed to load CSV {path}: {exc}', flush=True)
         return None
 
+    blank_keys = [qk for qk, ans in bubble_answers.items() if not ans]
+    if blank_keys:
+        print(f'[KeyFile] WARNING: {len(blank_keys)} bubble question(s) have a blank answer '
+              f'in the key file — scan will likely produce incorrect results. '
+              f'Fix these before scanning: {", ".join(sorted(blank_keys))}', flush=True)
+
     print(f'[KeyFile] Loaded CSV key: {len(bubble_answers)} bubble answer(s), '
           f'{len(open_questions)} open question(s).', flush=True)
     result = {'bubble_answers': bubble_answers, 'open_questions': open_questions}
