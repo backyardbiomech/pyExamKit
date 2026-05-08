@@ -152,6 +152,63 @@ class Scanner(object):
         else:
             self._run_scan_key()
 
+    def _ask_version_for_student(self, row_idx: int, name: str,
+                                   raw_ver: str, img_path: str | None) -> str | None:
+        """Show a dialog with the student's aligned scan and ask the user to
+        manually select an exam version.  Returns a version letter (e.g. 'A')
+        from self.version_keys, or None to skip the student."""
+        import tkinter as tk
+        from PIL import ImageTk, Image as _PILImage
+
+        result = [None]
+        win = tk.Toplevel(self.parent)
+        win.title(f'Unknown version — row {row_idx}: {name}')
+        win.transient(self.parent)
+        win.grab_set()
+        win.lift()
+        win.focus_force()
+
+        tk.Label(win,
+                 text=f'Student row {row_idx}:  {name}',
+                 font=('Arial', 13, 'bold')).pack(pady=(10, 2))
+        tk.Label(win,
+                 text=f'Version bubble not detected  (scanned: "{raw_ver}")\n'
+                      'Select the correct version or click Skip to exclude this student:',
+                 font=('Arial', 11), justify='center').pack(pady=(0, 8))
+
+        if img_path:
+            try:
+                with _PILImage.open(img_path) as pil_img:
+                    max_w, max_h = 620, 780
+                    ratio = min(max_w / pil_img.width, max_h / pil_img.height, 1.0)
+                    disp = pil_img.resize(
+                        (int(pil_img.width * ratio), int(pil_img.height * ratio)),
+                        _PILImage.LANCZOS)
+                photo = ImageTk.PhotoImage(disp)
+                img_lbl = tk.Label(win, image=photo)
+                img_lbl.image = photo  # prevent GC
+                img_lbl.pack(padx=8, pady=(0, 8))
+            except Exception as _e:
+                tk.Label(win, text=f'(Could not load image: {_e})',
+                         fg='gray').pack()
+
+        btn_frame = tk.Frame(win)
+        btn_frame.pack(pady=(4, 12))
+
+        def _choose(v):
+            result[0] = v
+            win.destroy()
+
+        for ver in sorted(self.version_keys):
+            tk.Button(btn_frame, text=f'Version {ver}', width=12,
+                      font=('Arial', 12),
+                      command=lambda v=ver: _choose(v)).pack(side='left', padx=6)
+        tk.Button(btn_frame, text='Skip', width=8, font=('Arial', 12),
+                  fg='gray', command=lambda: _choose(None)).pack(side='left', padx=10)
+
+        win.wait_window()
+        return result[0]
+
     def _run_multi_version(self):
         """
         Scan all student sheets, detect each student's exam version from the
@@ -204,8 +261,32 @@ class Scanner(object):
                 version_groups.setdefault(ver_letter, []).append(row_idx)
             else:
                 name = self.resdf.loc[row_idx, 'LastName']
-                print(f'[MultiVersion] Student row {row_idx} ({name}) has unrecognized '
-                      f'version answer "{raw_ver}" — skipped.', flush=True)
+                print(f'[MultiVersion] WARNING — Student row {row_idx} ({name}) version '
+                      f'bubble not detected (scanned: "{raw_ver}").', flush=True)
+                # Try to get the aligned image for this student
+                img_idx = (row_idx - 1) * pps
+                img_path = (self.aligned_image_list[img_idx]
+                            if 0 <= img_idx < len(self.aligned_image_list) else None)
+                chosen = None
+                if self.parent is not None:
+                    chosen = self._ask_version_for_student(row_idx, name, raw_ver, img_path)
+                if chosen:
+                    print(f'[MultiVersion] Student row {row_idx} ({name}) manually '
+                          f'assigned to version {chosen}.', flush=True)
+                    version_groups.setdefault(chosen, []).append(row_idx)
+                else:
+                    print(f'[MultiVersion] Student row {row_idx} ({name}) skipped — '
+                          'will NOT appear in any output.', flush=True)
+                    alert_path = self.outdir / 'ALERT.txt'
+                    alert_line = (f'MISSING VERSION: Student row {row_idx} ({name}) '
+                                  f'— version bubble not detected (raw: "{raw_ver}") '
+                                  f'— excluded from all results.')
+                    if not alert_path.exists():
+                        alert_path.write_text(alert_line)
+                    else:
+                        with open(alert_path, 'a') as _af:
+                            _af.write('\n')
+                            _af.write(alert_line)
 
         if not version_groups:
             print('[MultiVersion] No students matched any loaded version key. '
