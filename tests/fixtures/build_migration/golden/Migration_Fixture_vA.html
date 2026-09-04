@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migration Fixture — Version A</title>
+
+  <!-- MathJax for rendering $$...$$ equations -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+  <style>
+    /* ── Base typography ───────────────────────────────────────── */
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 12pt;
+      line-height: 1.3;
+      color: #000;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+
+    .page {
+      width: 7.5in;
+      margin: 0.5in auto;
+      padding: 0;
+    }
+
+    /* ── Exam header ───────────────────────────────────────────── */
+    .exam-header {
+      border-bottom: 2px solid #000;
+      padding-bottom: 6pt;
+      margin-bottom: 12pt;
+    }
+
+    .exam-header h1 {
+      font-size: 16pt;
+      margin: 0 0 2pt 0;
+    }
+
+    .exam-header .meta {
+      font-size: 11pt;
+      margin: 1pt 0;
+    }
+
+    .exam-header .name-line {
+      margin-top: 6pt;
+      font-size: 12pt;
+    }
+
+    /* ── Questions ─────────────────────────────────────────────── */
+    .question-block {
+      margin-bottom: 10pt;
+      page-break-inside: avoid;
+    }
+
+    .question-stem {
+      margin-bottom: 3pt;
+    }
+
+    .question-number {
+      font-weight: bold;
+    }
+
+    .points-label {
+      font-size: 10pt;
+      color: #333;
+    }
+
+    .points-note {
+      font-style: italic;
+      font-size: 11pt;
+      margin: 4pt 0 0 0;
+    }
+
+    .question-image {
+      display: block;
+      max-width: 100%;
+      max-height: 300px;
+      margin: 4pt 0;
+    }
+
+    /* ── Answer choices ────────────────────────────────────────── */
+    .answers {
+      list-style: none;
+      padding-left: 24pt;
+      margin: 2pt 0 0 0;
+    }
+
+    .answers li {
+      margin-bottom: 2pt;
+    }
+
+    .answer-letter {
+      display: inline-block;
+      min-width: 18pt;
+      font-weight: bold;
+    }
+
+    .answer-image {
+      display: block;
+      max-width: 100%;
+      max-height: 150px;
+      margin: 2pt 0;
+    }
+
+    /* ── Select-all note ───────────────────────────────────────── */
+    .select-all-note {
+      font-style: italic;
+      font-size: 10pt;
+      margin-bottom: 2pt;
+    }
+
+    /* ── Short-answer blank ────────────────────────────────────── */
+    .sa-blank {
+      display: inline-block;
+      min-width: 60pt;
+      border-bottom: 1.5px solid #000;
+      margin: 0 2pt;
+      vertical-align: bottom;
+    }
+
+    .sa-note {
+      font-style: italic;
+      font-size: 10pt;
+      margin: 1pt 0 6pt 0;
+      color: #444;
+    }
+
+    /* ── MD multi-selection blocks ──────────────────────────── */
+    .md-block {
+      border-left: 3px solid #aaa;
+      padding-left: 8pt;
+    }
+
+    .md-selections {
+      margin-left: 12pt;
+      margin-top: 4pt;
+    }
+
+    .md-selection {
+      margin-top: 4pt;
+    }
+
+    .selection-label {
+      font-weight: bold;
+      font-size: 11pt;
+      margin: 0 0 1pt 0;
+    }
+
+    /* ── Question image divider ────────────────────────────── */
+    .question-image-divider {
+      border: none;
+      border-top: 1px solid #888;
+      margin: 8pt 0 6pt 0;
+    }
+
+    /* ── Print styles ──────────────────────────────────────────── */
+    @media print {
+      body {
+        font-size: 11pt;
+        line-height: 1.3;
+      }
+
+      .page {
+        width: 100%;
+        margin: 0;
+        padding: 0.25in 0.5in;
+        box-sizing: border-box;
+      }
+
+      /* Extra top margin on pages 2+ for staple clearance */
+      @page :left  { margin-top: 0.6in; }
+      @page :right { margin-top: 0.6in; }
+      @page :first { margin-top: 0; }
+
+      .question-block,
+      .md-block {
+        page-break-inside: avoid;
+      }
+
+      a {
+        text-decoration: none;
+        color: #000;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Exam Header ─────────────────────────────────────────────── -->
+  <div class="exam-header">
+    <h1>Migration Fixture</h1>
+    <p class="meta">TEST101</p>
+    <p class="name-line">
+      Name:&nbsp;___________________________&nbsp;&nbsp;&nbsp;&nbsp;Date:&nbsp;___________
+    </p>
+    
+    <p class="points-note">Each question is worth 1 pts unless otherwise noted.</p>
+    
+  </div>
+
+  <!-- Questions -->
+  
+
+  
+  <!-- MC / MA question -->
+  <div class="question-block">
+
+    <!-- Images -->
+    <hr class="question-image-divider">
+    
+    <img class="question-image" src="images/testImage.png" alt="Question image">
+    
+
+    <!-- Stem -->
+    <p class="question-stem">
+      <span class="question-number">1.</span>
+      
+      this is the question text
+    </p>
+
+    <!-- MA note -->
+    
+
+    <!-- Answer choices -->
+    <ul class="answers">
+      
+      <li><span class="answer-letter">A.</span>
+        correct answer A
+      </li>
+      
+      <li><span class="answer-letter">B.</span>
+        inccorect answer B
+      </li>
+      
+      <li><span class="answer-letter">C.</span>
+        incorrect answer C
+      </li>
+      
+      <li><span class="answer-letter">D.</span>
+        inccorect answer D
+      </li>
+      
+    </ul>
+
+  </div>
+  
+
+  
+
+  
+  <!-- MC / MA question -->
+  <div class="question-block">
+
+    <!-- Images -->
+    
+    
+
+    <!-- Stem -->
+    <p class="question-stem">
+      <span class="question-number">2.</span>
+      
+      this is question 2 text
+    </p>
+
+    <!-- MA note -->
+    
+    <p class="select-all-note">(Select all that apply.)</p>
+    
+
+    <!-- Answer choices -->
+    <ul class="answers">
+      
+      <li><span class="answer-letter">A.</span>
+        inccorect anwers A
+      </li>
+      
+      <li><span class="answer-letter">B.</span>
+        this is the correct answer
+      </li>
+      
+      <li><span class="answer-letter">C.</span>
+        this is also a correct answer
+      </li>
+      
+      <li><span class="answer-letter">D.</span>
+        inccorect answer D
+      </li>
+      
+    </ul>
+
+  </div>
+  
+
+  
+
+  
+  <!-- SA short-answer question -->
+  <div class="question-block">
+
+    <!-- Images -->
+    
+    
+
+    <!-- Stem -->
+    <p class="question-stem">
+      <span class="question-number">3.</span>
+      
+      Fill in the answer in this blank <span class="sa-blank"></span>.
+    </p>
+    <p class="sa-note">(Write your answer on the answer sheet.)</p>
+
+  </div>
+
+  
+
+  
+
+  
+  <!-- MD grouped block -->
+  <div class="question-block md-block">
+
+    <!-- Images -->
+    
+    
+
+    <!-- Number range + stem -->
+    <p class="question-stem">
+      <span class="question-number">
+        Questions 4&ndash;5.
+      </span>
+      
+      This is a multiple dropdown question. Here is the first <strong>(Question 4)</strong> and here is another <strong>(Question 5)</strong>.
+    </p>
+
+    <!-- Per-dropdown selections -->
+    <div class="md-selections">
+      
+      <div class="md-selection">
+        <p class="selection-label">Question 4:</p>
+        <ul class="answers">
+          
+          <li><span class="answer-letter">A.</span> correct answer for 1</li>
+          
+          <li><span class="answer-letter">B.</span> incorrect answer for 1</li>
+          
+          <li><span class="answer-letter">C.</span> incorrect answer for 1</li>
+          
+        </ul>
+      </div>
+      
+      <div class="md-selection">
+        <p class="selection-label">Question 5:</p>
+        <ul class="answers">
+          
+          <li><span class="answer-letter">A.</span> incorrect answer for 2</li>
+          
+          <li><span class="answer-letter">B.</span> correct answer for 2</li>
+          
+        </ul>
+      </div>
+      
+    </div>
+
+  </div>
+
+  
+
+  
+
+  
+  <!-- MC / MA question -->
+  <div class="question-block">
+
+    <!-- Images -->
+    
+    
+
+    <!-- Stem -->
+    <p class="question-stem">
+      <span class="question-number">6.</span>
+      
+      This is a true/false question in new quizzes.
+    </p>
+
+    <!-- MA note -->
+    
+
+    <!-- Answer choices -->
+    <ul class="answers">
+      
+      <li><span class="answer-letter">A.</span>
+        True
+      </li>
+      
+      <li><span class="answer-letter">B.</span>
+        False
+      </li>
+      
+    </ul>
+
+  </div>
+  
+
+  
+
+</div>
+</body>
+</html>
