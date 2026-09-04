@@ -12,14 +12,10 @@ a = Analysis(
     binaries=[],
     datas=[
         ('images/', 'images'),
-        *collect_data_files('skimage'),
         *collect_data_files('customtkinter'),
-        *collect_data_files('scipy'),
     ],
     hiddenimports=[
-        *collect_submodules('skimage'),
         *collect_submodules('pandas'),
-        *collect_submodules('scipy'),
         *collect_submodules('customtkinter'),
         'PIL._tkinter_finder',
         'fitz',
