@@ -162,11 +162,6 @@
       margin: 0 0 1pt 0;
     }
 
-    /* ── OR/MT lettered display row ───────────────────────── */
-    .or-choices {
-      margin: 4pt 0 4pt 0;
-    }
-
     /* ── Question image divider ────────────────────────────── */
     .question-image-divider {
       border: none;
@@ -281,10 +276,12 @@
       {{ q.text }}
     </p>
 
-    <!-- Lettered items, in scrambled display order -->
-    <p class="or-choices">
-      {% for item in q.display_items %}<span class="answer-letter">{{ item.letter }}.</span> {{ item.text }}{% if not loop.last %}&nbsp;&nbsp;&nbsp;{% endif %}{% endfor %}
-    </p>
+    <!-- Lettered items, in scrambled display order, one per line -->
+    <ul class="answers">
+      {% for item in q.display_items %}
+      <li><span class="answer-letter">{{ item.letter }}.</span> {{ item.text }}</li>
+      {% endfor %}
+    </ul>
 
     <!-- One slot per rank position -->
     <div class="md-selections">
@@ -318,10 +315,12 @@
       {{ q.text }}
     </p>
 
-    <!-- Lettered rights, in scrambled display order -->
-    <p class="or-choices">
-      {% for r in q.display_rights %}<span class="answer-letter">{{ r.letter }}.</span> {{ r.text }}{% if not loop.last %}&nbsp;&nbsp;&nbsp;{% endif %}{% endfor %}
-    </p>
+    <!-- Lettered rights, in scrambled display order, one per line -->
+    <ul class="answers">
+      {% for r in q.display_rights %}
+      <li><span class="answer-letter">{{ r.letter }}.</span> {{ r.text }}</li>
+      {% endfor %}
+    </ul>
 
     <!-- One slot per left item -->
     <div class="md-selections">

@@ -162,11 +162,6 @@
       margin: 0 0 1pt 0;
     }
 
-    /* ── OR/MT lettered display row ───────────────────────── */
-    .or-choices {
-      margin: 4pt 0 4pt 0;
-    }
-
     /* ── Question image divider ────────────────────────────── */
     .question-image-divider {
       border: none;
@@ -406,10 +401,20 @@
       This is a matching question. It will show in canvas as a list of things on the left, each with its own dropdown menu on the right. All the dropdowns contain the same options. Multiple "left" items can have the same correct answer. Note the formatting below. left1, left2, etc just track the list items that will appear on the left, right1, right2, etc track the options that will show in the dropdowns, and the correct answer for each left item is indicated by putting the right label inside brackets. Notice no spaces in labels or between brackets and labels, and all labels are followed by a colon, then the text to be matched. Canvas awards partial credit based on the number of left side items.
     </p>
 
-    <!-- Lettered rights, in scrambled display order -->
-    <p class="or-choices">
-      <span class="answer-letter">A.</span> first right option correct for third left&nbsp;&nbsp;&nbsp;<span class="answer-letter">B.</span> second right option correct for first and second left&nbsp;&nbsp;&nbsp;<span class="answer-letter">C.</span> third right option&nbsp;&nbsp;&nbsp;<span class="answer-letter">D.</span> fourth right option distractor&nbsp;&nbsp;&nbsp;<span class="answer-letter">E.</span> fifth right option distractor
-    </p>
+    <!-- Lettered rights, in scrambled display order, one per line -->
+    <ul class="answers">
+      
+      <li><span class="answer-letter">A.</span> first right option correct for third left</li>
+      
+      <li><span class="answer-letter">B.</span> second right option correct for first and second left</li>
+      
+      <li><span class="answer-letter">C.</span> third right option</li>
+      
+      <li><span class="answer-letter">D.</span> fourth right option distractor</li>
+      
+      <li><span class="answer-letter">E.</span> fifth right option distractor</li>
+      
+    </ul>
 
     <!-- One slot per left item -->
     <div class="md-selections">
@@ -451,10 +456,16 @@
       This is an ordering question for new quizzes. It will show as a "top label", like "most superficial", a bottom label like "deepest", and a series of drag and drop options. They are simply put with numbers and order here.
     </p>
 
-    <!-- Lettered items, in scrambled display order -->
-    <p class="or-choices">
-      <span class="answer-letter">A.</span> dermis&nbsp;&nbsp;&nbsp;<span class="answer-letter">B.</span> epidermis&nbsp;&nbsp;&nbsp;<span class="answer-letter">C.</span> hypodermis
-    </p>
+    <!-- Lettered items, in scrambled display order, one per line -->
+    <ul class="answers">
+      
+      <li><span class="answer-letter">A.</span> dermis</li>
+      
+      <li><span class="answer-letter">B.</span> epidermis</li>
+      
+      <li><span class="answer-letter">C.</span> hypodermis</li>
+      
+    </ul>
 
     <!-- One slot per rank position -->
     <div class="md-selections">
