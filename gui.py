@@ -6,6 +6,7 @@ from scanner import Scanner
 import customtkinter as ctk
 from tkinter import filedialog
 import ai_ocr
+from build_tab import BuildExamUI
 
 
 class TextRedirector(io.TextIOBase):
@@ -50,6 +51,8 @@ class pyScanUI(ctk.CTkFrame):
         scan_tab   = tabs.add("Scan Exams")
         key_tab    = tabs.add("Build Key")
         regrade_tab = tabs.add("Re-grade")
+        build_tab  = tabs.add("Build Exam")
+        BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
 
         # ════════════════════════════════════════════════════════
         # TAB 1 — Scan Exams
