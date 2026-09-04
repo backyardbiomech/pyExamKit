@@ -499,7 +499,7 @@ class pyScanUI(ctk.CTkFrame):
     def _load_key_metadata(self, path: str):
         """Read metadata from a key file and populate num questions / skip fields."""
         try:
-            from openQ import load_key_file
+            from keyformat import load_key_file
             data = load_key_file(path)
             if data is None:
                 return

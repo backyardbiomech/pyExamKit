@@ -1,0 +1,12 @@
+type,question,page,x1,y1,x2,y2,answer,partial_answers,points
+metadata,num_questions,,,,,,8,,
+metadata,questions_to_skip,,,,,,6,,
+bubble,Q001,,,,,,A,,2.0
+bubble,Q002,,,,,,BD,,1.0
+bubble,Q003,,,,,,C,,1.5
+bubble,Q004,,,,,,A,,1.0
+bubble,Q005,,,,,,B,,1.0
+bubble,Q006,,,,,,ignore,,
+bubble,Q007,,,,,,D,,1.0
+bubble,Q008,,,,,,A,,1.0
+open,openQ_6,,,,,,sample answer|alt answer,close variant,3.0
