@@ -56,11 +56,14 @@ jobs:
       - name: Build .exe with PyInstaller
         run: uv run pyinstaller pyexamscan.spec
 
+      - name: Zip Windows build
+        run: Compress-Archive -Path dist\PyExamScan\* -DestinationPath PyExamScan-Windows.zip
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: PyExamScan-Windows
-          path: dist\PyExamScan\PyExamScan.exe
+          path: PyExamScan-Windows.zip
 
   release:
     needs: [build-macos, build-windows]
@@ -78,7 +81,7 @@ jobs:
         with:
           files: |
             PyExamScan-macOS/PyExamScan-macOS.dmg
-            PyExamScan-Windows/PyExamScan.exe
+            PyExamScan-Windows/PyExamScan-Windows.zip
           generate_release_notes: true
 
       - name: Delete artifacts after release
