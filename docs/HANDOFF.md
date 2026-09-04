@@ -1,6 +1,14 @@
 # Handoff: pyExamPaper + pyExamScan merge
 
-*Written 2026-09-04. Start here. Everything below is planning only. No code has been changed in either exam repo.*
+*Written 2026-09-04, updated the same day through phase 3. Start here.*
+
+## Current status — read this first
+
+Phases 0 through 3 are **done, committed, and pushed** to `origin/phase0-opencv-rewrite` (5 commits ahead of `main`, not yet merged — that's still your call, probably after phase 4). Brandon confirmed the new "Build Exam" tab works by clicking through it himself. `pyExamPaper` (the separate repo) has not been touched at all — it still works standalone and is safe to fall back on.
+
+**Next action: phase 3.5**, per `docs/ordering-matching-spec.md` — add the OR (ordering) and MT (matching) question types, which currently exist in the question banks and are silently skipped, and fix the MD-question points bug along the way (each dropdown of a multi-dropdown question currently carries the full question's point value instead of a fair share — see "Two real bugs found" below; deliberately left unfixed through phase 3 so each phase's own verification stayed a pure code-move/transcription check). Read that spec file before starting; it also covers the six-bubble-per-question ceiling every proposal has to fit inside. After 3.5, phase 4 is the final "ship it" pass: rewrite `pyexamscan.spec`, add a tag-triggered GitHub Actions release workflow, and rewrite the stale `README.md`.
+
+One item from phase 0 is still genuinely unverified: installing the macOS build on a machine that has never had Python. No such machine has been available in any session so far.
 
 ## The decision
 
@@ -20,15 +28,15 @@ This reversed an earlier recommendation in the same session, and the reversal is
 
 | Repo | State |
 |---|---|
-| `pyExamScan_v2` | clean except untracked `docs/`, containing the three files above |
-| `pyExamPaper` | clean except untracked `docs/`, containing the shelved Tauri plan |
-| `schedulingApp` | **63 restored files staged and uncommitted**, see below |
+| `pyExamScan_v2` | clean, on branch `phase0-opencv-rewrite`, 5 commits ahead of `main`, all pushed to origin. Phases 0-3 done. |
+| `pyExamPaper` | clean except untracked `docs/` (the shelved Tauri plan) — untouched by any phase so far, still works standalone |
+| `schedulingApp` | last known state below is from the original planning session and has not been re-checked since — unrelated to this work either way |
 
 `schedulingApp` had its entire `src-tauri/` directory deleted by commit `17df1de` ("cleanup", 2026-08-13), which is still unpushed and one commit ahead of origin. That repo could not build, and neither could its CI. The files were restored this session with `git checkout 17df1de^ -- src-tauri` and are staged but **not committed**, pending Brandon confirming the deletion was unintentional. He said he did not know whether it was.
 
 That repo is otherwise unrelated to this work. It stays a Tauri app and needs no changes.
 
-## Next action: phase 0, the gate
+## Phase 0 plan, as originally written (completed — see "Phase 0 result" below)
 
 Half a day, on a branch in `pyExamScan_v2`, before any merge work. Everything downstream depends on the outcome.
 
@@ -44,7 +52,7 @@ Two failure modes. Alignment that looks plausible but is slightly off means the 
 
 ## Phase 0 result (2026-09-04)
 
-Done on branch `phase0-opencv-rewrite`, uncommitted, pending your review. Touches exactly four files: `scan_functions.py`, `pyproject.toml`, `pyexamscan.spec`, `uv.lock`.
+Done on branch `phase0-opencv-rewrite` (committed — see "Update" below for the commit hash and push). Touches exactly four files: `scan_functions.py`, `pyproject.toml`, `pyexamscan.spec`, `uv.lock`.
 
 The rewrite matches the original exactly. `results.csv`, `resultsperquestions.csv`, `resultsforCanvas.csv`, and `exam_key.csv` came out byte-identical between the old (scipy/scikit-image) and new (opencv) code, run against `tests/scannedSheets.pdf` through the full `Scanner` pipeline, not just the isolated functions. The aligned JPEGs are not bit-identical — up to 11/255 per-pixel difference, from JPEG re-encoding and cv2's bilinear sampling differing slightly from skimage's — but that magnitude never crosses a threshold decision, which is why the final dictionaries and CSVs match exactly regardless. Neither of the two predicted failure modes showed up: alignment was correct on the first attempt (the `WARP_INVERSE_MAP` direction reasoning in this doc held), and the size-15 median blur ran fine (grayscale-before-blur ordering was preserved). `cv2.threshold` ended up unused; it applies `<=` at the threshold value where the original code and every other spot in this rewrite use strict `<`, so the comparison stayed a plain numpy expression instead, to keep the match exact rather than approximate.
 
@@ -64,7 +72,7 @@ The macOS side doesn't have this problem: `BUNDLE` wraps `COLLECT`'s full output
 
 ## Phase 1 result (2026-09-04)
 
-Done on branch `phase0-opencv-rewrite` — continued on the same branch rather than cutting a new one, since nothing forced the split; reconsider before merging if you'd rather ship it as its own PR. Uncommitted, pending your review. Adds `keyformat.py`; touches `openQ.py`, `scanner.py`, `gui.py`; adds `tests/test_keyformat.py` and `tests/ten_column_key.csv`.
+Done on branch `phase0-opencv-rewrite` — continued on the same branch rather than cutting a new one, since nothing forced the split; reconsider before merging if you'd rather ship it as its own PR. Committed and pushed (`1ac0163`). Adds `keyformat.py`; touches `openQ.py`, `scanner.py`, `gui.py`; adds `tests/test_keyformat.py` and `tests/ten_column_key.csv`.
 
 `keyformat.py` is now the only place in the repo that reads or writes a key CSV. It's dependency-free — just `csv`, `json`, `pathlib` — so it can move into a shared root in phase 2 without pulling tkinter/PIL/numpy into pyExamPaper's side of the merge. `openQ.py`, `scanner.py`, and `gui.py` now import `load_key_file`/`save_key_file` (and `load_key_csv`/`save_key_csv`/`_openq_sort_key` where needed) from it instead of defining or re-exporting their own copies.
 
@@ -78,7 +86,7 @@ Verified three ways. `tests/test_keyformat.py` (14 cases, stdlib `unittest`, no 
 
 **Points were silently lost round-tripping a key CSV — fixed above.** `pyExamPaper/key_generator.py` writes ten columns ending in `points`. `pyExamScan_v2/openQ.py:save_key_csv` wrote nine and had no `points` column, though its reader did parse one. Building an exam with per-pool point values, opening the key in the scanner's open-question editor, and saving lost every per-question point value with no error. This was the strongest argument for the merge, and is what phase 1's `keyformat.py` exists to fix.
 
-**MD questions are worth too much.** `key_generator.py` writes the full point value onto every dropdown row, and `gradeResults` sums per column, so a three-dropdown MD tagged `(1 pt)` scores three points. Fixed by the same points-distribution rule as OR and MT. Brandon may want to check recent MD-containing exams.
+**MD questions are worth too much — not yet fixed, scoped to phase 3.5.** `key_generator.py` writes the full point value onto every dropdown row, and `gradeResults` sums per column, so a three-dropdown MD tagged `(1 pt)` scores three points. The plan is to fix it with the same points-distribution rule phase 3.5 introduces for OR and MT — but as of phase 3, this bug is still live and has been deliberately carried forward unfixed into `exam_key_writer.py` (see phase 2's result below), specifically so each phase's verification stayed a pure code-move check rather than mixing in a behavior change. `tests/test_build_tab_logic.py` and `tests/test_build_migration.py` both assert the bug reproduces exactly, as a tripwire for phase 3.5 to update once it actually lands the fix. Brandon may want to check recent MD-containing exams in the meantime.
 
 ## Phase 2 result (2026-09-04)
 
@@ -98,7 +106,7 @@ All 20 tests pass (`uv run python -m unittest discover tests -v`): the 14 from p
 
 ## Phase 3 result (2026-09-04)
 
-Done on branch `phase0-opencv-rewrite`, uncommitted, pending your review. Adds `build_tab.py` and `tests/test_build_tab_logic.py`. Touches `gui.py` (one import line, two lines in `__initUI`). Nothing in `pyExamPaper` was touched — same boundary as phases 1 and 2.
+Done on branch `phase0-opencv-rewrite`, committed and pushed (`f5b1e18`). Adds `build_tab.py` and `tests/test_build_tab_logic.py`. Touches `gui.py` (one import line, two lines in `__initUI`). Nothing in `pyExamPaper` was touched — same boundary as phases 1 and 2.
 
 **pyExamScan_v2 already had the tab infrastructure the written plan assumed it would need to build.** Before writing anything, two full reads (via background research agents, not skimmed) covered both GUIs end to end: `pyExamPaper/gui.py` (704 lines of PySide6 — every widget, default value, the `PoolTable`'s exact column behavior, the conditional same-questions row's show/hide/force-check rules, the 8 verbatim validation strings and their order, `GenerateWorker`'s exact log-line sequence) and `pyExamScan_v2/gui.py` (695 lines of customtkinter — already has a `ctk.CTkTabview` with three tabs sharing one status-log textbox, no threading anywhere, no `messagebox` usage anywhere, established color and layout conventions). The written plan's imagined `app.py` "with a tab or mode switcher" already exists as `pyScanUI`'s tabview, so this phase adds a fourth tab — **"Build Exam"**, after the existing three — instead of building a new top-level shell.
 
@@ -108,7 +116,7 @@ Done on branch `phase0-opencv-rewrite`, uncommitted, pending your review. Adds `
 
 **The business logic is split from the widget code on purpose**, into three plain functions at module scope — `compute_pool_totals`, `validate_build_fields`, `build_config_from_fields` — each taking plain values, not live widgets. This is the direct answer to a verification gap: this session's Tk install is still broken (`_tkinter.TclError: Can't find a usable init.tcl`, same as phase 1 hit, reconfirmed before starting this phase), so no live root window could be created here and the widget class itself could not be driven or clicked through. The pure functions could still be unit tested, though, and that's exactly where a faithful transcription is most likely to go subtly wrong — validation checking order, the "bad input silently falls back to a default" quirks in `PoolTable.get_totals`/`get_pools`, the blank-title-becomes-`"Untitled"` fallback that only applies on the save-config path. `tests/test_build_tab_logic.py` (22 cases) exercises all three functions directly, including the exact wording and ordering of every validation message. Combined with phase 1 and 2's suites, all 42 tests pass.
 
-**What this phase could not verify, and you should before relying on it:** actually opening the app and clicking through the new tab — layout, whether the nested scroll region for pool rows behaves (it's a plain frame inside the tab's own scrollable content area, not an independently-scrolling one, specifically to avoid a known tkinter nested-scroll mouse-wheel-capture quirk, but this is untested since no live window could be opened), and the file-picker dialogs. Same caveat phase 1 left for the key-editor dialogs.
+**What this phase could not verify: actually opening the app and clicking through the new tab.** Brandon did this after the fact and confirmed the tabs work. That was a smoke test, not necessarily exhaustive — the specific things this session flagged as unverified (the pool-row scroll behavior, every validation message actually firing at the right moment, config load/save round-tripping through the real widgets, the same-questions conditional row's show/hide/force-check chain) are worth a closer look if something seems off, since none of them were individually confirmed, only "the tabs work" in general.
 
 **Explicitly not done here:** no PySide6 removal from `pyExamPaper`'s `pyproject.toml`, no deletion of `pyExamPaper/gui.py` or `main.py` — that repo still works standalone. Retiring it is a separate decision for once you're satisfied the new tab is a full replacement. No repo rename, no `pyexamkit/` package restructuring — still flat at root.
 
