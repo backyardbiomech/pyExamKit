@@ -4,11 +4,11 @@
 
 ## Current status — read this first
 
-Phases 0 through 3.5 are **done and verified locally, not yet committed** on branch `phase0-opencv-rewrite` (which itself is 5 commits ahead of `main` from phases 0-3, already pushed to `origin/phase0-opencv-rewrite`; phase 3.5's changes are working-tree only — commit on request, not automatically). Brandon confirmed the phase-3 "Build Exam" tab works by clicking through it himself; phase 3.5 has **not** had that same live click-through yet (see its result section below — this session's Tk install is still broken). `pyExamPaper` (the separate repo) has not been touched at all — it still works standalone and is safe to fall back on.
+Phases 0 through 3.5 are **done and committed** on branch `phase0-opencv-rewrite`, 6 commits ahead of `main` (not yet merged — that's still your call). Phases 0-3 (5 commits) are pushed to `origin/phase0-opencv-rewrite`; phase 3.5 (commit `5afa70c`) is committed locally but **not yet pushed** — push whenever you're ready, nothing about it depends on being on the remote first. Brandon confirmed the phase-3 "Build Exam" tab works by clicking through it himself; phase 3.5 has **not** had that same live click-through yet (see its result section below — this session's Tk install is still broken). `pyExamPaper` (the separate repo) has not been touched at all — it still works standalone and is safe to fall back on.
 
-**Next action: phase 4**, the final "ship it" pass — rewrite `pyexamscan.spec`, add a tag-triggered GitHub Actions release workflow, and rewrite the stale `README.md`.
+**Next action: phase 4**, the final "ship it" pass — rewrite `pyexamscan.spec`, add a tag-triggered GitHub Actions release workflow, and rewrite the stale `README.md`. **One concrete thing phase 4 must not miss**, found while prepping this handoff: `pyexamscan.spec`'s `datas` list only bundles `images/` — it has no entry for `templates/`, and `renderer.py` (added in phase 2) loads `templates/exam.html` at runtime via Jinja2's `FileSystemLoader`, which PyInstaller's static import analysis can't discover on its own the way it discovers a normal `import`. Every PyInstaller build since phase 2 has been missing that file; none has been rebuilt since (phase 0's build/CI run, the only one so far, predates jinja2 entirely). Add `('templates/', 'templates')` to `datas` alongside the existing `images/` entry, and smoke-test the Build Exam tab specifically in the packaged app, not just the scanner tabs — the written plan's original phase-4 description predates jinja2 becoming a dependency at all, so it doesn't mention this.
 
-Two items are still genuinely unverified, both flagged in their own phase's result section below rather than blocking anything: installing the macOS build on a machine that has never had Python (phase 0), and the manual print/fill/scan test of a real OR+MT exam plus a live click-through of OR/MT pool files in the Build Exam tab (phase 3.5) — no such machine, printer, or working Tk install has been available in any session so far.
+Three items are still genuinely unverified, each flagged in its own phase's result section below rather than blocking anything: installing the macOS build on a machine that has never had Python (phase 0), the manual print/fill/scan test of a real OR+MT exam (phase 3.5), and a live click-through of OR/MT pool files in the Build Exam tab (phase 3.5) — no such machine, printer, or working Tk install has been available in any session so far.
 
 ## The decision
 
@@ -28,7 +28,7 @@ This reversed an earlier recommendation in the same session, and the reversal is
 
 | Repo | State |
 |---|---|
-| `pyExamScan_v2` | on branch `phase0-opencv-rewrite`, 5 commits ahead of `main` and pushed (phases 0-3). Phase 3.5 is done in the working tree on top of that but **not yet committed** — `git status` shows the changed/new files. |
+| `pyExamScan_v2` | clean, on branch `phase0-opencv-rewrite`, 6 commits ahead of `main`. Phases 0-3 (5 commits) are pushed to origin; phase 3.5 (commit `5afa70c`) is committed locally but **not yet pushed**. |
 | `pyExamPaper` | clean except untracked `docs/` (the shelved Tauri plan) — untouched by any phase so far, still works standalone |
 | `schedulingApp` | last known state below is from the original planning session and has not been re-checked since — unrelated to this work either way |
 
@@ -122,7 +122,7 @@ Done on branch `phase0-opencv-rewrite`, committed and pushed (`f5b1e18`). Adds `
 
 ## Phase 3.5 result (2026-09-04)
 
-Done on branch `phase0-opencv-rewrite`, per `docs/ordering-matching-spec.md` — **not yet committed**. Touches `models.py`, `parser.py`, `exam_builder.py`, `exam_key_writer.py`, `renderer.py`, `templates/exam.html`, and `tests/test_build_migration.py` (golden fixtures regenerated plus two assertions updated — see below). Adds `tests/test_or_mt.py` and `tests/fixtures/or_mt/`. `pyExamPaper` and `build_tab.py`/the GUI were not touched — OR and MT ride through the existing pool-file picker with no new UI, and the scanner needed no changes at all, confirming the spec's central claim: both types emit ordinary single-letter bubble rows indistinguishable from MC to `grade_functions.gradeResults`.
+Done on branch `phase0-opencv-rewrite`, per `docs/ordering-matching-spec.md` — committed as `5afa70c`, not yet pushed. Touches `models.py`, `parser.py`, `exam_builder.py`, `exam_key_writer.py`, `renderer.py`, `templates/exam.html`, and `tests/test_build_migration.py` (golden fixtures regenerated plus two assertions updated — see below). Adds `tests/test_or_mt.py` and `tests/fixtures/or_mt/`. `pyExamPaper` and `build_tab.py`/the GUI were not touched — OR and MT ride through the existing pool-file picker with no new UI, and the scanner needed no changes at all, confirming the spec's central claim: both types emit ordinary single-letter bubble rows indistinguishable from MC to `grade_functions.gradeResults`.
 
 **The MD points bug is fixed, not just documented.** `exam_key_writer.py` gained `_distribute_points(total, n)`, a largest-remainder split to two decimals (1.0 point over 3 slots → `[0.34, 0.33, 0.33]`, matching the spec's own worked example) used for MD, OR, and MT alike. `tests/test_build_migration.py`'s tripwire (`test_md_question_points_bug_preserved`, added in phase 2 specifically to flag this moment) is renamed `test_md_question_points_bug_fixed` and now asserts `[0.5, 0.5]` for that fixture's 1-point, 2-dropdown MD question. If any exam built between phase 1 and now had a multi-dropdown MD question, its printed key overweighted that question — worth checking recent gradebooks, per the original bug note.
 
@@ -134,7 +134,7 @@ Done on branch `phase0-opencv-rewrite`, per `docs/ordering-matching-spec.md` —
 
 **What this phase could not verify:** the manual print → hand-fill → scan test the spec calls for as a final step before trusting this with a class, and a live click-through of the Build Exam tab with an OR/MT-containing pool file — this session's Tk install is still broken (`_tkinter.TclError: Can't find a usable init.tcl`, the same issue phases 1 and 3 both hit), so nothing GUI-side could be driven directly. The build→render→key pipeline itself was exercised directly (bypassing the GUI), which is as close as this session could get.
 
-**Explicitly not done here:** no GUI changes (none needed — grepped `build_tab.py`/`gui.py`/`README.md` for hardcoded question-type lists and found none to update); no resolution of the eleven-step urinary ordering question in `ch24urin_level1.txt` (Brandon already said to leave that content decision for later — see below); no commit.
+**Explicitly not done here:** no GUI changes (none needed — grepped `build_tab.py`/`gui.py`/`README.md` for hardcoded question-type lists and found none to update); no resolution of the eleven-step urinary ordering question in `ch24urin_level1.txt` (Brandon already said to leave that content decision for later — see below); no push.
 
 ## Open question, deliberately parked
 
