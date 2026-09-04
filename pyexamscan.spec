@@ -12,6 +12,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('images/', 'images'),
+        ('templates/', 'templates'),
         *collect_data_files('customtkinter'),
     ],
     hiddenimports=[
@@ -65,7 +66,7 @@ app = BUNDLE(
     bundle_identifier='com.pyexamscan.app',
     info_plist={
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '3.0.0',
+        'CFBundleShortVersionString': '3.0.2',
         'CFBundleName': 'PyExamScan',
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,

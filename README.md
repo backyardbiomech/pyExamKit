@@ -1,31 +1,55 @@
-# pyExamScan installation on Mac
-last edited 11 Feb., 2022
+# pyExamScan
 
-1. Download the [Miniconda installer](https://conda.io/miniconda.html) aka miniconda from Continuum. Except in unusual circumstances you’ll want the latest 64bit Python 3.x installer. You can also use the full Anaconda environment, which will let you avoid many of the steps below, though the download is **much** larger and installs many packages not needed for pyExamScan. I recommend you stick with miniconda unless you already use Anaconda. If you use the full Anaconda installer, you can jump down to step 4 below.
-  + NOTE: you can also create a conda env and install in there. If you don't know what that means, don't worry about it.
-2. To install Miniconda, open a Terminal window. On a mac, hit `cmd-space`, type in "terminal", and hit enter.
-    1. In the terminal window, change directory into your downloads folder:  
-    `cd ~/Downloads`
-    NB: if you don't know, `cd` stands for "change directories", and is like navigating folders. The `~` on a Mac is a shortcut for your home directory – the folder named as your user name that contains your Documents, Downloads, and Desktop folders, and where you'll be installing miniconda. So `~/Downloads` is just a handy shortcut for `Volumes/Macintosh HD/Users/<your user name>/Downloads`
-    2. Then install (you might need to change the text to match the name of the file you just downloaded).  
-    `bash Miniconda3-latest-MacOSX-x86_64.sh`
-    3. Agree to all of the default options.
-    4. Close that terminal window, and open a new one.
-3. In that window enter the following commands to install the required packages:
-    1. `conda update --all`  (this updates all the installed Anaconda packages)
-    2. `conda config --add channels conda-forge` (adds the conda-forge package source as the first place to look)
-    4. `conda install opencv matplotlib pandas scipy Pillow imageio` (this installs Python packages required by pyExamScan. Agree to install all and their dependencies - it will be a long list and may take a few minutes)
-    5. `pip install fpdf` (This installs one package not available directly from Anaconda)
-4. Opencv is a finicky package, so before we get too much further, check the installation of opencv. In the terminal:
-    1. `python3`
-    2. `import cv2`
-    3. If you don’t get an error, congrats, opencv is installed. Quit python with `quit()`, and go to step 5.
-    4. If you get an error that ends with something like `libopencv_core…dylib, Reason: image not found`:
-        1. Quit python with `quit()`
-        2. `conda install openblas=0.2.19`
-        3. `python3`
-        4. `import cv2`
-        5. if you don’t get an error, congrats, opencv is installed. Quit python with `quit()`.
-5. Now that you have a Python environment with opencv and other packages installed, it's time to install the pyExamScan software:
-    1. Go to the [github repo](https://github.com/backyardbiomech/pyExamScan_v2). Click on the green `Code` button, and select `Download zip`. Uncompress the zip in your downloads folder. Make sure the uncompressed folder is named exactly `pyexamscan_v2`, and move it to your Desktop.
-6. Open that folder and open the [Usage Instructions](https://github.com/backyardbiomech/pyExamScan_v2/blob/main/Usage_Instructions.md)
+A desktop app for building bubble-sheet exams from question banks, then scanning and grading them. Both halves — building and grading — share one file format and one download; there is nothing else to install.
+
+---
+
+## Installation
+
+Download the latest release for your system from the [Releases page](https://github.com/backyardbiomech/pyExamScan_v2/releases/latest).
+
+### Windows
+
+1. Download `PyExamScan-Windows.zip` and extract it — right-click the file and choose **Extract All**. Keep the extracted `PyExamScan` folder together; `PyExamScan.exe` needs the files next to it to run.
+2. Double-click `PyExamScan.exe` inside the extracted folder.
+   - Windows may show a **SmartScreen** warning ("Windows protected your PC"). Click **More info**, then **Run anyway**. This appears because the app isn't code-signed, not because anything is wrong with it.
+3. On future launches, just double-click `PyExamScan.exe` again.
+
+### Mac
+
+1. Download `PyExamScan-macOS.dmg` and open it.
+2. Drag `PyExamScan.app` into your **Applications** folder (or onto your Desktop).
+3. **Before opening**, open `Terminal` and remove the macOS quarantine flag. If you moved the app to Applications:
+
+   ```bash
+   xattr -cr /Applications/PyExamScan.app
+   ```
+
+   If you left it on the Desktop instead:
+
+   ```bash
+   xattr -cr ~/Desktop/PyExamScan.app
+   ```
+
+   > **Why is this necessary?** macOS marks anything downloaded from the internet with a quarantine attribute and blocks unsigned apps that carry it. `xattr -cr` removes that attribute so Gatekeeper allows the app to run.
+
+4. Double-click `PyExamScan.app` to launch it. If you still see an "unidentified developer" warning, right-click the app icon, choose **Open**, then click **Open** in the dialog.
+
+---
+
+## Quick start
+
+The app opens to one window with four tabs, sharing a single log at the bottom.
+
+- **Build Exam** — build a printable exam from one or more question-bank text files: pick pools and how many questions to draw from each, set shuffle and version options, and generate scrambled versions plus an answer key. Supports multiple choice, multiple answer, multiple dropdown, true/false, short answer, and the ordering/matching question types.
+- **Build Key** — fill in an answer key by hand-scanning a marked answer sheet, or let the app fill in the bubbles for you from a plain list of answers.
+- **Scan Exams** — scan a stack of completed answer sheets (with the key as the first page) and grade them against it.
+- **Re-grade** — re-run grading against already-scanned images, without rescanning, if you need to change the key or answer-choice rules after the fact.
+
+For the full walkthrough of making a key and scanning exams, see [Usage_Instructions.md](Usage_Instructions.md).
+
+---
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE).

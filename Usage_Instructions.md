@@ -1,21 +1,8 @@
 # pyExamScan Usage Instructions
 
-pyExamScan has several modules, all accessible from the main control window. Currently, the software is not packaged as an app, so it must be started from the terminal. If you followed the Installation instructions carefully, you can start the app as follows:
+pyExamScan has several modules, all accessible as tabs in the main control window. See [README.md](README.md) for installation — once installed, launch `PyExamScan.app` (Mac) or `PyExamScan.exe` (Windows) like any other app to open the control window.
 
-1. Open your terminal or command line (on mac, cmd-space to search, find "terminal" and open the app).
-2. in Terminal, navigate to the folder you installed, 
-    
-    ```bash
-    cd ~/Desktop/pyexamscan_v2
-    ```
-    
-3. Run the program with 
-
-    ```bash
-    python pyExamScan_v2.py
-    ```
-    
-4. That will open a control window to load files and run the scanner.
+This document covers the **Build Key**, **Scan Exams**, and **Re-grade** tabs — making a key and grading scanned exams. For building an exam itself from question banks, see the **Build Exam** tab, described briefly in the README.
 
 ## Making your key
 ### Option 1 - fill in the bubbles:
