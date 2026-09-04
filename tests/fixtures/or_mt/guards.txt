@@ -1,0 +1,41 @@
+OR
+1. Order too many fabricated items.
+1: a
+2: b
+3: c
+4: d
+5: e
+6: f
+7: g
+
+OR
+2. Order too few fabricated items.
+1: only one
+
+MT
+3. Fabricated matching question with no lefts.
+right1: something
+
+MT
+4. Fabricated matching question with a bad label reference.
+[rightX]left1: alpha
+right1: beta
+
+OR
+5. A clean fabricated ordering question at the six-item ceiling.
+toplabel: shallow
+1: skin
+2: fat
+3: muscle
+4: bone
+5: marrow
+6: core
+bottomlabel: deep
+
+MT
+6. A clean fabricated matching question with a shared right and non-sequential labels.
+[catB]item1: alpha
+[catA]item2: beta
+[catB]item3: gamma
+catA: first category
+catB: second category

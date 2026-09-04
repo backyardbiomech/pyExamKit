@@ -1,0 +1,16 @@
+MT
+1. Seven fabricated lefts each need a unique right and there are no distractors to trim away.
+[r1]left1: item one
+[r2]left2: item two
+[r3]left3: item three
+[r4]left4: item four
+[r5]left5: item five
+[r6]left6: item six
+[r7]left7: item seven
+r1: right one
+r2: right two
+r3: right three
+r4: right four
+r5: right five
+r6: right six
+r7: right seven

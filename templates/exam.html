@@ -162,6 +162,11 @@
       margin: 0 0 1pt 0;
     }
 
+    /* ── OR/MT lettered display row ───────────────────────── */
+    .or-choices {
+      margin: 4pt 0 4pt 0;
+    }
+
     /* ── Question image divider ────────────────────────────── */
     .question-image-divider {
       border: none;
@@ -249,6 +254,80 @@
           <li><span class="answer-letter">{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0] }}.</span> {{ ans.text }}</li>
           {% endfor %}
         </ul>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  {% elif q.q_type == 'OR' %}
+  <!-- OR ordering block -->
+  <div class="question-block md-block">
+
+    <!-- Images -->
+    {% if q.image_paths %}<hr class="question-image-divider">{% endif %}
+    {% for img in q.image_paths %}
+    <img class="question-image" src="images/{{ img | basename }}" alt="Question image">
+    {% endfor %}
+
+    <!-- Number range + stem -->
+    <p class="question-stem">
+      <span class="question-number">
+        {% if q.start_num == q.end_num %}{{ q.start_num }}.{% else %}Questions {{ q.start_num }}&ndash;{{ q.end_num }}.{% endif %}
+      </span>
+      {% if q.show_pts %}
+      <span class="points-label">({{ q.show_pts }} pts total)</span>
+      {% endif %}
+      {{ q.text }}
+    </p>
+
+    <!-- Lettered items, in scrambled display order -->
+    <p class="or-choices">
+      {% for item in q.display_items %}<span class="answer-letter">{{ item.letter }}.</span> {{ item.text }}{% if not loop.last %}&nbsp;&nbsp;&nbsp;{% endif %}{% endfor %}
+    </p>
+
+    <!-- One slot per rank position -->
+    <div class="md-selections">
+      {% for slot in q.slots %}
+      <div class="md-selection">
+        <p class="selection-label">(Question {{ slot.q_num }}){% if slot.label %}&nbsp;&nbsp;{{ slot.label }}{% endif %}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  {% elif q.q_type == 'MT' %}
+  <!-- MT matching block -->
+  <div class="question-block md-block">
+
+    <!-- Images -->
+    {% if q.image_paths %}<hr class="question-image-divider">{% endif %}
+    {% for img in q.image_paths %}
+    <img class="question-image" src="images/{{ img | basename }}" alt="Question image">
+    {% endfor %}
+
+    <!-- Number range + stem -->
+    <p class="question-stem">
+      <span class="question-number">
+        {% if q.start_num == q.end_num %}{{ q.start_num }}.{% else %}Questions {{ q.start_num }}&ndash;{{ q.end_num }}.{% endif %}
+      </span>
+      {% if q.show_pts %}
+      <span class="points-label">({{ q.show_pts }} pts total)</span>
+      {% endif %}
+      {{ q.text }}
+    </p>
+
+    <!-- Lettered rights, in scrambled display order -->
+    <p class="or-choices">
+      {% for r in q.display_rights %}<span class="answer-letter">{{ r.letter }}.</span> {{ r.text }}{% if not loop.last %}&nbsp;&nbsp;&nbsp;{% endif %}{% endfor %}
+    </p>
+
+    <!-- One slot per left item -->
+    <div class="md-selections">
+      {% for slot in q.slots %}
+      <div class="md-selection">
+        <p class="selection-label">(Question {{ slot.q_num }})&nbsp;&nbsp;{{ slot.text }}</p>
       </div>
       {% endfor %}
     </div>

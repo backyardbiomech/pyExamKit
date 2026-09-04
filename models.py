@@ -17,11 +17,34 @@ class Dropdown:
 
 
 @dataclass
+class OrderItem:
+    text: str
+    rank: int          # true position, 1-based, from the source file
+
+
+@dataclass
+class MatchLeft:
+    text: str
+    correct_label: str
+
+
+@dataclass
+class MatchRight:
+    label: str
+    text: str
+
+
+@dataclass
 class Question:
-    q_type: str               # 'MC', 'MA', 'MD', 'MD_EXPANDED'
+    q_type: str               # 'MC', 'MA', 'MD', 'MD_EXPANDED', 'OR', 'MT'
     text: str                 # question stem (may contain inline HTML/MathJax)
     answers: list[Answer] = field(default_factory=list)      # MC and MA
     dropdowns: list[Dropdown] = field(default_factory=list)  # MD only
+    order_items: list[OrderItem] = field(default_factory=list)    # OR only
+    order_top_label: str = ''                                      # OR only
+    order_bottom_label: str = ''                                   # OR only
+    match_lefts: list[MatchLeft] = field(default_factory=list)    # MT only
+    match_rights: list[MatchRight] = field(default_factory=list)  # MT only
     image_paths: list[str] = field(default_factory=list)     # relative paths from source folder
     points: str | None = None   # e.g. "2" or None
     source_text: str = ''       # original raw block text, used for markdown re-export

@@ -110,6 +110,10 @@ class ExamRenderer:
                 lines.append(_md_block_for_md(q, q_num))
             elif q.q_type == 'SA':
                 lines.append(_md_block_for_sa(q, q_num))
+            elif q.q_type == 'OR':
+                lines.append(_md_block_for_or(q, q_num))
+            elif q.q_type == 'MT':
+                lines.append(_md_block_for_mt(q, q_num))
             else:
                 lines.append(_md_block_for_question(q, q_num))
             lines.append('')
@@ -216,6 +220,64 @@ def _prepare_questions_for_html(questions: list[Question], build_default: float,
                 'selections': selections,
             })
             q_num += n
+        elif q.q_type == 'OR':
+            n = len(q.order_items)
+            start = q_num
+            end = q_num + n - 1
+
+            # q.order_items is already in builder-shuffled display order;
+            # letter by position, same convention as every other answer list.
+            display_items = [
+                {'letter': _LETTERS[i], 'text': item.text}
+                for i, item in enumerate(q.order_items)
+            ]
+            slots = [
+                {
+                    'q_num': start + i,
+                    'label': q.order_top_label if i == 0 else (
+                        q.order_bottom_label if i == n - 1 else ''
+                    ),
+                }
+                for i in range(n)
+            ]
+
+            result.append({
+                'q_type': 'OR',
+                'text': q.text,
+                'image_paths': q.image_paths,
+                'show_pts': _pts_label(q.points, build_default, mode_pts),
+                'start_num': start,
+                'end_num': end,
+                'display_items': display_items,
+                'slots': slots,
+            })
+            q_num += n
+        elif q.q_type == 'MT':
+            n = len(q.match_lefts)
+            start = q_num
+            end = q_num + n - 1
+
+            # q.match_rights is already in builder-shuffled display order.
+            display_rights = [
+                {'letter': _LETTERS[i], 'text': r.text}
+                for i, r in enumerate(q.match_rights)
+            ]
+            slots = [
+                {'q_num': start + i, 'text': left.text}
+                for i, left in enumerate(q.match_lefts)
+            ]
+
+            result.append({
+                'q_type': 'MT',
+                'text': q.text,
+                'image_paths': q.image_paths,
+                'show_pts': _pts_label(q.points, build_default, mode_pts),
+                'start_num': start,
+                'end_num': end,
+                'display_rights': display_rights,
+                'slots': slots,
+            })
+            q_num += n
         elif q.q_type == 'SA':
             result.append({
                 'q_type': 'SA',
@@ -274,6 +336,50 @@ def _md_block_for_md(q: Question, num: int) -> str:
         for ans in dropdown.answers:
             prefix = '*' if ans.is_correct else ''
             parts.append(f"{prefix}{dropdown.name}: {_strip_html(ans.text)}")
+    return '\n'.join(parts)
+
+
+def _md_block_for_or(q: Question, num: int) -> str:
+    """Render an OR Question back to importable markdown format.
+
+    Items are written in true rank order, not display (shuffled) order --
+    the source format's numeric prefixes encode the correct sequence, and
+    writing them out of order would make the regenerated file misleading
+    to a human re-editing it.
+    """
+    parts: list[str] = ['OR']
+    for img in q.image_paths:
+        parts.append(f"image: {img}")
+    if q.points:
+        parts.append(f"({q.points} pts)")
+    parts.append(f"{num}. {_strip_html(q.text)}")
+    if q.order_top_label:
+        parts.append(f"toplabel: {_strip_html(q.order_top_label)}")
+    for item in sorted(q.order_items, key=lambda it: it.rank):
+        parts.append(f"{item.rank}: {_strip_html(item.text)}")
+    if q.order_bottom_label:
+        parts.append(f"bottomlabel: {_strip_html(q.order_bottom_label)}")
+    return '\n'.join(parts)
+
+
+def _md_block_for_mt(q: Question, num: int) -> str:
+    """Render an MT Question back to importable markdown format.
+
+    The original left-side name tokens (left1, left2...) aren't stored on
+    MatchLeft, so they're resynthesized sequentially here; only the right
+    labels are read back from parsing, so those are preserved exactly,
+    including one label shared as the correct answer for multiple lefts.
+    """
+    parts: list[str] = ['MT']
+    for img in q.image_paths:
+        parts.append(f"image: {img}")
+    if q.points:
+        parts.append(f"({q.points} pts)")
+    parts.append(f"{num}. {_strip_html(q.text)}")
+    for i, left in enumerate(q.match_lefts, start=1):
+        parts.append(f"[{left.correct_label}]left{i}: {_strip_html(left.text)}")
+    for right in q.match_rights:
+        parts.append(f"{right.label}: {_strip_html(right.text)}")
     return '\n'.join(parts)
 
 

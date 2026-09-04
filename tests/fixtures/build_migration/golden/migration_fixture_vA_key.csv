@@ -1,10 +1,16 @@
 type,question,page,x1,y1,x2,y2,answer,partial_answers,points
-metadata,num_questions,,,,,,6,,
+metadata,num_questions,,,,,,12,,
 metadata,questions_to_skip,,,,,,3,,
 bubble,Q001,,,,,,A,,1.0
 bubble,Q002,,,,,,BC,,1.0
 bubble,Q003,,,,,,ignore,,
-bubble,Q004,,,,,,A,,1.0
-bubble,Q005,,,,,,B,,1.0
-bubble,Q006,,,,,,B,,1.0
-open,openQ_3,,,,,,correct text|corect tect,,1.0
+bubble,Q004,,,,,,A,,0.5
+bubble,Q005,,,,,,B,,0.5
+bubble,Q006,,,,,,B,,0.34
+bubble,Q007,,,,,,B,,0.33
+bubble,Q008,,,,,,A,,0.33
+bubble,Q009,,,,,,B,,0.34
+bubble,Q010,,,,,,A,,0.33
+bubble,Q011,,,,,,C,,0.33
+bubble,Q012,,,,,,B,,1.0
+open,openQ_3,1,,,,,correct text|corect tect,,1.0

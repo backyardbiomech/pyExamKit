@@ -53,7 +53,8 @@ class ExamBuilder:
             source_folder = config.exact_file.parent
             base_questions, warnings = parse_file(config.exact_file)
             all_warnings.extend(warnings)
-            base_questions = [_trim_mc_answers(q) for q in base_questions]
+            base_questions, trim_warnings = _trim_and_filter(base_questions, config.exact_file.name)
+            all_warnings.extend(trim_warnings)
             pool_sources = [(base_questions, None, source_folder, None)]  # None count = use all
         else:
             pool_sources = []
@@ -61,7 +62,8 @@ class ExamBuilder:
             for pool in config.pools:
                 qs, warnings = parse_file(pool.filepath)
                 all_warnings.extend(warnings)
-                qs = [_trim_mc_answers(q) for q in qs]
+                qs, trim_warnings = _trim_and_filter(qs, pool.filepath.name)
+                all_warnings.extend(trim_warnings)
                 if pool.count > len(qs):
                     all_warnings.append(
                         f"Pool '{pool.filepath.name}': requested {pool.count} questions "
@@ -119,6 +121,7 @@ class ExamBuilder:
             for q in selected:
                 if config.shuffle_answers:
                     q = _shuffle_answers(q)
+                _finalize_or_mt(q, config.shuffle_questions)
                 _align_diagram_letters(q)
                 expanded.append(q)
 
@@ -190,7 +193,25 @@ def _shuffle_answers(q: Question) -> Question:
     elif q.q_type == 'MD':
         for dropdown in q.dropdowns:
             random.shuffle(dropdown.answers)
+    elif q.q_type == 'MT':
+        random.shuffle(q.match_rights)
     return q
+
+
+def _finalize_or_mt(q: Question, shuffle_lefts: bool) -> None:
+    """Assign OR/MT their display order in-place.
+
+    OR items are always scrambled for display, regardless of shuffle_answers:
+    the source file lists them in true-answer order, so leaving them
+    unscrambled would print the answer key as the question. MT's left column
+    becomes the exam's own numbered question slots (see the HTML template),
+    so its order follows shuffle_questions (question-slot order) rather than
+    shuffle_answers (choice order, used for its rights in _shuffle_answers).
+    """
+    if q.q_type == 'OR':
+        random.shuffle(q.order_items)
+    elif q.q_type == 'MT' and shuffle_lefts:
+        random.shuffle(q.match_lefts)
 
 
 def _align_diagram_letters(q: Question) -> None:
@@ -241,6 +262,52 @@ def _trim_mc_answers(q: Question, max_choices: int = 6) -> Question:
     else:
         q.answers = correct + random.sample(wrong, min(slots_for_wrong, len(wrong)))
     return q
+
+
+def _trim_mt_rights(q: Question, max_rights: int = 6) -> tuple[Question, str | None]:
+    """Trim an MT question's right-side options to at most max_rights.
+
+    Mirrors _trim_mc_answers: every right that is some left's correct answer
+    is kept unconditionally; distractors are randomly sampled to fill the
+    remaining slots. If the required (non-droppable) rights alone already
+    exceed max_rights, trimming can't help -- returns a warning instead of
+    silently leaving the question over the sheet's limit.
+    """
+    if q.q_type != 'MT':
+        return q, None
+    if len(q.match_rights) <= max_rights:
+        return q, None
+    q = copy.deepcopy(q)
+    required_labels = {left.correct_label for left in q.match_lefts}
+    required = [r for r in q.match_rights if r.label in required_labels]
+    distractors = [r for r in q.match_rights if r.label not in required_labels]
+    slots_for_distractors = max_rights - len(required)
+    if slots_for_distractors <= 0:
+        q.match_rights = required
+    else:
+        q.match_rights = required + random.sample(
+            distractors, min(slots_for_distractors, len(distractors))
+        )
+    if len(q.match_rights) > max_rights:
+        return q, (f"matching question \"{q.text[:60]}\" has {len(q.match_rights)} right-side "
+                   f"options after trimming distractors, exceeding the {max_rights}-option "
+                   f"sheet limit. Skipped.")
+    return q, None
+
+
+def _trim_and_filter(questions: list[Question], fname: str) -> tuple[list[Question], list[str]]:
+    """Apply MC/MA and MT trimming to a freshly-parsed pool, dropping any
+    question that still can't fit the answer sheet even after trimming."""
+    kept: list[Question] = []
+    warnings: list[str] = []
+    for q in questions:
+        q = _trim_mc_answers(q)
+        q, warn = _trim_mt_rights(q)
+        if warn:
+            warnings.append(f"'{fname}': {warn}")
+            continue
+        kept.append(q)
+    return kept, warnings
 
 
 

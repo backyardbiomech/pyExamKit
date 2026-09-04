@@ -6,12 +6,12 @@ and writes it through keyformat.py, the single place that knows the key CSV
 format. Replaces pyExamPaper's key_generator.py, which wrote CSV rows
 directly and predates keyformat.py.
 
-Each MD question still puts the full question point value on every dropdown
-row, and gradeResults sums per column, so a three-dropdown MD question scores
-three times its intended value. That bug is preserved here, not fixed: the
-fix is scoped to phase 3.5 alongside the OR/MT points-distribution rule it
-reuses, and this module exists to move key-writing to keyformat.py without
-changing behavior.
+MD, OR, and MT questions each occupy several sequential bubble rows for one
+question; all three split the question's total points evenly across their
+rows via _distribute_points rather than putting the full value on every row
+(the latter was a bug for MD -- a three-dropdown MD tagged 1 point scored
+three points -- fixed here rather than carried forward, per
+docs/ordering-matching-spec.md).
 """
 from __future__ import annotations
 
@@ -21,14 +21,28 @@ from models import ExamVersion, Question
 from keyformat import save_key_file
 
 
+def _distribute_points(total: float, n: int) -> list[float]:
+    """Split `total` points evenly across `n` slots, largest-remainder
+    rounding to 2 decimals so the parts sum exactly to `total` even when it
+    doesn't divide evenly -- e.g. 1.0 over 3 slots is [0.34, 0.33, 0.33], not
+    three 0.3333... values that only sum to 0.9999.
+    """
+    if n <= 0:
+        return []
+    total_cents = round(total * 100)
+    base, remainder = divmod(total_cents, n)
+    return [(base + 1) / 100 if i < remainder else base / 100 for i in range(n)]
+
+
 def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
     """Translate an ExamVersion into the generic dict keyformat.py expects:
     bubble_answers, open_questions, metadata, point_values.
 
     SA questions produce an 'ignore' bubble placeholder (so gradeResults/
     markSheets skip that slot) plus an open question carrying the answers.
-    MD questions produce one bubble row per dropdown, sequential. Every
-    other question type produces a single bubble row.
+    MD, OR, and MT questions each produce one bubble row per dropdown/item/
+    left, sequential, with the question's points split across those rows.
+    Every other question type produces a single bubble row.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
@@ -38,11 +52,40 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
     counter = 1
     for q in version.questions:
         if q.q_type == 'MD':
-            pts = _effective_points(q, default_points)
-            for dropdown in q.dropdowns:
+            total_pts = _effective_points(q, default_points)
+            pts_list = _distribute_points(total_pts, len(q.dropdowns))
+            for dropdown, pts in zip(q.dropdowns, pts_list):
                 q_label = f"Q{counter:03d}"
                 bubble_answers[q_label] = _dropdown_answer(dropdown)
                 point_values[q_label] = pts
+                counter += 1
+
+        elif q.q_type == 'OR':
+            total_pts = _effective_points(q, default_points)
+            n = len(q.order_items)
+            pts_list = _distribute_points(total_pts, n)
+            # q.order_items is already in builder-assigned display order;
+            # each item's display letter is its index in that list.
+            rank_to_display_index = {item.rank: idx for idx, item in enumerate(q.order_items)}
+            for i in range(n):
+                display_idx = rank_to_display_index[i + 1]
+                q_label = f"Q{counter:03d}"
+                bubble_answers[q_label] = chr(ord('A') + display_idx)
+                point_values[q_label] = pts_list[i]
+                counter += 1
+
+        elif q.q_type == 'MT':
+            total_pts = _effective_points(q, default_points)
+            n = len(q.match_lefts)
+            pts_list = _distribute_points(total_pts, n)
+            # q.match_rights is already in builder-assigned display order;
+            # a right's display letter is its index in that list.
+            right_label_to_display_index = {r.label: idx for idx, r in enumerate(q.match_rights)}
+            for i, left in enumerate(q.match_lefts):
+                display_idx = right_label_to_display_index[left.correct_label]
+                q_label = f"Q{counter:03d}"
+                bubble_answers[q_label] = chr(ord('A') + display_idx)
+                point_values[q_label] = pts_list[i]
                 counter += 1
 
         elif q.q_type == 'SA':

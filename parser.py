@@ -3,15 +3,15 @@ parser.py
 
 Parse the markdown/text question bank files used by qtiConverter into Question objects.
 Supports: MC (multiple choice), MA (multiple answer), MD (multiple dropdown), TF (true/false),
-          SA (short answer).
-All other question types (ES, MB, MT, OR, CT, HS) are skipped with a warning.
+          SA (short answer), OR (ordering), MT (matching).
+All other question types (ES, MB, CT, HS) are skipped with a warning.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from models import Answer, Dropdown, Question
+from models import Answer, Dropdown, MatchLeft, MatchRight, OrderItem, Question
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -72,7 +72,7 @@ def _preprocess(raw: str) -> list[str]:
 # Header parsing
 # ---------------------------------------------------------------------------
 
-_TYPE_LIST = {'MC', 'MA', 'MD', 'TF', 'SA'}
+_TYPE_LIST = {'MC', 'MA', 'MD', 'TF', 'SA', 'OR', 'MT'}
 _ALL_TYPES = {'MC', 'MA', 'MT', 'SA', 'MD', 'MB', 'ES', 'NU', 'OR', 'TF', 'CT', 'HS'}
 
 
@@ -342,13 +342,133 @@ def _parse_md(lines: list[str], image_paths: list[str],
 
 
 # ---------------------------------------------------------------------------
+# OR parser
+# ---------------------------------------------------------------------------
+
+_OR_MAX_ITEMS = 6
+_OR_MIN_ITEMS = 2
+
+
+def _parse_or(lines: list[str], image_paths: list[str], points: str | None,
+              raw_block: str, q_index: int, fname: str) -> tuple[Question | None, str | None]:
+    """Parse an ordering question block.
+
+    Returns (question, warning). warning is set (and question is None) when
+    the block is structurally fine but can't fit the six-bubble answer sheet;
+    None/None falls back to parse_file's generic "could not parse" message.
+    """
+    if not lines:
+        return None, None
+
+    stem_line = lines[0]
+    m = re.match(r'^\d+[.)]\s{0,4}([\S\s]+?)$', stem_line)
+    quest = m.group(1).strip() if m else stem_line.strip()
+
+    top_label = ''
+    bottom_label = ''
+    items: list[OrderItem] = []
+    for line in lines[1:]:
+        m = re.match(r'^toplabel:\s*(.+)$', line, re.IGNORECASE)
+        if m:
+            top_label = _process_formatting(m.group(1).strip())
+            continue
+        m = re.match(r'^bottomlabel:\s*(.+)$', line, re.IGNORECASE)
+        if m:
+            bottom_label = _process_formatting(m.group(1).strip())
+            continue
+        m = re.match(r'^(\d+):\s*(.+)$', line)
+        if m:
+            items.append(OrderItem(text=_process_formatting(m.group(2).strip()), rank=int(m.group(1))))
+
+    if not items:
+        return None, None
+
+    items.sort(key=lambda it: it.rank)
+
+    if len(items) > _OR_MAX_ITEMS:
+        return None, (f"Block {q_index} in {fname}: ordering question has {len(items)} items; "
+                       f"the answer sheet allows at most {_OR_MAX_ITEMS}. Skipped.")
+    if len(items) < _OR_MIN_ITEMS:
+        return None, (f"Block {q_index} in {fname}: ordering question has only {len(items)} "
+                       f"item(s); an ordering needs at least {_OR_MIN_ITEMS}. Skipped.")
+
+    return Question(
+        q_type='OR',
+        text=_process_formatting(quest),
+        order_items=items,
+        order_top_label=top_label,
+        order_bottom_label=bottom_label,
+        image_paths=image_paths,
+        points=points,
+        source_text=raw_block,
+    ), None
+
+
+# ---------------------------------------------------------------------------
+# MT parser
+# ---------------------------------------------------------------------------
+
+_MT_LEFT_RE = re.compile(r'^\[(\w+)\](\w+):\s*(.+)$')
+_MT_RIGHT_RE = re.compile(r'^(\w+):\s*(.+)$')
+
+
+def _parse_mt(lines: list[str], image_paths: list[str], points: str | None,
+              raw_block: str, q_index: int, fname: str) -> tuple[Question | None, str | None]:
+    """Parse a matching question block.
+
+    Returns (question, warning), same contract as _parse_or.
+    """
+    if not lines:
+        return None, None
+
+    stem_line = lines[0]
+    m = re.match(r'^\d+[.)]\s{0,4}([\S\s]+?)$', stem_line)
+    quest = m.group(1).strip() if m else stem_line.strip()
+
+    lefts: list[MatchLeft] = []
+    rights: dict[str, str] = {}  # label -> text, insertion order preserved
+
+    for line in lines[1:]:
+        m = _MT_LEFT_RE.match(line)
+        if m:
+            right_label, _left_name, text = m.group(1), m.group(2), m.group(3).strip()
+            lefts.append(MatchLeft(text=_process_formatting(text), correct_label=right_label))
+            continue
+        m = _MT_RIGHT_RE.match(line)
+        if m:
+            label, text = m.group(1), m.group(2).strip()
+            rights[label] = _process_formatting(text)
+            continue
+
+    if not lefts:
+        return None, f"Block {q_index} in {fname}: matching question has no left-side items. Skipped."
+
+    for left in lefts:
+        if left.correct_label not in rights:
+            return None, (f"Block {q_index} in {fname}: matching question references right-side "
+                           f"label '{left.correct_label}', which has no matching right entry. Skipped.")
+
+    match_rights = [MatchRight(label=label, text=text) for label, text in rights.items()]
+
+    return Question(
+        q_type='MT',
+        text=_process_formatting(quest),
+        match_lefts=lefts,
+        match_rights=match_rights,
+        image_paths=image_paths,
+        points=points,
+        source_text=raw_block,
+    ), None
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def parse_file(filepath: Path) -> tuple[list[Question], list[str]]:
     """Parse a question bank file and return (questions, warnings).
 
-    Supports MC, MA, MD, SA, and TF question types.
+    Supports MC, MA, MD, SA, TF, OR, and MT question types.
     Other types are skipped and reported in the warnings list.
     """
     with filepath.open(encoding='utf-8-sig') as f:
@@ -374,21 +494,26 @@ def parse_file(filepath: Path) -> tuple[list[Question], list[str]]:
         if q_type not in _TYPE_LIST:
             warnings.append(
                 f"Block {q_index}: question type '{q_type}' is not supported "
-                f"(only MC, MA, MD, SA, TF). Skipped."
+                f"(only MC, MA, MD, SA, TF, OR, MT). Skipped."
             )
             continue
 
+        warn: str | None = None
         if q_type in ('MC', 'MA'):
             q = _parse_mc(remaining, q_type, image_paths, points, block)
         elif q_type == 'TF':
             q = _parse_tf(remaining, image_paths, points, block)
         elif q_type == 'SA':
             q = _parse_sa(remaining, image_paths, points, block)
+        elif q_type == 'OR':
+            q, warn = _parse_or(remaining, image_paths, points, block, q_index, filepath.name)
+        elif q_type == 'MT':
+            q, warn = _parse_mt(remaining, image_paths, points, block, q_index, filepath.name)
         else:  # MD
             q = _parse_md(remaining, image_paths, points, block)
 
         if q is None:
-            warnings.append(f"Block {q_index}: could not parse question. Skipped.")
+            warnings.append(warn or f"Block {q_index}: could not parse question. Skipped.")
             continue
 
         questions.append(q)
