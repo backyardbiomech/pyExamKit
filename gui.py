@@ -445,8 +445,8 @@ class pyScanUI(ctk.CTkFrame):
                      font=ctk.CTkFont(size=14, weight='bold')).grid(
             row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky='w')
         ctk.CTkLabel(dlg,
-                     text='Your key is stored in ~/.pyexamkit_config.json (mode 600).\n'
-                          'Get a key at console.anthropic.com.',
+                     text='Your key is stored in plain text in ~/.pyexamkit_config.json,\n'
+                          'readable only by your account. Get a key at console.anthropic.com.',
                      justify='left').grid(
             row=1, column=0, columnspan=3, padx=16, pady=(0, 8), sticky='w')
 

@@ -18,6 +18,7 @@ recognize_batch(crops, student_ids, context, api_key, model) -> dict[str, str]
 import base64
 import io
 import json
+import os
 import re
 from pathlib import Path
 
@@ -39,11 +40,27 @@ def load_config() -> dict:
 
 
 def save_config(data: dict) -> None:
-    """Merge *data* into ~/.pyexamkit_config.json.  Key file is chmod 600."""
+    """Merge *data* into ~/.pyexamkit_config.json.
+
+    The file is created owner-read/write only, and on POSIX an existing file
+    is narrowed to the same. Creating it with the mode already set matters:
+    writing at the default umask and chmod'ing afterwards leaves the API key
+    world-readable in the gap between the two, however brief.
+
+    O_CREAT's mode applies only when the file is new, so a config written by
+    an older version of this app keeps its old permissions unless they are
+    forced -- hence the explicit chmod as well. Windows ignores both; there
+    the file's protection comes from the user profile's own ACL, which is why
+    the dialogs describing this file do not promise a POSIX mode.
+    """
     existing = load_config()
     existing.update(data)
-    CONFIG_PATH.write_text(json.dumps(existing, indent=2))
-    CONFIG_PATH.chmod(0o600)
+    payload = json.dumps(existing, indent=2)
+    fd = os.open(CONFIG_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        fh.write(payload)
+    if os.name == 'posix':
+        CONFIG_PATH.chmod(0o600)
 
 
 # ── Context presets ──────────────────────────────────────────────────────────
@@ -179,8 +196,54 @@ def recognize_batch(
             # Strip any accidental markdown fences
             raw = re.sub(r'```[a-z]*\n?', '', raw).strip().rstrip('`')
             chunk_results = json.loads(raw)
-            results.update(chunk_results)
+            results.update(_clean_response(chunk_results, chunk_ids))
         except Exception as exc:
             print(f'[AI OCR] API call failed: {exc}', flush=True)
 
     return results
+
+
+def _clean_response(parsed, sent_ids: list[str]) -> dict[str, str]:
+    """Keep only the labels this batch actually asked about, as plain strings.
+
+    A model can return a label that was never sent, a nested object instead of
+    a string, or something that isn't a mapping at all. Callers index this
+    result by student row and convert the label with int(), so letting an
+    invented key through turns a bad transcription into a crash partway
+    through a scan -- after the API call has already been paid for.
+    """
+    if not isinstance(parsed, dict):
+        print(f'[AI OCR] Ignoring malformed response: expected a JSON object, '
+              f'got {type(parsed).__name__}.', flush=True)
+        return {}
+
+    expected = set(sent_ids)
+    cleaned: dict[str, str] = {}
+    unknown: list[str] = []
+    malformed: list[str] = []
+    for label, text in parsed.items():
+        label = str(label).strip()
+        if label not in expected:
+            unknown.append(label)
+            continue
+        # A number is a legitimate answer, so keep it as text. Anything
+        # structured is the model ignoring the response format; drop it so the
+        # field stays blank for review rather than showing a stringified dict.
+        if isinstance(text, str):
+            cleaned[label] = text
+        elif isinstance(text, (int, float)) and not isinstance(text, bool):
+            cleaned[label] = str(text)
+        else:
+            malformed.append(label)
+
+    if unknown:
+        print(f'[AI OCR] Ignoring {len(unknown)} unrecognized label(s) in the response: '
+              f'{", ".join(sorted(unknown)[:5])}', flush=True)
+    if malformed:
+        print(f'[AI OCR] Ignoring {len(malformed)} label(s) whose transcription was not '
+              f'text: {", ".join(sorted(malformed)[:5])}', flush=True)
+    missing = expected - cleaned.keys()
+    if missing:
+        print(f'[AI OCR] No transcription returned for {len(missing)} image(s); '
+              f'those will be blank for manual review.', flush=True)
+    return cleaned

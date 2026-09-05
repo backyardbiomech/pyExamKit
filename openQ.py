@@ -15,6 +15,24 @@ from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
                        _openq_sort_key)
 
 
+def _by_student_index(per_label: dict) -> dict:
+    """Re-key a label->text map by integer student row.
+
+    ai_ocr.recognize_batch already drops labels it never asked about, so this
+    is the second line of defence, covering a progress cache that has been
+    hand-edited or truncated. A bad label skips one transcription rather than
+    raising partway through building the review window.
+    """
+    out: dict = {}
+    for sid, text in per_label.items():
+        try:
+            out[int(sid)] = text
+        except (TypeError, ValueError):
+            print(f'[AI OCR] Skipping transcription with non-numeric label {sid!r}.',
+                  flush=True)
+    return out
+
+
 def load_acceptable_answers_file(path: str) -> tuple:
     """
     Parse a CSV or JSON file of pre-defined acceptable answers.
@@ -343,7 +361,7 @@ class OpenQs(object):
                     print(f'[AI OCR] Cache file: {_cp}', flush=True)
                     print('[AI OCR] Delete that file to force a fresh API run.', flush=True)
                 self._ai_texts = {
-                    qk: {int(sid): text for sid, text in per_q.items()}
+                    qk: _by_student_index(per_q)
                     for qk, per_q in _loaded_cache['ai_texts'].items()
                 }
                 for qk, kt in _loaded_cache.get('key_texts', {}).items():
@@ -392,7 +410,7 @@ class OpenQs(object):
                     ai_key_txt = batch.pop('0', '')
                     if ai_key_txt:
                         self.openQkeytext[qk] = ai_key_txt
-                    self._ai_texts[qk] = {int(sid): text for sid, text in batch.items()}
+                    self._ai_texts[qk] = _by_student_index(batch)
                     # Step 4b: re-sync acceptable_answers with the AI-read key text
                     # Only overwrite primary answer when NOT in key-file mode
                     if not self._key_file_mode:
@@ -644,8 +662,8 @@ class OpenQs(object):
         tk.Label(
             dlg,
             text='An API key is required to use Claude for handwriting recognition.\n'
-                 'Paste your key below. It will be saved to\n'
-                 '~/.pyexamkit_config.json (readable only by you).\n\n'
+                 'Paste your key below. It will be saved in plain text to\n'
+                 '~/.pyexamkit_config.json, readable only by your account.\n\n'
                  'Get a key at console.anthropic.com.',
             justify='left',
         ).pack(anchor='w', padx=16, pady=(0, 8))
