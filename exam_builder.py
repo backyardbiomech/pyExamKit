@@ -41,6 +41,37 @@ class BuildError(Exception):
     pass
 
 
+# The printed answer sheet has 150 numbered question slots; init_functions
+# .makeAreaDict lays them out against fixed coordinates and runs off the
+# bottom of the aligned image past roughly 151, so anything beyond this can
+# be printed on the exam but never bubbled or graded.
+MAX_QUESTION_SLOTS = 150
+
+# The answer sheets shipped in images/, smallest first.
+ANSWER_SHEET_SIZES = (30, 60, 90, 120, 150)
+
+
+def slot_count(q: Question) -> int:
+    """Answer-sheet slots one question occupies.
+
+    Most questions take one. MD, OR, and MT each take one per dropdown,
+    ordered item, or left-hand item, which is why an exam's slot count runs
+    ahead of its question count as soon as those types are used.
+    """
+    if q.q_type == 'MD':
+        return len(q.dropdowns)
+    if q.q_type == 'OR':
+        return len(q.order_items)
+    if q.q_type == 'MT':
+        return len(q.match_lefts)
+    return 1
+
+
+def answer_sheet_for(slots: int) -> int | None:
+    """Smallest shipped answer sheet that fits `slots`, or None if none does."""
+    return next((size for size in ANSWER_SHEET_SIZES if slots <= size), None)
+
+
 class ExamBuilder:
     def build(self, config: BuildConfig) -> tuple[list[ExamVersion], list[str]]:
         """Build exam versions according to config.
@@ -151,6 +182,18 @@ class ExamBuilder:
                     version.questions.insert(0, vq)
                 else:
                     version.questions.append(vq)
+
+        # Versions can differ in slot count when each draws its own random
+        # sample, so warn against the worst one.
+        worst = max(sum(slot_count(q) for q in v.questions) for v in versions)
+        if worst > MAX_QUESTION_SLOTS:
+            all_warnings.append(
+                f"This exam needs {worst} answer-sheet slots, but the printed sheet has "
+                f"only {MAX_QUESTION_SLOTS}. Questions past {MAX_QUESTION_SLOTS} can be "
+                f"printed but never bubbled or graded. Ordering, matching, and "
+                f"multi-dropdown questions each take one slot per item, so the slot count "
+                f"runs ahead of the question count -- drop questions or shorten those."
+            )
 
         return versions, all_warnings
 

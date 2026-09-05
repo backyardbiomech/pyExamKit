@@ -23,7 +23,8 @@ from pathlib import Path
 import customtkinter as ctk
 from tkinter import filedialog
 
-from exam_builder import BuildConfig, ExamBuilder, PoolConfig
+from exam_builder import (BuildConfig, ExamBuilder, PoolConfig, answer_sheet_for,
+                          slot_count)
 from exam_config import load_config, save_config
 from exam_key_writer import save_key
 from parser import parse_file
@@ -521,7 +522,15 @@ class BuildExamUI(ctk.CTkFrame):
             total_versions = len(versions)
             for version in versions:
                 v_letter = version.version_letter
-                self.log_fn(f'\n  Version {v_letter} ({len(version.questions)} questions)')
+                slots = sum(slot_count(q) for q in version.questions)
+                sheet = answer_sheet_for(slots)
+                # The slot count, not the question count, is what has to fit
+                # the paper -- OR/MT/MD each take several slots -- so name the
+                # answer sheet to print rather than making the user work it out.
+                sheet_note = (f'print the {sheet}-question answer sheet' if sheet
+                              else 'TOO LARGE for any answer sheet')
+                self.log_fn(f'\n  Version {v_letter} ({len(version.questions)} questions, '
+                            f'{slots} answer-sheet slots — {sheet_note})')
                 html_path = renderer.to_html(version, output_path, total_versions, config.default_points)
                 self.log_fn(f'    HTML  → {html_path.name}')
                 md_path = renderer.to_markdown(version, output_path)
