@@ -39,3 +39,21 @@ MT
 [catB]item3: gamma
 catA: first category
 catB: second category
+
+OR
+7. Fabricated ordering numbered from zero.
+0: a
+1: b
+2: c
+
+OR
+8. Fabricated ordering with a gap in its numbering.
+1: a
+2: b
+4: d
+
+OR
+9. Fabricated ordering with a repeated number.
+1: a
+2: b
+2: c

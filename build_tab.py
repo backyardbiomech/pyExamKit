@@ -32,6 +32,13 @@ from renderer import ExamRenderer, safe_name
 VERSION_POSITION_LABELS = {'at end of exam': 'last', 'at start of exam': 'first'}
 VERSION_POSITION_VALUES = {v: k for k, v in VERSION_POSITION_LABELS.items()}
 
+# The printed answer sheet has six bubbles per question, A-F (dicts.py's
+# coordinate tables, mirrored by init_functions.makeResDict), and the Scan
+# Exams tab has key-file slots for those same six letters. A seventh version
+# would need a bubble G that does not exist on paper and could not be graded,
+# so the builder stops at F rather than producing an unscannable exam.
+MAX_VERSIONS = 6
+
 
 # ---------------------------------------------------------------------------
 # Pure logic -- no widgets, so this half is unit-testable without a live Tk
@@ -284,6 +291,10 @@ class BuildExamUI(ctk.CTkFrame):
         self.num_versions_entry.insert(0, '1')
         self.num_versions_entry.grid(row=3, column=1, pady=2, sticky='w')
         self.num_versions_entry.bind('<KeyRelease>', lambda e: self._update_same_questions_visibility())
+        ctk.CTkLabel(frame, text=f'(A–{chr(ord("A") + MAX_VERSIONS - 1)}, '
+                                 f'the most the answer sheet can encode)',
+                     text_color='gray60').grid(
+            row=3, column=2, padx=(6, 0), pady=2, sticky='w')
 
         ctk.CTkLabel(frame, text='Default pts/question:').grid(
             row=4, column=0, padx=(0, 6), pady=2, sticky='w')
@@ -481,7 +492,12 @@ class BuildExamUI(ctk.CTkFrame):
             self.log_fn(error)
             return
 
-        num_versions = max(1, min(26, self._safe_int(self.num_versions_entry.get(), 1)))
+        requested_versions = max(1, self._safe_int(self.num_versions_entry.get(), 1))
+        num_versions = min(MAX_VERSIONS, requested_versions)
+        if requested_versions > num_versions:
+            self.log_fn(f'Note: {requested_versions} versions requested, but the answer sheet '
+                        f'only encodes {MAX_VERSIONS} (A–{chr(ord("A") + MAX_VERSIONS - 1)}). '
+                        f'Building {num_versions}.')
         default_points = self._parse_default_points()
         version_position = VERSION_POSITION_LABELS.get(self.version_pos_menu.get(), 'last')
 
@@ -557,7 +573,8 @@ class BuildExamUI(ctk.CTkFrame):
         try:
             config = build_config_from_fields(
                 title=self.title_entry.get(), course=self.course_entry.get(),
-                num_versions=self._safe_int(self.num_versions_entry.get(), 1),
+                num_versions=max(1, min(MAX_VERSIONS,
+                                        self._safe_int(self.num_versions_entry.get(), 1))),
                 shuffle_questions=self.shuffle_q_var.get(), shuffle_answers=self.shuffle_a_var.get(),
                 mode=self._source_mode.get(), exact_path=self.exact_entry.get(),
                 pool_rows=self._collect_pool_row_data(),

@@ -56,7 +56,7 @@ For the full walkthrough of making a key and scanning exams, see [Usage_Instruct
 
 The **Build Exam** tab turns one or more plain-text question banks into a printable exam: an HTML and a Markdown version to print or post, plus a key CSV the **Scan Exams** tab grades against. Point it at either a single **Exact File**, used exactly as written in file order, or one or more **Question Pools**, where you choose how many questions to randomly draw from each pool and at what point value — adding a pool file shows how many questions it actually contains and defaults the draw count to 10, or the bank's own total if smaller. A pool's own **Pts/Q** column overrides the exam-wide **Default pts/question**, but a `(N pts)` tag inside the source file always wins over both.
 
-Shuffle question order and answer order independently, generate up to 26 lettered versions in one pass, and optionally force every version to draw the identical set of questions rather than a fresh random sample each time. An optional version-identifier question, placed at the start or end of the exam, adds a "fill in the bubble for version X" question so the scanner can tell versions apart automatically when grading.
+Shuffle question order and answer order independently, generate up to six lettered versions (A–F, the most the six-bubble answer sheet can encode) in one pass, and optionally force every version to draw the identical set of questions rather than a fresh random sample each time. An optional version-identifier question, placed at the start or end of the exam, adds a "fill in the bubble for version X" question so the scanner can tell versions apart automatically when grading.
 
 ### Question bank format
 
@@ -96,7 +96,7 @@ toplabel: most superficial
 bottomlabel: least superficial
 ```
 
-An `MT` block gives each left item's correct right-hand label in brackets, then lists every right option including distractors; multiple lefts may share one right, and rights beyond the six-option cap get trimmed down to it, keeping every right that's somebody's correct answer and randomly sampling distractors for what's left:
+An `MT` block gives each left item's correct right-hand label in brackets, then lists every right option including distractors; multiple lefts may share one right, and rights beyond the six-option cap get trimmed down to it, keeping every right that's somebody's correct answer and randomly sampling distractors for what's left. As with `OR`, the right-hand options are always scrambled regardless of the shuffle-answers setting — banks usually declare the lefts in the same order as the rights they point at, so printing them in source order would run the answer key straight down the page:
 
 ```
 MT

@@ -163,11 +163,16 @@ def _make_version_question(version_letter: str) -> Question:
     """Create a synthetic MC question that identifies the exam version.
 
     Students are instructed to fill in a specific bubble (A for version A, etc.).
-    The question has all 26 letters as choices; the correct one matches the version.
-    Only A–D are presented on the printed exam to keep it compact, but the key
-    records the correct letter regardless.
+    Choices run A–E, or far enough to reach the version letter when that letter
+    is F. They never run past F: the answer sheet has six bubbles per question,
+    so a seventh choice would be unmarkable and ungradeable.
     """
-    letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    letters = 'ABCDEF'
+    if version_letter not in letters:
+        raise BuildError(
+            f'Version {version_letter} cannot be encoded: the answer sheet has six '
+            f'bubbles per question, so versions stop at {letters[-1]}.'
+        )
     # Show choices A–E so there is always a superset of common version letters
     num_choices = max(5, letters.index(version_letter) + 1)
     # All choices give the same instruction so students aren't confused by
@@ -193,25 +198,28 @@ def _shuffle_answers(q: Question) -> Question:
     elif q.q_type == 'MD':
         for dropdown in q.dropdowns:
             random.shuffle(dropdown.answers)
-    elif q.q_type == 'MT':
-        random.shuffle(q.match_rights)
     return q
 
 
 def _finalize_or_mt(q: Question, shuffle_lefts: bool) -> None:
     """Assign OR/MT their display order in-place.
 
-    OR items are always scrambled for display, regardless of shuffle_answers:
-    the source file lists them in true-answer order, so leaving them
-    unscrambled would print the answer key as the question. MT's left column
-    becomes the exam's own numbered question slots (see the HTML template),
-    so its order follows shuffle_questions (question-slot order) rather than
-    shuffle_answers (choice order, used for its rights in _shuffle_answers).
+    OR items and MT rights are both scrambled unconditionally, regardless of
+    shuffle_answers. The source format lists an ordering's items in true-answer
+    order, and habitually declares a matching question's lefts in the same
+    order as the rights they point at, so leaving either unscrambled prints
+    the answer key as the question — a diagonal A, B, C, ... down the page.
+    This is a deliberate departure from how MC/MA/MD treat that setting.
+
+    MT's left column becomes the exam's own numbered question slots (see the
+    HTML template) rather than a choice list, so it follows shuffle_questions.
     """
     if q.q_type == 'OR':
         random.shuffle(q.order_items)
-    elif q.q_type == 'MT' and shuffle_lefts:
-        random.shuffle(q.match_lefts)
+    elif q.q_type == 'MT':
+        random.shuffle(q.match_rights)
+        if shuffle_lefts:
+            random.shuffle(q.match_lefts)
 
 
 def _align_diagram_letters(q: Question) -> None:

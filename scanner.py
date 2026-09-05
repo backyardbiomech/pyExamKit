@@ -471,10 +471,16 @@ class Scanner(object):
                 }
         _key_csv_path = str(self.outdir / 'exam_key.csv')
         _skip_str = ','.join(str(n) for n in self.ignores) if self.ignores else ''
+        # Carry per-question points through from the loaded key. This file is
+        # advertised below as reusable in the Key File field, so dropping them
+        # here would silently regrade every question at the flat bubble value
+        # the next time it is used.
+        _point_values = self._key_data.get('point_values') if self._key_data else None
         try:
             save_key_file(_key_csv_path, {
                 'bubble_answers': _bubble_ans,
                 'open_questions': _open_qs,
+                'point_values': _point_values or {},
                 'metadata': {
                     'num_questions': self.quests,
                     'questions_to_skip': _skip_str,

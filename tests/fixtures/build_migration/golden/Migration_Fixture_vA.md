@@ -1,4 +1,4 @@
-# Migration Fixture — Version A (auto-generated 2026-09-04 18:23)
+# Migration Fixture — Version A (auto-generated 2026-09-05 08:05)
 
 MC
 image: testImage.png
@@ -33,11 +33,11 @@ MT
 [right2]left1: first left option
 [right2]left2: second left option
 [right1]left3: third left option
-right1: first right option correct for third left
+right4: fourth right option distractor
 right2: second right option correct for first and second left
 right3: third right option
-right4: fourth right option distractor
 right5: fifth right option distractor
+right1: first right option correct for third left
 
 OR
 6. This is an ordering question for new quizzes. It will show as a "top label", like "most superficial", a bottom label like "deepest", and a series of drag and drop options. They are simply put with numbers and order here.

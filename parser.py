@@ -354,8 +354,9 @@ def _parse_or(lines: list[str], image_paths: list[str], points: str | None,
     """Parse an ordering question block.
 
     Returns (question, warning). warning is set (and question is None) when
-    the block is structurally fine but can't fit the six-bubble answer sheet;
-    None/None falls back to parse_file's generic "could not parse" message.
+    the block is structurally fine but can't fit the six-bubble answer sheet,
+    or when its rank numbers aren't a clean 1..N sequence; None/None falls
+    back to parse_file's generic "could not parse" message.
     """
     if not lines:
         return None, None
@@ -391,6 +392,16 @@ def _parse_or(lines: list[str], image_paths: list[str], points: str | None,
     if len(items) < _OR_MIN_ITEMS:
         return None, (f"Block {q_index} in {fname}: ordering question has only {len(items)} "
                        f"item(s); an ordering needs at least {_OR_MIN_ITEMS}. Skipped.")
+
+    # Ranks must be exactly 1..N with no gaps or repeats. The key writer maps
+    # rank -> display letter by looking up every rank from 1 to N, so a bank
+    # numbered from 0, missing a number, or repeating one would otherwise
+    # raise KeyError partway through generating the exam.
+    ranks = [it.rank for it in items]
+    if ranks != list(range(1, len(items) + 1)):
+        return None, (f"Block {q_index} in {fname}: ordering question is numbered "
+                       f"{', '.join(str(r) for r in ranks)}; items must be numbered "
+                       f"1 to {len(items)} with no gaps or repeats. Skipped.")
 
     return Question(
         q_type='OR',

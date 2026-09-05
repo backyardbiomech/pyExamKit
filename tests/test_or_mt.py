@@ -75,16 +75,16 @@ class ParseMatching(unittest.TestCase):
 
 
 class ParserGuards(unittest.TestCase):
-    """The four structural guards that reject at parse time, each naming the
-    file and block number (the fifth guard, a post-trim MT rejection, can't
-    run until exam_builder trims -- see TrimMtRightsGuard below)."""
+    """The structural guards that reject at parse time, each naming the file
+    and block number (the post-trim MT rejection can't run until exam_builder
+    trims -- see TrimMtRightsGuard below)."""
 
     @classmethod
     def setUpClass(cls):
         cls.questions, cls.warnings = parse_file(GUARDS)
 
-    def test_four_bad_blocks_rejected_two_clean_ones_kept(self):
-        self.assertEqual(len(self.warnings), 4)
+    def test_bad_blocks_rejected_two_clean_ones_kept(self):
+        self.assertEqual(len(self.warnings), 7)
         self.assertEqual(len(self.questions), 2)
         self.assertEqual({q.q_type for q in self.questions}, {'OR', 'MT'})
 
@@ -110,6 +110,21 @@ class ParserGuards(unittest.TestCase):
         self.assertIn('guards.txt', msg)
         self.assertIn("'rightX'", msg)
         self.assertIn('no matching right entry', msg)
+
+    def test_or_ranks_must_be_one_through_n(self):
+        """Ranks that aren't a clean 1..N sequence are rejected at parse time.
+        build_key_data looks up every rank from 1 to N to map it to a display
+        letter, so a bank numbered from zero, missing a number, or repeating
+        one would otherwise raise KeyError partway through generating an exam
+        -- after the HTML and Markdown had already been written to disk."""
+        for block, bad_numbering in (('Block 7', '0, 1, 2'),
+                                      ('Block 8', '1, 2, 4'),
+                                      ('Block 9', '1, 2, 2')):
+            with self.subTest(block=block):
+                msg = next(w for w in self.warnings if block in w)
+                self.assertIn('guards.txt', msg)
+                self.assertIn(bad_numbering, msg)
+                self.assertIn('no gaps or repeats', msg)
 
     def test_or_at_six_item_ceiling_survives(self):
         or_q = next(q for q in self.questions if q.q_type == 'OR')
@@ -199,10 +214,10 @@ class DistributePoints(unittest.TestCase):
 class BuildRenderKeyRoundTrip(unittest.TestCase):
     """Full build -> render -> key pipeline on a small exam with one OR and
     one MT question. shuffle_questions/shuffle_answers are both off, so MT's
-    lefts/rights stay in source order and only OR's mandatory display
-    shuffle introduces randomness -- expected letters for OR are derived
-    from the built Question object itself rather than hardcoded, so this
-    test doesn't depend on a particular random seed."""
+    lefts stay in source order, but OR's items and MT's rights both shuffle
+    regardless -- expected letters for both are derived from the built
+    Question objects themselves rather than hardcoded, so this test doesn't
+    depend on a particular random seed."""
 
     @classmethod
     def setUpClass(cls):
@@ -241,14 +256,15 @@ class BuildRenderKeyRoundTrip(unittest.TestCase):
         pts = self.key_data['point_values']
         self.assertEqual([pts['Q001'], pts['Q002'], pts['Q003']], [0.34, 0.33, 0.33])
 
-    def test_mt_key_letters_source_order(self):
-        # shuffle_answers=False -> match_rights stays in declaration order:
-        # catA is declared before catB in basic.txt, so catA=index 0 ('A'),
-        # catB=index 1 ('B'), regardless of which left references which first.
+    def test_mt_key_letters_match_built_display_order(self):
+        # MT's rights are scrambled unconditionally, like OR's items, so the
+        # expected letters are derived from the built Question's own display
+        # order rather than hardcoded -- this test doesn't depend on a seed.
+        label_to_letter = {r.label: chr(ord('A') + i)
+                           for i, r in enumerate(self.mt_q.match_rights)}
         bubbles = self.key_data['bubble_answers']
-        self.assertEqual(bubbles['Q004'], 'B')  # term1 -> catB -> index 1
-        self.assertEqual(bubbles['Q005'], 'A')  # term2 -> catA -> index 0
-        self.assertEqual(bubbles['Q006'], 'B')  # term3 -> catB -> index 1
+        for i, left in enumerate(self.mt_q.match_lefts):
+            self.assertEqual(bubbles[f'Q{4 + i:03d}'], label_to_letter[left.correct_label])
 
     def test_mt_points_split_evenly(self):
         pts = self.key_data['point_values']
@@ -303,6 +319,47 @@ class OrItemsAlwaysShuffled(unittest.TestCase):
         # With 3! = 6 possible orderings and 20 draws, seeing more than one
         # distinct order is overwhelmingly likely if shuffling is happening.
         self.assertGreater(len(orders), 1)
+
+
+class MtRightsAlwaysShuffled(unittest.TestCase):
+    """MT rights scramble regardless of shuffle_answers, for the same reason
+    OR items do: banks habitually declare lefts in the same order as the
+    rights they point at, so an unscrambled MT prints a diagonal A, B, C
+    answer key down the page."""
+
+    def test_mt_rights_shuffle_with_shuffle_answers_off(self):
+        config = BuildConfig(
+            title='Shuffle Check', course='TEST', num_versions=1,
+            shuffle_questions=False, shuffle_answers=False,
+            exact_file=BASIC, default_points=1.0,
+        )
+        orders = set()
+        random.seed(1)
+        for _ in range(20):
+            versions, _ = ExamBuilder().build(config)
+            mt_q = next(q for q in versions[0].questions if q.q_type == 'MT')
+            orders.add(tuple(r.label for r in mt_q.match_rights))
+        self.assertGreater(len(orders), 1)
+
+    def test_parallel_bank_does_not_key_straight_down_the_alphabet(self):
+        """The regression this guards: a bank whose lefts reference rights in
+        declaration order (left1->r1, left2->r2, ...) used to key A, B, C on
+        every build with shuffle_answers off."""
+        bank = FIXTURE_DIR / 'mt_parallel.txt'
+        config = BuildConfig(
+            title='Parallel', course='TEST', num_versions=1,
+            shuffle_questions=False, shuffle_answers=False,
+            exact_file=bank, default_points=1.0,
+        )
+        keys = set()
+        random.seed(3)
+        for _ in range(20):
+            versions, warnings = ExamBuilder().build(config)
+            self.assertEqual(warnings, [])
+            data = build_key_data(versions[0], 1.0)
+            keys.add(tuple(data['bubble_answers'][f'Q{i:03d}'] for i in (1, 2, 3)))
+        self.assertGreater(len(keys), 1)
+        self.assertNotEqual(keys, {('A', 'B', 'C')})
 
 
 if __name__ == '__main__':
