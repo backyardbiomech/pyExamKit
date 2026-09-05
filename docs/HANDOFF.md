@@ -194,7 +194,7 @@ A full read of the merged branch against all three plan documents, looking for e
 
 `openQ.py`'s `{int(sid): ...}` sat outside any `try`, so a model response with a non-numeric label crashed the review window after the API call was already paid for. Fixed at the source, which is the tighter contract: `recognize_batch` knows exactly which labels it sent, so `_clean_response` keeps only those, coerces numeric answers to text, and drops structured values rather than stringifying a dict into a transcription field. `openQ._by_student_index` is the second line of defence, covering a hand-edited progress cache.
 
-**Still not fixed:** `.ipynb_checkpoints/*.py`, `scanner.pyc`, and `PDF_to_Images.app.zip` are tracked, those checkpoints now being the only live-looking Python still saying `pyExamScan_v2`.
+**Tracked cruft, removed.** Six `.ipynb_checkpoints/*.py` files (stale Jupyter copies, all differing from their live counterparts, and the last live-looking Python still saying `pyExamScan_v2`), `scanner.pyc` (Python 2.7 bytecode, in a repo requiring 3.11), and `PDF_to_Images.app.zip` (a 1.5 MB binary referenced by no document in the repo, from before PyMuPDF handled rasterizing). `.ipynb_checkpoints/` is now in `.gitignore`; `*.py[cod]` already was, but a gitignore never applied to a file already tracked, which is why the `.pyc` survived this long. All three are still in git history if any of them turns out to be wanted.
 
 ## Open question, deliberately parked
 
