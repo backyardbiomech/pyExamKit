@@ -405,8 +405,8 @@ def _md_block_for_sa(q: Question, num: int) -> str:
 
 def _strip_html(text: str) -> str:
     """Remove simple HTML tags and unescape HTML entities for markdown output."""
-    # Restore sa-blank spans to underscores before stripping all tags
-    text = re.sub(r'<span\s+class="sa-blank"[^>]*></span>', '________', text)
+    # Restore blank spans to underscores before stripping all tags
+    text = re.sub(r'<span\s+class="blank"[^>]*></span>', '________', text)
     text = re.sub(r'<[^>]+>', '', text)
     text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = text.replace('&nbsp;', ' ')

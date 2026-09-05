@@ -45,7 +45,7 @@ def _process_formatting(text: str) -> str:
             # Restore HTML tags we just inserted (bold/italic/sup/sub)
             seg = re.sub(r'&lt;(/?(?:strong|em|sup|sub|br))&gt;', r'<\1>', seg)
             # Convert 3+ underscores to a styled blank span (SA fill-in-the-blank)
-            seg = re.sub(r'_{3,}', '<span class="sa-blank"></span>', seg)
+            seg = re.sub(r'_{3,}', '<span class="blank"></span>', seg)
             result.append(seg)
     return ''.join(result)
 
