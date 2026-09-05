@@ -1,5 +1,5 @@
 """
-Cloud AI OCR for pyExamScan — uses the Anthropic Claude API to transcribe
+Cloud AI OCR for pyExamKit — uses the Anthropic Claude API to transcribe
 handwritten exam answers in batch.  Falls back gracefully when the
 ``anthropic`` library is not installed or no API key is configured.
 
@@ -25,11 +25,11 @@ import numpy as np
 
 # ── Persistent config ────────────────────────────────────────────────────────
 
-CONFIG_PATH = Path.home() / '.pyexamscan_config.json'
+CONFIG_PATH = Path.home() / '.pyexamkit_config.json'
 
 
 def load_config() -> dict:
-    """Load persisted settings (API key, etc.) from ~/.pyexamscan_config.json."""
+    """Load persisted settings (API key, etc.) from ~/.pyexamkit_config.json."""
     if CONFIG_PATH.exists():
         try:
             return json.loads(CONFIG_PATH.read_text())
@@ -39,7 +39,7 @@ def load_config() -> dict:
 
 
 def save_config(data: dict) -> None:
-    """Merge *data* into ~/.pyexamscan_config.json.  Key file is chmod 600."""
+    """Merge *data* into ~/.pyexamkit_config.json.  Key file is chmod 600."""
     existing = load_config()
     existing.update(data)
     CONFIG_PATH.write_text(json.dumps(existing, indent=2))

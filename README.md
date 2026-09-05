@@ -1,4 +1,6 @@
-# pyExamScan
+<img src="images/AppIcon.png" width="96" alt="pyExamKit icon">
+
+# pyExamKit
 
 A desktop app for building bubble-sheet exams from question banks, then scanning and grading them. Both halves — building and grading — share one file format and one download; there is nothing else to install.
 
@@ -6,34 +8,34 @@ A desktop app for building bubble-sheet exams from question banks, then scanning
 
 ## Installation
 
-Download the latest release for your system from the [Releases page](https://github.com/backyardbiomech/pyExamScan_v2/releases/latest).
+Download the latest release for your system from the [Releases page](https://github.com/backyardbiomech/pyExamKit/releases/latest).
 
 ### Windows
 
-1. Download `PyExamScan-Windows.zip` and extract it — right-click the file and choose **Extract All**. Keep the extracted `PyExamScan` folder together; `PyExamScan.exe` needs the files next to it to run.
-2. Double-click `PyExamScan.exe` inside the extracted folder.
+1. Download `PyExamKit-Windows.zip` and extract it — right-click the file and choose **Extract All**. Keep the extracted `PyExamKit` folder together; `PyExamKit.exe` needs the files next to it to run.
+2. Double-click `PyExamKit.exe` inside the extracted folder.
    - Windows may show a **SmartScreen** warning ("Windows protected your PC"). Click **More info**, then **Run anyway**. This appears because the app isn't code-signed, not because anything is wrong with it.
-3. On future launches, just double-click `PyExamScan.exe` again.
+3. On future launches, just double-click `PyExamKit.exe` again.
 
 ### Mac
 
-1. Download `PyExamScan-macOS.dmg` and open it.
-2. Drag `PyExamScan.app` into your **Applications** folder (or onto your Desktop).
+1. Download `PyExamKit-macOS.dmg` and open it.
+2. Drag `PyExamKit.app` into your **Applications** folder (or onto your Desktop).
 3. **Before opening**, open `Terminal` and remove the macOS quarantine flag. If you moved the app to Applications:
 
    ```bash
-   xattr -cr /Applications/PyExamScan.app
+   xattr -cr /Applications/PyExamKit.app
    ```
 
    If you left it on the Desktop instead:
 
    ```bash
-   xattr -cr ~/Desktop/PyExamScan.app
+   xattr -cr ~/Desktop/PyExamKit.app
    ```
 
    > **Why is this necessary?** macOS marks anything downloaded from the internet with a quarantine attribute and blocks unsigned apps that carry it. `xattr -cr` removes that attribute so Gatekeeper allows the app to run.
 
-4. Double-click `PyExamScan.app` to launch it. If you still see an "unidentified developer" warning, right-click the app icon, choose **Open**, then click **Open** in the dialog.
+4. Double-click `PyExamKit.app` to launch it. If you still see an "unidentified developer" warning, right-click the app icon, choose **Open**, then click **Open** in the dialog.
 
 ---
 

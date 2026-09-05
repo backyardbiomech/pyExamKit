@@ -629,7 +629,7 @@ class OpenQs(object):
     def _prompt_api_key(self) -> str:
         """
         Show a modal dialog asking the user to paste their Anthropic API key.
-        Saves it to ~/.pyexamscan_config.json and returns the key string.
+        Saves it to ~/.pyexamkit_config.json and returns the key string.
         Returns '' if the user cancels or leaves the field blank.
         """
         result = {'key': ''}
@@ -645,7 +645,7 @@ class OpenQs(object):
             dlg,
             text='An API key is required to use Claude for handwriting recognition.\n'
                  'Paste your key below. It will be saved to\n'
-                 '~/.pyexamscan_config.json (readable only by you).\n\n'
+                 '~/.pyexamkit_config.json (readable only by you).\n\n'
                  'Get a key at console.anthropic.com.',
             justify='left',
         ).pack(anchor='w', padx=16, pady=(0, 8))

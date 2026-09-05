@@ -275,7 +275,7 @@ def _parse_sa(lines: list[str], image_paths: list[str],
             # None starred → all full credit; some starred → starred=full, unstarred=partial
             is_correct = True if not any_starred else starred
             # Store answer text as-is (no HTML processing): SA answers are plain-text
-            # comparison values used by pyExamScan_v2; HTML-escaping them corrupts the match.
+            # comparison values used by pyExamKit; HTML-escaping them corrupts the match.
             answers.append(Answer(text=text, is_correct=is_correct))
 
     return Question(

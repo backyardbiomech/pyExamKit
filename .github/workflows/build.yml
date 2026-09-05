@@ -21,24 +21,24 @@ jobs:
         run: uv sync --group dev
 
       - name: Build .app with PyInstaller
-        run: uv run pyinstaller pyexamscan.spec
+        run: uv run pyinstaller pyexamkit.spec
 
       - name: Create DMG
         run: |
           brew install create-dmg
           create-dmg \
-            --volname "PyExamScan" \
+            --volname "PyExamKit" \
             --window-size 600 400 \
             --icon-size 128 \
             --app-drop-link 450 185 \
-            "PyExamScan-macOS.dmg" \
-            "dist/PyExamScan.app"
+            "PyExamKit-macOS.dmg" \
+            "dist/PyExamKit.app"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyExamScan-macOS
-          path: PyExamScan-macOS.dmg
+          name: PyExamKit-macOS
+          path: PyExamKit-macOS.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -54,16 +54,16 @@ jobs:
         run: uv sync --group dev
 
       - name: Build .exe with PyInstaller
-        run: uv run pyinstaller pyexamscan.spec
+        run: uv run pyinstaller pyexamkit.spec
 
       - name: Zip Windows build
-        run: Compress-Archive -Path dist\PyExamScan\* -DestinationPath PyExamScan-Windows.zip
+        run: Compress-Archive -Path dist\PyExamKit\* -DestinationPath PyExamKit-Windows.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyExamScan-Windows
-          path: PyExamScan-Windows.zip
+          name: PyExamKit-Windows
+          path: PyExamKit-Windows.zip
 
   release:
     needs: [build-macos, build-windows]
@@ -80,15 +80,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            PyExamScan-macOS/PyExamScan-macOS.dmg
-            PyExamScan-Windows/PyExamScan-Windows.zip
+            PyExamKit-macOS/PyExamKit-macOS.dmg
+            PyExamKit-Windows/PyExamKit-Windows.zip
           generate_release_notes: true
 
       - name: Delete artifacts after release
         uses: actions/github-script@v7
         with:
           script: |
-            const names = ['PyExamScan-macOS', 'PyExamScan-Windows'];
+            const names = ['PyExamKit-macOS', 'PyExamKit-Windows'];
             for (const name of names) {
               const { data } = await github.rest.actions.listArtifactsForRepo({
                 owner: context.repo.owner,

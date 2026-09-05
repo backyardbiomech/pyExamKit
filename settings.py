@@ -2,7 +2,7 @@ import numpy as np
 
 class Settings():
     '''
-    A class to store all the settings for pyExamScan
+    A class to store all the settings for pyExamKit
     '''
     def __init__(self):
         '''Initialize the settings'''

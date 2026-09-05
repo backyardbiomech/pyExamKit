@@ -1,5 +1,5 @@
 [project]
-name = "pyexamscan"
+name = "pyexamkit"
 version = "3.0.2"
 requires-python = ">=3.11"
 dependencies = [

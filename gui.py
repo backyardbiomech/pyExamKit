@@ -29,7 +29,7 @@ class TextRedirector(io.TextIOBase):
 
 class pyScanUI(ctk.CTkFrame):
     """
-    Main GUI frame for pyExamScan.
+    Main GUI frame for pyExamKit.
     """
 
     def __init__(self, parent):
@@ -445,7 +445,7 @@ class pyScanUI(ctk.CTkFrame):
                      font=ctk.CTkFont(size=14, weight='bold')).grid(
             row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky='w')
         ctk.CTkLabel(dlg,
-                     text='Your key is stored in ~/.pyexamscan_config.json (mode 600).\n'
+                     text='Your key is stored in ~/.pyexamkit_config.json (mode 600).\n'
                           'Get a key at console.anthropic.com.',
                      justify='left').grid(
             row=1, column=0, columnspan=3, padx=16, pady=(0, 8), sticky='w')

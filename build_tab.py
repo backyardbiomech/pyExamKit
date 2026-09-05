@@ -2,7 +2,7 @@
 build_tab.py
 
 customtkinter port of pyExamPaper's exam-builder window (its gui.py,
-PySide6/Qt), as a fourth tab in pyExamScan_v2's existing CTkTabview.
+PySide6/Qt), as a fourth tab in pyExamKit's existing CTkTabview.
 Reproduces its layout and behavior field-for-field. Deliberate departures
 from the original: validation failures log to the shared status box
 instead of a QMessageBox popup (this app has no messagebox usage
