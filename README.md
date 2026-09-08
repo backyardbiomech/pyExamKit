@@ -58,6 +58,12 @@ The **Build Exam** tab turns one or more plain-text question banks into a printa
 
 Shuffle question order and answer order independently, generate up to six lettered versions (A–F, the most the six-bubble answer sheet can encode) in one pass, and optionally force every version to draw the identical set of questions rather than a fresh random sample each time. An optional version-identifier question, placed at the start or end of the exam, adds a "fill in the bubble for version X" question so the scanner can tell versions apart automatically when grading.
 
+### Importing a Canvas quiz
+
+**Import QTI…**, beside **Add Pool File…**, turns a quiz you already built in Canvas into a question bank without retyping it. Export the quiz or item bank from Canvas as QTI, hand the app the `.zip`, and it writes a bank file, saves any images the questions use into a folder beside it, and adds the result as a pool. Canvas wraps both New Quizzes and classic quizzes in the same QTI 1.2 format, so either export works.
+
+Multiple choice, multiple answer, true/false, short answer, multiple dropdown, matching, and ordering all convert. Essay, numerical, fill-in-multiple-blanks, categorization, and hot spot questions have no place on a bubble sheet and are skipped — each one is named in the log, so the number of questions in the pool can be reconciled against the quiz it came from. Read the converted file before building an exam: Canvas stores question text as HTML, and anything that cannot survive as plain text, such as a table or a nested list, is flattened.
+
 ### Question bank format
 
 Each question is a blank-line-separated block of plain text: an optional two-letter type code on its own line (`MC` if omitted), an optional `image: filename.png` line, an optional point-value line like `(2 pts)`, then the numbered stem. These are the same files qtiConverter reads for Canvas, so one bank works for both.

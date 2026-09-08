@@ -196,6 +196,12 @@ A full read of the merged branch against all three plan documents, looking for e
 
 **Tracked cruft, removed.** Six `.ipynb_checkpoints/*.py` files (stale Jupyter copies, all differing from their live counterparts, and the last live-looking Python still saying `pyExamScan_v2`), `scanner.pyc` (Python 2.7 bytecode, in a repo requiring 3.11), and `PDF_to_Images.app.zip` (a 1.5 MB binary referenced by no document in the repo, from before PyMuPDF handled rasterizing). `.ipynb_checkpoints/` is now in `.gitignore`; `*.py[cod]` already was, but a gitignore never applied to a file already tracked, which is why the `.pyc` survived this long. All three are still in git history if any of them turns out to be wanted.
 
+## Added since the merge: Canvas QTI import
+
+The **Build Exam** tab gained an **Import QTI…** button on 2026-09-08, and `qti_import.py` behind it, converting a Canvas quiz export into a question bank the tab loads as a pool. It is independent of the phase 0-4 work and touches only `build_tab.py`'s pool section. The reasoning, the shape of Canvas's export, and what the two test fixtures each verify are in `docs/qti-import.md`. The one fact worth carrying forward without opening that file: **Canvas exports New Quizzes in the classic QTI 1.2 wrapper**, not QTI 2.1, so there is one reader for both quiz engines and no second one is needed.
+
+Not yet verified live: the button itself has never been clicked, because no session so far has had a working Tk install. The conversion is covered by twenty tests against two fixtures, and the tab's own wiring is not.
+
 ## Open question, deliberately parked
 
 `BIOL207/QuestionBanks/exam3Banks/ch24urin_level1.txt` contains an eleven-step ordering question. The answer sheet has six bubbles per question, and an ordering cannot be trimmed without changing what is asked, so it cannot go on paper. Options are splitting it at a natural seam, rewriting it as MC with whole orderings as the choices, or leaving it Canvas-only. **Brandon said to leave this for now.** It is a content decision, not a blocker, but it should be settled before BIOL 207 uses the feature.
