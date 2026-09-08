@@ -415,8 +415,10 @@ class BuildExamUI(ctk.CTkFrame):
         self._update_pool_totals()
 
     def _add_pool_files(self):
+        last_pool = self._pool_rows[-1]['filepath'] if self._pool_rows else ''
         paths = filedialog.askopenfilenames(
             title='Select pool file(s)',
+            initialdir=self._existing_dir(last_pool) or self._output_dir() or None,
             filetypes=[('Text/Markdown files', '*.txt *.md'), ('All files', '*.*')])
         if not paths:
             return
@@ -456,6 +458,8 @@ class BuildExamUI(ctk.CTkFrame):
     def _browse_exact(self):
         path = filedialog.askopenfilename(
             title='Select question file',
+            initialdir=(self._existing_dir(self.exact_entry.get())
+                        or self._output_dir() or None),
             filetypes=[('Text/Markdown files', '*.txt *.md'), ('All files', '*.*')])
         if not path:
             return
@@ -464,8 +468,24 @@ class BuildExamUI(ctk.CTkFrame):
         if not self.output_entry.get().strip():
             self.output_entry.insert(0, str(Path(path).parent))
 
+    def _existing_dir(self, text: str) -> str:
+        """Nearest existing directory at or above `text`, or '' if there is none."""
+        text = text.strip()
+        if not text:
+            return ''
+        candidate = Path(text).expanduser()
+        for path in (candidate, *candidate.parents):
+            if path.is_dir():
+                return str(path)
+        return ''
+
+    def _output_dir(self) -> str:
+        return self._existing_dir(self.output_entry.get())
+
     def _browse_output(self):
-        path = filedialog.askdirectory(title='Select output folder')
+        path = filedialog.askdirectory(
+            title='Select output folder',
+            initialdir=self._output_dir() or None)
         if not path:
             return
         self.output_entry.delete(0, 'end')
@@ -555,10 +575,12 @@ class BuildExamUI(ctk.CTkFrame):
     # -- config load/save ---------------------------------------------------
 
     def _load_config_file(self):
+        # macOS Tk crashes on multi-dot patterns like *.exam.json, so match on
+        # the real extension instead.
         path = filedialog.askopenfilename(
             title='Load Exam Config',
-            filetypes=[('Exam config files', '*.exam.json'), ('JSON files', '*.json'),
-                       ('All files', '*.*')])
+            initialdir=self._output_dir() or None,
+            filetypes=[('Exam config files', '*.json'), ('All files', '*.*')])
         if not path:
             return
         try:
@@ -572,8 +594,9 @@ class BuildExamUI(ctk.CTkFrame):
         suggested = f'{safe_name(title)}.exam.json'
         path = filedialog.asksaveasfilename(
             title='Save Exam Config', initialfile=suggested,
-            filetypes=[('Exam config files', '*.exam.json'), ('JSON files', '*.json'),
-                       ('All files', '*.*')])
+            initialdir=self._output_dir() or None,
+            defaultextension='.json',
+            filetypes=[('Exam config files', '*.json'), ('All files', '*.*')])
         if not path:
             return
         dest = Path(path)
