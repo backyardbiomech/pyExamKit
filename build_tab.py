@@ -28,6 +28,7 @@ from exam_builder import (BuildConfig, ExamBuilder, PoolConfig, answer_sheet_for
 from exam_config import load_config, save_config
 from exam_key_writer import save_key
 from parser import parse_file
+from qti_import import convert_qti_zip, peek_titles, summarize
 from renderer import ExamRenderer, safe_name
 
 VERSION_POSITION_LABELS = {'at end of exam': 'last', 'at start of exam': 'first'}
@@ -247,6 +248,7 @@ class BuildExamUI(ctk.CTkFrame):
         btn_row = ctk.CTkFrame(parent, fg_color='transparent')
         btn_row.pack(fill='x', anchor='w')
         ctk.CTkButton(btn_row, text='Add Pool File…', command=self._add_pool_files).pack(side='left')
+        ctk.CTkButton(btn_row, text='Import QTI…', command=self._import_qti).pack(side='left', padx=(8, 0))
 
         header = ctk.CTkFrame(parent, fg_color='transparent')
         header.pack(fill='x', pady=(6, 0))
@@ -435,6 +437,62 @@ class BuildExamUI(ctk.CTkFrame):
                     row['count_entry'].insert(0, str(n))
             except Exception:
                 row['in_bank_label'].configure(text='0')
+        self._update_pool_totals()
+
+    def _import_qti(self):
+        """Convert a Canvas QTI export into a bank file and add it as a pool.
+
+        The conversion is lossy in one direction only: question types the
+        answer sheet cannot hold are dropped, and every drop is named in the
+        log rather than passed over quietly, so the pool count in the row can
+        be reconciled against the quiz it came from.
+        """
+        zip_path = filedialog.askopenfilename(
+            title='Select a Canvas QTI export (.zip)',
+            initialdir=self._output_dir() or None,
+            filetypes=[('QTI export', '*.zip'), ('All files', '*.*')])
+        if not zip_path:
+            return
+        titles = peek_titles(Path(zip_path))
+        suggested = f'{safe_name(titles[0])}.txt' if titles else f'{Path(zip_path).stem}.txt'
+        out_path = filedialog.asksaveasfilename(
+            title='Save converted question bank as',
+            initialfile=suggested,
+            initialdir=self._output_dir() or str(Path(zip_path).parent),
+            defaultextension='.txt',
+            filetypes=[('Text files', '*.txt'), ('Markdown files', '*.md'),
+                       ('All files', '*.*')])
+        if not out_path:
+            return
+        try:
+            result = convert_qti_zip(Path(zip_path), Path(out_path))
+        except Exception as exc:
+            self.log_fn(f'Could not convert {Path(zip_path).name}:\n{exc}')
+            return
+
+        self.log_fn(f'Converted {Path(zip_path).name} → {Path(out_path).name}: '
+                    f'{summarize(result)}')
+        for warning in result.warnings:
+            self.log_fn(f'  WARNING: {warning}')
+        if result.images:
+            self.log_fn(f'  {len(result.images)} image(s) saved to '
+                        f'{Path(out_path).stem}_images/')
+        if not result.total:
+            self.log_fn('  Nothing converted, so no pool was added.')
+            return
+        self.log_fn('  Check the converted file before building: Canvas question '
+                    'text is HTML, and this flattens it to plain text.')
+
+        questions, warnings = parse_file(Path(out_path))
+        for warning in warnings:
+            self.log_fn(f'  WARNING: {warning}')
+        row = self._add_pool_row(out_path, count=10, points_str='')
+        row['in_bank_label'].configure(text=str(len(questions)))
+        if len(questions) < 10:
+            row['count_entry'].delete(0, 'end')
+            row['count_entry'].insert(0, str(len(questions)))
+        if not self.output_entry.get().strip():
+            self.output_entry.insert(0, str(Path(out_path).parent))
         self._update_pool_totals()
 
     def _collect_pool_row_data(self) -> list[dict]:
