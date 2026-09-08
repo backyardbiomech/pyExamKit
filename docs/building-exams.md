@@ -25,7 +25,7 @@ One case is *un*-shuffled on purpose. When every choice in a question is a singl
 
 **Use same questions across all versions** changes what "version" means. Left off, each version draws its own fresh random sample from the pools, so version B may ask about things version A never mentions. Turned on, all versions ask the identical set of questions and differ only in order. Same-questions versions are the ones to use when the versions have to be comparable to each other.
 
-**Add version identifier question** appends — or, set to first, prepends — a synthetic question that instructs each student to fill in the bubble for their version letter. That one bubble is what lets the scanner sort a mixed stack of sheets and grade each one against the right key, so turn it on any time you print more than one version. It occupies a question slot like any other question, but is worth zero points. The default is to make it the last question so student's can't easily find the version when passing out exams.
+**Add version identifier question** appends — or, set to first, prepends — a synthetic question that instructs each student to fill in the bubble for their version letter. That one bubble is what lets the scanner sort a mixed stack of sheets and grade each one against the right key, so turn it on any time you print more than one version. It occupies a question slot like any other question, but is worth zero points. The default is to make it the last question so students can't easily find the version when passing out exams.
 
 ## Output folder and what lands in it
 
@@ -49,7 +49,7 @@ This is what makes a build repeatable. Re-running a saved configuration draws a 
 
 The log at the bottom of the window is where the builder reports everything it could not do: bank blocks it could not parse, Canvas-only question types it skipped, matching questions whose correct answers exceed the sheet's six options, ordering questions that are too long or numbered wrong, and pools that came up short. None of these stop the build — you get an exam either way — so the question count on the printed page is the number to reconcile against what you expected.
 
-One warning deserves particular attention. If the exam needs more than **150 answer-sheet slots**, the log gives a warnin, and every question past 150 prints normally but has nowhere to be bubbled. Ordering, matching, and multiple dropdown questions each take one slot per item, so an exam of 90 questions can easily need 130 slots.
+One warning deserves particular attention. If the exam needs more than **150 answer-sheet slots**, the log gives a warning, and every question past 150 prints normally but has nowhere to be bubbled. Ordering, matching, and multiple dropdown questions each take one slot per item, so an exam of 90 questions can easily need 130 slots.
 
 ---
 
