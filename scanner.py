@@ -15,6 +15,7 @@ import init_functions
 import scan_functions
 import grade_functions
 from openQ import OpenQs
+from keyformat import load_key_file, save_key_file
 
 
 class Scanner(object):
@@ -64,10 +65,9 @@ class Scanner(object):
         self.version_question = version_question
         self.version_keys: dict[str, dict] = {}
         if version_key_paths:
-            from openQ import load_key_file as _lkf_ver
             for _ver, _vpath in version_key_paths.items():
                 if _vpath:
-                    _vkd = _lkf_ver(_vpath)
+                    _vkd = load_key_file(_vpath)
                     if _vkd:
                         self.version_keys[_ver.upper()] = _vkd
                     else:
@@ -75,7 +75,6 @@ class Scanner(object):
                               flush=True)
         self._key_data = None
         if key_file_path:
-            from openQ import load_key_file
             self._key_data = load_key_file(key_file_path)
             if self._key_data is None:
                 print(f'[Scanner] Warning: failed to load key file "{key_file_path}". '
@@ -455,7 +454,6 @@ class Scanner(object):
 
         # Save key CSV — bubble answers from key row 0 + open-ended coords/answers
         # This file can be loaded next time in the Key File field to skip re-scanning the key.
-        from openQ import save_key_file as _save_key_file
         _bubble_ans = {}
         for col in self.resdf.columns:
             if col.startswith('Q') and col[1:].isdigit():
@@ -473,10 +471,16 @@ class Scanner(object):
                 }
         _key_csv_path = str(self.outdir / 'exam_key.csv')
         _skip_str = ','.join(str(n) for n in self.ignores) if self.ignores else ''
+        # Carry per-question points through from the loaded key. This file is
+        # advertised below as reusable in the Key File field, so dropping them
+        # here would silently regrade every question at the flat bubble value
+        # the next time it is used.
+        _point_values = self._key_data.get('point_values') if self._key_data else None
         try:
-            _save_key_file(_key_csv_path, {
+            save_key_file(_key_csv_path, {
                 'bubble_answers': _bubble_ans,
                 'open_questions': _open_qs,
+                'point_values': _point_values or {},
                 'metadata': {
                     'num_questions': self.quests,
                     'questions_to_skip': _skip_str,
@@ -603,8 +607,7 @@ class Scanner(object):
             # Re-save key file with any answers the grader typed in during review
             if self.key_file_path:
                 try:
-                    from openQ import load_key_file as _lkf, save_key_file as _skf
-                    _kd = _lkf(self.key_file_path) or {}
+                    _kd = load_key_file(self.key_file_path) or {}
                     if not _kd:
                         print('[Scanner] Key file re-read returned empty — skipping '
                               'answer update to avoid overwriting existing data.',
@@ -615,7 +618,7 @@ class Scanner(object):
                             _oq['full'] = list(openQs.acceptable_answers[_qk])
                         if openQs.partial_credit_answers.get(_qk):
                             _oq['partial'] = list(openQs.partial_credit_answers[_qk])
-                    _skf(self.key_file_path, _kd)
+                    save_key_file(self.key_file_path, _kd)
                     print(f'[Scanner] Key file updated with graded answers → {self.key_file_path}', flush=True)
                 except Exception as _exc:
                     print(f'[Scanner] Could not update key file: {_exc}', flush=True)

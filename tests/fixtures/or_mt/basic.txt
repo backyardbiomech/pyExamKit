@@ -1,0 +1,15 @@
+OR
+1. Order these fabricated layers from **shallow** to deep.
+toplabel: shallow
+1: epidermis
+2: dermis
+3: hypodermis
+bottomlabel: deep
+
+MT
+2. Match each fabricated term with its category.
+[catB]term1: alpha
+[catA]term2: beta
+[catB]term3: gamma
+catA: first category
+catB: second category

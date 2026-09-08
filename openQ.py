@@ -11,6 +11,26 @@ from PIL import Image as PILImage, ImageDraw as PILImageDraw
 
 from ocr import attempt_ocr, suggest_grade
 import ai_ocr as _ai_ocr_mod
+from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
+                       _openq_sort_key)
+
+
+def _by_student_index(per_label: dict) -> dict:
+    """Re-key a label->text map by integer student row.
+
+    ai_ocr.recognize_batch already drops labels it never asked about, so this
+    is the second line of defence, covering a progress cache that has been
+    hand-edited or truncated. A bad label skips one transcription rather than
+    raising partway through building the review window.
+    """
+    out: dict = {}
+    for sid, text in per_label.items():
+        try:
+            out[int(sid)] = text
+        except (TypeError, ValueError):
+            print(f'[AI OCR] Skipping transcription with non-numeric label {sid!r}.',
+                  flush=True)
+    return out
 
 
 def load_acceptable_answers_file(path: str) -> tuple:
@@ -129,23 +149,6 @@ def _pil_to_tkphoto(pil_img, master=None):
     return tk.PhotoImage(**kwargs)
 
 
-def _openq_sort_key(k: str) -> tuple:
-    """Sort key for openQ_N labels so openQ_2 sorts before openQ_10,
-    and openQ_1A/openQ_1B sort between openQ_1 and openQ_2."""
-    suffix = k.rsplit('_', 1)[-1] if '_' in k else k
-    num_part = ''
-    alpha_part = suffix
-    for i, c in enumerate(suffix):
-        if c.isdigit():
-            num_part += c
-        else:
-            alpha_part = suffix[i:]
-            break
-    else:
-        alpha_part = ''
-    return (int(num_part) if num_part else 0, alpha_part.lower())
-
-
 def _load_aligned_arr(imgpath: str) -> 'np.ndarray':
     """
     Load a scan image (JPEG or PDF) and return the aligned numpy array.
@@ -204,291 +207,6 @@ def _load_aligned_arr_page(pdfpath: str, page_idx: int) -> 'np.ndarray':
         return _Image(tmp_path, _Settings()).aligned
     finally:
         Path(tmp_path).unlink(missing_ok=True)
-
-
-def load_key_file(path: str) -> dict | None:
-    """
-    Load an exam key file (JSON or CSV).
-    CSV files (.csv) are dispatched to load_key_csv().
-    JSON files return the parsed/normalised dict with keys:
-      bubble_answers, open_questions
-    Returns None on failure.
-    """
-    p = Path(path)
-    if not p.exists():
-        print(f'[KeyFile] Not found: {path}', flush=True)
-        return None
-    # Dispatch CSV format
-    if p.suffix.lower() == '.csv':
-        return load_key_csv(path)
-    try:
-        data = json.loads(p.read_text(encoding='utf-8'))
-        if not isinstance(data, dict):
-            raise ValueError('Root must be a JSON object')
-
-        # Normalise bubble answer keys: "Q1" / "1" → "Q001"
-        raw_bubble = data.get('bubble_answers', {})
-        norm_bubble: dict = {}
-        for k, v in raw_bubble.items():
-            k = str(k).strip()
-            if k.upper().startswith('Q'):
-                try:
-                    norm_bubble['Q' + format(int(k[1:]), '03d')] = str(v).strip()
-                    continue
-                except ValueError:
-                    pass
-            norm_bubble[k] = str(v).strip()
-        data['bubble_answers'] = norm_bubble
-
-        # Normalise open-question keys: "1" → "openQ_1"
-        raw_oq = data.get('open_questions', {})
-        norm_oq: dict = {}
-        for k, v in raw_oq.items():
-            k = str(k).strip()
-            if not k.startswith('openQ_'):
-                try:
-                    k = 'openQ_' + str(int(k))
-                except ValueError:
-                    k = 'openQ_' + k
-            norm_oq[k] = v
-        data['open_questions'] = norm_oq
-
-        return data
-    except Exception as exc:
-        print(f'[KeyFile] Failed to load {path}: {exc}', flush=True)
-        return None
-
-
-def load_key_csv(path: str) -> dict | None:
-    """
-    Load a CSV exam key file.
-
-    Wide format (one row per question — preferred):
-      type, question, page, x1, y1, x2, y2, answer, partial_answers
-      type is 'bubble' or 'open'.
-      answer       — the primary (full-credit) answer; pipe-separated for multiple
-      partial_answers — pipe-separated partial-credit answers (optional)
-
-    Tall/legacy format also accepted (one row per answer):
-      type is 'bubble', 'open_coords', 'open_full', or 'open_partial'
-
-    Rows with blank type or type starting with '#' are skipped.
-    Returns the same dict shape as load_key_file(), or None on failure.
-    """
-    def _norm_bubble_key(raw: str) -> str:
-        raw = raw.strip()
-        if raw.upper().startswith('Q'):
-            try:
-                return 'Q' + format(int(raw[1:]), '03d')
-            except ValueError:
-                pass
-        try:
-            return 'Q' + format(int(raw), '03d')
-        except ValueError:
-            return raw
-
-    def _norm_open_key(raw: str) -> str:
-        raw = raw.strip()
-        if raw.startswith('openQ_'):
-            return raw
-        try:
-            return 'openQ_' + str(int(raw))
-        except ValueError:
-            return 'openQ_' + raw
-
-    def _parse_pipe(cell: str) -> list[str]:
-        """Split a pipe-separated cell, strip each part, drop empties."""
-        return [v.strip() for v in cell.split('|') if v.strip()]
-
-    p = Path(path)
-    if not p.exists():
-        print(f'[KeyFile] Not found: {path}', flush=True)
-        return None
-
-    bubble_answers: dict = {}
-    open_questions: dict = {}
-    metadata: dict = {}
-    point_values: dict = {}
-
-    try:
-        with open(p, newline='', encoding='utf-8-sig') as fh:
-            reader = csv.DictReader(fh)
-            for row in reader:
-                row_type = (row.get('type') or '').strip().lower()
-                if not row_type or row_type.startswith('#'):
-                    continue
-
-                question = (row.get('question') or '').strip()
-                if not question:
-                    continue
-
-                # ── Metadata row ─────────────────────────────────────────
-                if row_type == 'metadata':
-                    value = (row.get('answer') or '').strip()
-                    if question == 'num_questions' and value:
-                        try:
-                            metadata['num_questions'] = int(value)
-                        except ValueError:
-                            pass
-                    elif question == 'questions_to_skip' and value:
-                        metadata['questions_to_skip'] = value
-                    continue
-
-                # ── Wide format ──────────────────────────────────────────
-                if row_type == 'bubble':
-                    answer = (row.get('answer') or row.get('value') or '').strip()
-                    bubble_answers[_norm_bubble_key(question)] = answer
-                    pts_str = (row.get('points') or '').strip()
-                    if pts_str:
-                        try:
-                            point_values[_norm_bubble_key(question)] = float(pts_str)
-                        except ValueError:
-                            pass
-
-                elif row_type == 'open':
-                    qk = _norm_open_key(question)
-                    if qk not in open_questions:
-                        open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
-                    # Coordinates (float-safe: CSV may store ints as "1.0")
-                    try:
-                        x1 = int(float(row.get('x1') or 0))
-                        y1 = int(float(row.get('y1') or 0))
-                        x2 = int(float(row.get('x2') or 0))
-                        y2 = int(float(row.get('y2') or 0))
-                        if any(c != 0 for c in (x1, y1, x2, y2)):
-                            open_questions[qk]['coords'] = [x1, y1, x2, y2]
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-                    # Page (float-safe)
-                    try:
-                        pv = (row.get('page') or '').strip()
-                        open_questions[qk]['page'] = max(1, int(float(pv))) if pv else 1
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-                    # Full-credit answers (pipe-separated)
-                    for ans in _parse_pipe(row.get('answer') or ''):
-                        if ans.lower() not in [a.lower() for a in open_questions[qk]['full']]:
-                            open_questions[qk]['full'].append(ans)
-                    # Partial-credit answers (pipe-separated)
-                    for ans in _parse_pipe(row.get('partial_answers') or ''):
-                        if ans.lower() not in [a.lower() for a in open_questions[qk]['partial']]:
-                            open_questions[qk]['partial'].append(ans)
-                    # Points
-                    pts_str = (row.get('points') or '').strip()
-                    if pts_str:
-                        try:
-                            point_values[_norm_open_key(question)] = float(pts_str)
-                        except ValueError:
-                            pass
-
-                # ── Tall/legacy format ───────────────────────────────────
-                elif row_type == 'open_coords':
-                    qk = _norm_open_key(question)
-                    if qk not in open_questions:
-                        open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
-                    try:
-                        x1 = int(float(row.get('x1') or 0))
-                        y1 = int(float(row.get('y1') or 0))
-                        x2 = int(float(row.get('x2') or 0))
-                        y2 = int(float(row.get('y2') or 0))
-                        if any(c != 0 for c in (x1, y1, x2, y2)):
-                            open_questions[qk]['coords'] = [x1, y1, x2, y2]
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-                    try:
-                        pv = (row.get('page') or '').strip()
-                        open_questions[qk]['page'] = max(1, int(float(pv))) if pv else 1
-                    except (ValueError, TypeError, OverflowError):
-                        pass
-
-                elif row_type == 'open_full':
-                    value = (row.get('value') or '').strip()
-                    if value:
-                        qk = _norm_open_key(question)
-                        if qk not in open_questions:
-                            open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
-                        if value.lower() not in [a.lower() for a in open_questions[qk]['full']]:
-                            open_questions[qk]['full'].append(value)
-
-                elif row_type == 'open_partial':
-                    value = (row.get('value') or '').strip()
-                    if value:
-                        qk = _norm_open_key(question)
-                        if qk not in open_questions:
-                            open_questions[qk] = {'full': [], 'partial': [], 'coords': None, 'page': 1}
-                        if value.lower() not in [a.lower() for a in open_questions[qk]['partial']]:
-                            open_questions[qk]['partial'].append(value)
-
-    except Exception as exc:
-        print(f'[KeyFile] Failed to load CSV {path}: {exc}', flush=True)
-        return None
-
-    blank_keys = [qk for qk, ans in bubble_answers.items() if not ans]
-    if blank_keys:
-        print(f'[KeyFile] WARNING: {len(blank_keys)} bubble question(s) have a blank answer '
-              f'in the key file — scan will likely produce incorrect results. '
-              f'Fix these before scanning: {", ".join(sorted(blank_keys))}', flush=True)
-
-    print(f'[KeyFile] Loaded CSV key: {len(bubble_answers)} bubble answer(s), '
-          f'{len(open_questions)} open question(s).', flush=True)
-    result = {'bubble_answers': bubble_answers, 'open_questions': open_questions}
-    if metadata:
-        result['metadata'] = metadata
-    if point_values:
-        result['point_values'] = point_values
-    return result
-
-
-def save_key_csv(path: str, data: dict) -> None:
-    """
-    Write a CSV exam key file in wide format (one row per question).
-    Columns: type, question, page, x1, y1, x2, y2, answer, partial_answers
-      metadata rows: type=metadata, question=field_name, answer=value
-      bubble rows:   type=bubble, answer=letter(s), all coordinate columns blank
-      open rows:     type=open, answer=pipe-separated full-credit answers,
-                     partial_answers=pipe-separated partial-credit answers
-    """
-    bubble = data.get('bubble_answers', {})
-    open_qs = data.get('open_questions', {})
-    meta = data.get('metadata', {})
-
-    with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
-        writer = csv.writer(fh)
-        writer.writerow(['type', 'question', 'page', 'x1', 'y1', 'x2', 'y2',
-                         'answer', 'partial_answers'])
-
-        # Metadata rows (num_questions, questions_to_skip)
-        if meta.get('num_questions'):
-            writer.writerow(['metadata', 'num_questions', '', '', '', '', '',
-                             meta['num_questions'], ''])
-        if meta.get('questions_to_skip'):
-            writer.writerow(['metadata', 'questions_to_skip', '', '', '', '', '',
-                             meta['questions_to_skip'], ''])
-
-        # Bubble answers (sorted by question key)
-        for qk in sorted(bubble.keys()):
-            writer.writerow(['bubble', qk, '', '', '', '', '', bubble[qk], ''])
-
-        # Open-ended questions (sorted numerically so openQ_2 precedes openQ_10)
-        for qk in sorted(open_qs.keys(), key=_openq_sort_key):
-            qdata = open_qs[qk]
-            page = qdata.get('page', 1) or 1
-            coords = qdata.get('coords')
-            if coords and len(coords) == 4:
-                x1, y1, x2, y2 = (int(c) for c in coords)
-            else:
-                x1, y1, x2, y2 = ('', '', '', '')
-            full_ans = '|'.join(qdata.get('full', []))
-            partial_ans = '|'.join(qdata.get('partial', []))
-            writer.writerow(['open', qk, page, x1, y1, x2, y2, full_ans, partial_ans])
-
-
-def save_key_file(path: str, data: dict) -> None:
-    """Write an exam key file. Dispatches to CSV or JSON based on file extension."""
-    if Path(path).suffix.lower() == '.csv':
-        save_key_csv(path, data)
-        return
-    Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')
 
 
 class OpenQs(object):
@@ -643,7 +361,7 @@ class OpenQs(object):
                     print(f'[AI OCR] Cache file: {_cp}', flush=True)
                     print('[AI OCR] Delete that file to force a fresh API run.', flush=True)
                 self._ai_texts = {
-                    qk: {int(sid): text for sid, text in per_q.items()}
+                    qk: _by_student_index(per_q)
                     for qk, per_q in _loaded_cache['ai_texts'].items()
                 }
                 for qk, kt in _loaded_cache.get('key_texts', {}).items():
@@ -692,7 +410,7 @@ class OpenQs(object):
                     ai_key_txt = batch.pop('0', '')
                     if ai_key_txt:
                         self.openQkeytext[qk] = ai_key_txt
-                    self._ai_texts[qk] = {int(sid): text for sid, text in batch.items()}
+                    self._ai_texts[qk] = _by_student_index(batch)
                     # Step 4b: re-sync acceptable_answers with the AI-read key text
                     # Only overwrite primary answer when NOT in key-file mode
                     if not self._key_file_mode:
@@ -929,7 +647,7 @@ class OpenQs(object):
     def _prompt_api_key(self) -> str:
         """
         Show a modal dialog asking the user to paste their Anthropic API key.
-        Saves it to ~/.pyexamscan_config.json and returns the key string.
+        Saves it to ~/.pyexamkit_config.json and returns the key string.
         Returns '' if the user cancels or leaves the field blank.
         """
         result = {'key': ''}
@@ -944,8 +662,8 @@ class OpenQs(object):
         tk.Label(
             dlg,
             text='An API key is required to use Claude for handwriting recognition.\n'
-                 'Paste your key below. It will be saved to\n'
-                 '~/.pyexamscan_config.json (readable only by you).\n\n'
+                 'Paste your key below. It will be saved in plain text to\n'
+                 '~/.pyexamkit_config.json, readable only by your account.\n\n'
                  'Get a key at console.anthropic.com.',
             justify='left',
         ).pack(anchor='w', padx=16, pady=(0, 8))
@@ -1899,6 +1617,9 @@ class KeyFileEditorDialog:
         # Internal data model
         self._bubble: dict = {}   # {qk: answer_str}
         self._open_qs: dict = {}  # {qk: {"full": [...], "partial": [...], "coords": [...] or None}}
+        # Per-question point values, carried through unedited — this dialog has
+        # no points UI, but must not silently drop them from a loaded key file.
+        self._point_values: dict = {}
 
         if path and Path(path).exists():
             data = load_key_file(path)
@@ -1913,6 +1634,7 @@ class KeyFileEditorDialog:
                         'coords': list(_c) if _c and len(_c) == 4 else None,
                         'page': int(qdata.get('page', 1) or 1),
                     }
+                self._point_values = dict(data.get('point_values', {}))
 
         self._build_ui()
 
@@ -2503,6 +2225,7 @@ class KeyFileEditorDialog:
                 'num_questions': _total,
                 'questions_to_skip': _skip_str,
             },
+            'point_values': dict(self._point_values),
         }
 
     def _save(self):
@@ -2583,6 +2306,10 @@ class KeyBuilderDialog:
         self._bubble: dict = {}
         # {qk: answer_str}
 
+        # Per-question point values, carried through unedited — this dialog has
+        # no points UI, but must not silently drop them from a loaded key file.
+        self._point_values: dict = {}
+
         self._current_page_idx: int = 0
         self._current_q_key: str | None = None
 
@@ -2599,6 +2326,7 @@ class KeyBuilderDialog:
                         'full': list(qdata.get('full', [])),
                         'partial': list(qdata.get('partial', [])),
                     }
+                self._point_values = dict(data.get('point_values', {}))
 
         self._build_ui()
 
@@ -3419,6 +3147,7 @@ class KeyBuilderDialog:
                     'num_questions': _total,
                     'questions_to_skip': _skip_str,
                 },
+                'point_values': dict(self._point_values),
             })
             self.saved_path = path
             self._status_var.set(f'Saved: {Path(path).name}')

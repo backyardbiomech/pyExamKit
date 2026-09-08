@@ -1,5 +1,5 @@
-# pyexamscan.spec
-# Build with: source .venv/bin/activate && python -m PyInstaller pyexamscan.spec -y
+# pyexamkit.spec
+# Build with: source .venv/bin/activate && python -m PyInstaller pyexamkit.spec -y
 # NOTE: use "python -m PyInstaller" (not bare "pyinstaller") to ensure the venv
 # Python is used for analysis; otherwise conda's Python may be picked up and
 # packages like customtkinter won't be found.
@@ -7,19 +7,16 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 a = Analysis(
-    ['pyExamScan_v2.py'],
+    ['pyExamKit.py'],
     pathex=['.'],
     binaries=[],
     datas=[
         ('images/', 'images'),
-        *collect_data_files('skimage'),
+        ('templates/', 'templates'),
         *collect_data_files('customtkinter'),
-        *collect_data_files('scipy'),
     ],
     hiddenimports=[
-        *collect_submodules('skimage'),
         *collect_submodules('pandas'),
-        *collect_submodules('scipy'),
         *collect_submodules('customtkinter'),
         'PIL._tkinter_finder',
         'fitz',
@@ -38,7 +35,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PyExamScan',
+    name='PyExamKit',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -49,6 +46,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='images/AppIcon.ico',
 )
 
 coll = COLLECT(
@@ -58,19 +56,19 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='PyExamScan',
+    name='PyExamKit',
 )
 
 # macOS .app bundle
 app = BUNDLE(
     coll,
-    name='PyExamScan.app',
-    icon=None,
-    bundle_identifier='com.pyexamscan.app',
+    name='PyExamKit.app',
+    icon='images/AppIcon.icns',
+    bundle_identifier='com.pyexamkit.app',
     info_plist={
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '3.0.0',
-        'CFBundleName': 'PyExamScan',
+        'CFBundleShortVersionString': '3.0.2',
+        'CFBundleName': 'PyExamKit',
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
     },

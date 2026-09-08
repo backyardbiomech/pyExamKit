@@ -6,6 +6,7 @@ from scanner import Scanner
 import customtkinter as ctk
 from tkinter import filedialog
 import ai_ocr
+from build_tab import BuildExamUI
 
 
 class TextRedirector(io.TextIOBase):
@@ -28,7 +29,7 @@ class TextRedirector(io.TextIOBase):
 
 class pyScanUI(ctk.CTkFrame):
     """
-    Main GUI frame for pyExamScan.
+    Main GUI frame for pyExamKit.
     """
 
     def __init__(self, parent):
@@ -50,6 +51,8 @@ class pyScanUI(ctk.CTkFrame):
         scan_tab   = tabs.add("Scan Exams")
         key_tab    = tabs.add("Build Key")
         regrade_tab = tabs.add("Re-grade")
+        build_tab  = tabs.add("Build Exam")
+        BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
 
         # ════════════════════════════════════════════════════════
         # TAB 1 — Scan Exams
@@ -442,8 +445,8 @@ class pyScanUI(ctk.CTkFrame):
                      font=ctk.CTkFont(size=14, weight='bold')).grid(
             row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky='w')
         ctk.CTkLabel(dlg,
-                     text='Your key is stored in ~/.pyexamscan_config.json (mode 600).\n'
-                          'Get a key at console.anthropic.com.',
+                     text='Your key is stored in plain text in ~/.pyexamkit_config.json,\n'
+                          'readable only by your account. Get a key at console.anthropic.com.',
                      justify='left').grid(
             row=1, column=0, columnspan=3, padx=16, pady=(0, 8), sticky='w')
 
@@ -499,7 +502,7 @@ class pyScanUI(ctk.CTkFrame):
     def _load_key_metadata(self, path: str):
         """Read metadata from a key file and populate num questions / skip fields."""
         try:
-            from openQ import load_key_file
+            from keyformat import load_key_file
             data = load_key_file(path)
             if data is None:
                 return

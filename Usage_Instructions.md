@@ -1,21 +1,8 @@
-# pyExamScan Usage Instructions
+# pyExamKit Usage Instructions
 
-pyExamScan has several modules, all accessible from the main control window. Currently, the software is not packaged as an app, so it must be started from the terminal. If you followed the Installation instructions carefully, you can start the app as follows:
+pyExamKit has several modules, all accessible as tabs in the main control window. See [README.md](README.md) for installation — once installed, launch `PyExamKit.app` (Mac) or `PyExamKit.exe` (Windows) like any other app to open the control window.
 
-1. Open your terminal or command line (on mac, cmd-space to search, find "terminal" and open the app).
-2. in Terminal, navigate to the folder you installed, 
-    
-    ```bash
-    cd ~/Desktop/pyexamscan_v2
-    ```
-    
-3. Run the program with 
-
-    ```bash
-    python pyExamScan_v2.py
-    ```
-    
-4. That will open a control window to load files and run the scanner.
+This document covers the **Build Key**, **Scan Exams**, and **Re-grade** tabs — making a key and grading scanned exams. For building an exam itself from question banks, see the **Build Exam** tab, described briefly in the README.
 
 ## Making your key
 ### Option 1 - fill in the bubbles:
@@ -38,7 +25,7 @@ pyExamScan has several modules, all accessible from the main control window. Cur
 |D|
 |FD|
 
-2. Launch pyExamScan using the instructions above
+2. Launch pyExamKit using the instructions above
 3. In the bottom panel, you can load the jpg of the blank answer sheet and select csv file you just created
     + If you have multiple versions of the test, enter the appropriate version letter (or leave it as A)
 4. Click the Make Key button. In the folder containing your key, you will now see a new jpg file. The Last Name should be filled in as "KEY" and the first name as "A" or whatever you changed the version to, and all of the bubbles should be filled in appropriately!

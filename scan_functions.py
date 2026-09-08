@@ -1,13 +1,23 @@
 import numpy as np
 import fnmatch
 import os
+import cv2
 import grade_functions
 from pathlib import Path
 from PIL import Image as PILImage
-from scipy.ndimage import median_filter, binary_erosion, binary_dilation
-from skimage.measure import label, regionprops
-from skimage.transform import warp, AffineTransform
-from skimage.color import rgb2gray
+
+
+def _rgb2gray_u8(img):
+    '''
+    Grayscale conversion matching skimage.color.rgb2gray's ITU-R 601-2 weights
+    (0.2125 R + 0.7154 G + 0.0721 B), then truncated to uint8 the way the old
+    code did with `(rgb2gray(img) * 255).astype(np.uint8)`. cv2.cvtColor's
+    default RGB2GRAY uses different (BT.601 luma) weights, which would shift
+    every threshold decision downstream, so this stays hand-rolled.
+    '''
+    coeffs = np.array([0.2125, 0.7154, 0.0721], dtype=np.float64)
+    gray = img.astype(np.float64) @ coeffs
+    return gray.astype(np.uint8)
 
 
 def imgReg(img, regPts, scan_settings):
@@ -17,16 +27,19 @@ def imgReg(img, regPts, scan_settings):
     regPts: (3,2) float64 array of (x,y) positions found in the scan
     Returns RGB uint8 ndarray aligned to the canonical template size.
     '''
-    tform = AffineTransform.from_estimate(
-        scan_settings.keyRegPts.astype(np.float64),
-        regPts.astype(np.float64),
+    # M maps canonical template points -> points found in the scan, i.e. it is
+    # already the output-to-input map that warpAffine needs, so it must be
+    # passed with WARP_INVERSE_MAP rather than inverted again.
+    M = cv2.getAffineTransform(
+        scan_settings.keyRegPts.astype(np.float32),
+        regPts.astype(np.float32),
     )
-    img_aligned = warp(img, tform,
-                       output_shape=scan_settings.sz,
-                       order=1,
-                       preserve_range=True,
-                       mode='constant',
-                       cval=255.0)
+    img_aligned = cv2.warpAffine(
+        img, M, (scan_settings.sz[1], scan_settings.sz[0]),
+        flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255, 255, 255),
+    )
     return img_aligned.astype(np.uint8)
 
 
@@ -37,31 +50,29 @@ def getRegPts(img, scan_settings):
     Returns (3,2) float32 array of (x,y) centroids, sorted [br, bl, tr].
     '''
     # Grayscale → median blur → threshold
-    gray = (rgb2gray(img) * 255).astype(np.uint8)
-    blurred = median_filter(gray, size=7)
-    # THRESH_BINARY_INV equivalent: dark dots become True
-    binary = blurred < scan_settings.volthresh
+    gray = _rgb2gray_u8(img)
+    blurred = cv2.medianBlur(gray, 7)
+    # THRESH_BINARY_INV equivalent: dark dots become foreground
+    mask = (blurred < scan_settings.volthresh).astype(np.uint8) * 255
 
     # Label connected components and sort by area descending
-    labeled = label(binary, connectivity=2)
-    props = sorted(regionprops(labeled), key=lambda r: r.area, reverse=True)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        mask, connectivity=8)
+    regions = sorted(range(1, num_labels),
+                      key=lambda i: stats[i, cv2.CC_STAT_AREA], reverse=True)
 
     pts = []
-    for region in props:
-        min_row, min_col, max_row, max_col = region.bbox
-        h = max_row - min_row
-        w = max_col - min_col
+    for i in regions:
+        x, y, w, h, area = stats[i]
         if h == 0:
             continue
         ar = w / h
         if ar > 1.2 or ar < 0.833:
             continue
-        area = region.area
         if (area > int(scan_settings.sz[1] * 1.2) or
                 area < int(scan_settings.sz[1] * 0.8)):
             continue
-        # centroid is (row, col); convert to float (x=col, y=row)
-        cy, cx = region.centroid
+        cx, cy = centroids[i]
         pts.append((cx, cy))
         if len(pts) == 3:
             break
@@ -89,8 +100,8 @@ def autothresh(aligned_img, scan_settings):
     aligned_img: RGB uint8 ndarray
     Returns binary uint8 ndarray (0/255) where 255 = filled region.
     '''
-    gray = (rgb2gray(aligned_img) * 255).astype(np.uint8)
-    blurred = median_filter(gray, size=15)
+    gray = _rgb2gray_u8(aligned_img)
+    blurred = cv2.medianBlur(gray, 15)
 
     threshdict = scan_settings.threshdict
     threshvals = np.full(4, np.nan)
@@ -103,14 +114,17 @@ def autothresh(aligned_img, scan_settings):
 
     v = np.median(threshvals)
     thresh = int(v * (1 - scan_settings.sigma))
-    # THRESH_BINARY_INV: pixels darker than thresh become True (filled regions)
-    binary = blurred < thresh
+    # THRESH_BINARY_INV: pixels darker than thresh become foreground (filled
+    # regions). Kept as a plain numpy compare rather than cv2.threshold,
+    # since THRESH_BINARY_INV treats pixels equal to thresh as foreground
+    # (<=) where the original code used a strict <.
+    mask = (blurred < thresh).astype(np.uint8) * 255
 
     kern_shape = scan_settings.kern.shape
-    struct = np.ones(kern_shape, dtype=bool)
-    eroded = binary_erosion(binary, structure=struct, iterations=3)
-    dilated = binary_dilation(eroded, structure=struct, iterations=3)
-    return dilated.astype(np.uint8) * 255
+    struct = cv2.getStructuringElement(cv2.MORPH_RECT, kern_shape)
+    eroded = cv2.erode(mask, struct, iterations=3)
+    dilated = cv2.dilate(eroded, struct, iterations=3)
+    return dilated
 
 
 def scanDots(img, areaDict, ignores, convDict):
@@ -119,7 +133,7 @@ def scanDots(img, areaDict, ignores, convDict):
     img: binary uint8 ndarray (0/255) or bool from autothresh
     Returns a dictionary of results keyed by area name.
     '''
-    binary_img = img > 0
+    binary_img = (img > 0).astype(np.uint8) * 255
 
     resDict = dict.fromkeys(areaDict, '-')
 
@@ -130,23 +144,21 @@ def scanDots(img, areaDict, ignores, convDict):
                 continue
         pt1, pt2 = v[0], v[1]
         # Extract region; numpy indexing is [rows, cols] = [y, x]
-        scanArea = binary_img[pt1[1]:pt2[1], pt1[0]:pt2[0]]
+        scanArea = np.ascontiguousarray(binary_img[pt1[1]:pt2[1], pt1[0]:pt2[0]])
 
         # Label connected components; filter out tiny regions (area < 10)
-        labeled = label(scanArea, connectivity=2)
-        props = [r for r in regionprops(labeled) if r.area >= 10]
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            scanArea, connectivity=8)
+        regions = [i for i in range(1, num_labels)
+                   if stats[i, cv2.CC_STAT_AREA] >= 10]
 
-        if not props:
+        if not regions:
             resDict[k] = '-'
         elif k[0] == 'Q':
             resDict[k] = ''
 
-        for region in props:
-            min_row, min_col, max_row, max_col = region.bbox
-            w = max_col - min_col   # horizontal extent (x direction)
-            h = max_row - min_row   # vertical extent  (y direction)
-            x = min_col             # left edge (x)
-            y = min_row             # top edge  (y)
+        for i in regions:
+            x, y, w, h, area = stats[i]
 
             if k[0] == 'F':
                 for lett, coord in convDict.items():
@@ -214,4 +226,3 @@ def savePdf(markeddir, outpdf, keyname):
     for page in filelist:
         outpdf.add_page()
         outpdf.image(page, 0, 0, 612)
-

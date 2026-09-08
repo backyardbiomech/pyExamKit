@@ -1,0 +1,8 @@
+MT
+1. Fabricated matching question whose lefts reference rights in declaration order.
+[r1]left1: alpha
+[r2]left2: beta
+[r3]left3: gamma
+r1: first category
+r2: second category
+r3: third category
