@@ -792,7 +792,6 @@ wheels = [
 
 [[package]]
 name = "pyexamkit"
-version = "3.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

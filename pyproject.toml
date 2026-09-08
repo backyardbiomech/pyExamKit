@@ -1,6 +1,6 @@
 [project]
 name = "pyexamkit"
-version = "3.0.2"
+dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = [
     "Pillow>=10.4",
@@ -16,8 +16,12 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { version_scheme = "no-guess-dev", local_scheme = "no-local-version" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]

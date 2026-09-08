@@ -4,7 +4,31 @@
 # Python is used for analysis; otherwise conda's Python may be picked up and
 # packages like customtkinter won't be found.
 
+import re
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+
+def _bundle_version():
+    """The release version, as macOS wants it: one to three integers.
+
+    The git tag is the only place a version number is written. hatch-vcs
+    turns it into the installed package's version at `uv sync` time, and
+    this reads it back, so a release cannot ship a version that disagrees
+    with the tag that built it. Off a tag, hatch-vcs appends a .postN.devN
+    suffix that CFBundleShortVersionString will not accept, so only the
+    leading numeric part is kept.
+    """
+    try:
+        from importlib.metadata import version
+        found = version('pyexamkit')
+    except Exception:
+        return '0.0.0'
+    match = re.match(r'^(\d+(?:\.\d+){0,2})', found)
+    return match.group(1) if match else '0.0.0'
+
+
+BUNDLE_VERSION = _bundle_version()
 
 a = Analysis(
     ['pyExamKit.py'],
@@ -67,7 +91,8 @@ app = BUNDLE(
     bundle_identifier='com.pyexamkit.app',
     info_plist={
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '3.0.2',
+        'CFBundleShortVersionString': BUNDLE_VERSION,
+        'CFBundleVersion': BUNDLE_VERSION,
         'CFBundleName': 'PyExamKit',
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
