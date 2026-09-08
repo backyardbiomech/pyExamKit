@@ -19,7 +19,7 @@ C. stratum lucidum
 D. stratum granulosum
 ```
 
-The **type line** is a two-letter code in capitals on a line by itself. Leave it out and the question is treated as multiple choice. The **image line** reads `image: filename.png`, with the path relative to the bank file, so `image: figures/skin.png` works for an images subfolder. The **points line** is a number in parentheses, and any words after the number are ignored, so `(2)`, `(2 pts)`, and `(2.5 points)` all set the same value. A point value written here overrides both the pool's Pts/Q column and the exam-wide default.
+The **type line** is a two-letter code in capitals on a line by itself. Leave it out and the question is treated as multiple choice. The **image line** reads `image: filename.png`, with the path relative to the bank file, so `image: figures/skin.png` works for an images subfolder. The **points line** is a number in parentheses, and any words after the number are ignored, so `(2)`, `(2 pts)`, and `(2 points)` all set the same value. A point value written here overrides both the pool's Pts/Q column and the exam-wide default.
 
 The stem begins with a digit followed by a period or a close parenthesis. The numbers do not have to be sequential or unique — the builder renumbers every question when it lays out the exam — so a bank assembled from several sources can leave its original numbering alone. Answer choices begin with a letter followed by a period or a close parenthesis, and a leading `*` marks a choice as correct.
 
@@ -27,7 +27,7 @@ A line beginning with `#` is a comment and is dropped before parsing, so you can
 
 ## Which types pyExamKit builds
 
-| Code | Question type | Bubbles used |
+| Code | Question type | Bubble rows used |
 |---|---|---|
 | `MC` | Multiple choice | 1 |
 | `MA` | Multiple answer (select all that apply) | 1 |

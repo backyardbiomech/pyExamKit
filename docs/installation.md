@@ -28,6 +28,10 @@ macOS marks anything downloaded from the internet with a quarantine attribute an
 
 Then double-click `PyExamKit.app` to launch it. If you still see an "unidentified developer" warning, right-click the app icon, choose **Open**, then click **Open** in the dialog.
 
+## What to print
+
+The `images/` folder in the repository holds ready-made answer sheet PDFs in 30, 60, 90, 120, and 150 question sizes, plus the Adobe Illustrator source. See [Answer sheets](answer-sheets.md) for which one to use and how far it can be modified.
+
 ## Running from source
 
 The packaged app is the supported way to run pyExamKit, but the repository runs directly under Python 3.11 or newer. [uv](https://docs.astral.sh/uv/) handles the environment:
@@ -50,9 +54,7 @@ uv run pyinstaller pyexamkit.spec
 
 The version number comes from the git tag by way of hatch-vcs, so a build made off a tag reports that tag and a build made between tags reports a development version.
 
-## What to print
 
-The `images/` folder in the repository holds ready-made answer sheet PDFs in 30, 60, 90, 120, and 150 question sizes, plus the Adobe Illustrator source. See [Answer sheets](answer-sheets.md) for which one to use and how far it can be modified.
 
 ---
 

@@ -14,7 +14,7 @@ Anything else on the page is fair game. You or the students can write anywhere, 
 
 ## Common modifications
 
-**Using a shorter exam than the sheet.** For a 50-question exam, print the 60-question sheet and cover questions 51 through 60 with a white box. Leave the outlined box on the right alone.
+**Using a shorter exam than the sheet.** For a 50-question exam, print the 60-question sheet and cover questions 51 through 60 with a white box. Leave the outlined box on the right alone. Students can use it for scratch paper if they want. Or just use the 150 question sheet. It will only scan what the key tells it to scan.
 
 **Reusing bubble rows for hand-graded work.** Say you have 20 multiple choice questions and a drawing worth up to 10 points. Leave questions 21 through 30 on the sheet and make them all 'A' on your key. Grade the drawings by hand, then fill in one 'A' per point earned — a dry erase marker or a wide Sharpie makes this fast, and you are allowed to color outside the bubble. Six points means six A's; leave the rest blank. Scan the stack and let the software do the arithmetic. A rubric can make each row mean something specific: 21 for labeling the x-axis, 22 for the y-axis, 23 for the first curve, and so on.
 
@@ -28,7 +28,7 @@ Anything else on the page is fair game. You or the students can write anywhere, 
 
 Handwriting is transcribed by a cloud model (see [Open-ended questions](open-ended-questions.md)), and the crop it is handed is only as clean as the page. Five things measurably help:
 
-Use a **single horizontal underline** rather than a full rectangle. Vertical box borders get read as parentheses. Print the line in **light gray** rather than black, so that under auto-contrast the line fades while pencil and ink stay dark. Make the blank **at least 6 to 8 cm wide**, so students write legibly and the whole word lands inside the crop. Put any printed label such as "Final Answer:" **above** the line rather than beside it, which leaves you a crop region containing nothing but handwriting. And when you draw that crop during grading setup, **crop tightly** — exclude the printed line and the label. Less extraneous ink is a better transcription.
+Use a **single horizontal underline** rather than a full rectangle. Vertical box borders may get read as parentheses. Or use a box to make sure students only put their answer in there. Print the line in **light gray** rather than black, so that under auto-contrast the line fades while pencil and ink stay dark. Make the blank **at least 6 to 8 cm wide**, so students write legibly and the whole word lands inside the crop. Put any printed label such as "Final Answer:" **above** the line rather than beside it, which leaves you a crop region containing nothing but handwriting. And when you draw that crop during grading setup, **crop tightly** — exclude the printed line and the label. Less extraneous ink is a better transcription.
 
 ---
 

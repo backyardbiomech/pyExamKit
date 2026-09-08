@@ -22,13 +22,13 @@ Check **Use AI OCR (Claude) for handwriting recognition**, then click **Configur
 
 ### What gets sent
 
-Cropped answer images and an anonymized index — a row number, not a name — are sent to Anthropic's servers. **No identifying information is sent unless it appears inside the crop box you drew**, which is the practical argument for cropping tightly around the writing and excluding the header of the sheet. If your institution's rules do not permit student work to leave your machine, leave AI OCR off and grade the images by eye; everything else in the workflow works the same way.
+Cropped answer images and an anonymized index — a row number, not a name — are sent to Anthropic's servers. **No identifying information is sent unless it appears inside the crop box you drew**, which is the practical argument for cropping tightly around the writing and excluding the header of the sheet.
 
 ## The grading window
 
 For each question, in turn, for each student, in turn, you see the crop from your key sheet on top and the crop from the student's sheet below, along with the transcription of each and a suggested grade.
 
-The key's transcription is editable. Fixing it there applies to every student from that point on, so a misread key is corrected once rather than fought with all the way down the stack.
+The **key's** transcription is editable. Fixing it there applies to every student from that point on, so a misread key is corrected once rather than fought with all the way down the stack.
 
 Four keys grade:
 
@@ -52,11 +52,11 @@ A similarity of **0.80 or better against any full-credit answer suggests correct
 
 Below that, the **partial credit strictness** slider decides. It is the similarity at which a near miss is offered partial credit instead of none — at 0, no near miss earns partial credit and only your explicitly listed partial answers do; at 1, nothing short of an exact match qualifies. The default of 0.50 is fairly generous. Separately, anything scoring **0.70 or better against an explicitly listed partial-credit answer** is suggested as partial.
 
-Two shortcuts skip the window entirely. A perfect-match suggestion is **accepted automatically** unless you check **Review perfect matches?**, which is the setting to use when you would rather see every sheet. And a partial suggestion is auto-accepted when it came from an explicit partial answer or from a strictness threshold you set, on the grounds that you already made that decision when you set it.
+Two shortcuts skip the window entirely. A perfect-match suggestion is **accepted automatically** unless you check **Review perfect matches?**, which is the setting to use when you would rather see every sheet. And a partial suggestion is auto-accepted when it came from an explicit partial answer in the key or from a strictness threshold you set, on the grounds that you already made that decision when you set it.
 
 Where no transcription came back at all, no grade is suggested and the answer is shown to you to grade by eye.
 
-The strictness slider also gates partial credit on select-all-that-apply bubble questions, described in [Scanning and grading](scanning-and-grading.md).
+Basically, no points are lost unless you confirm it, but points can be gained without confirmation (depending on settings).
 
 ## Interruptions
 

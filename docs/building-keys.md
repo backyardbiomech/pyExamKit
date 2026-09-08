@@ -2,7 +2,7 @@
 
 Grading needs a key: which bubble is correct for each question, where on the page each written answer sits, and what counts as a correct answer there. There are three ways to get one.
 
-**Build the exam here and the key comes with it.** The [Build Exam](building-exams.md) tab writes `Title_vA_key.csv` beside each version. Load it on the Scan Exams tab and you are done. This is the path to prefer, since the key cannot disagree with the exam it came from.
+**Build the exam here and the key comes with it.** The [Build Exam](building-exams.md) tab writes `Title_vA_key.csv` beside each version. Load it on the Scan Exams tab and you are done. This is the path to prefer, since the key cannot disagree with the exam it came from, as long as your exam files were correct.
 
 **Scan a sheet you filled in yourself.** The **Build Key** tab reads an answer sheet you bubbled by hand and turns it into the same CSV. Use this for an exam that was not built by this app.
 
@@ -12,7 +12,7 @@ Grading needs a key: which bubble is correct for each question, where on the pag
 
 Pick a mode, set the options that appear, and click **Build Key from Exam Scan…** to open the builder on your scanned sheet.
 
-**Blank sheet** mode is for marking where the written answers go, and nothing else. Load a blank sheet — a PDF, which can run to several pages — draw a box around each answer area, and save. You then type the bubble answers in afterward, either in this dialog or in a spreadsheet. This is the mode for an exam that is mostly or entirely written answers.
+**Blank sheet** mode is for marking where the **written answers** go, and nothing else. Load a blank sheet — a PDF, which can run to several pages, each of which needs the three registration circles— draw a box around each answer area, and save. You then type the bubble answers in afterward, either in this dialog or in a spreadsheet. This is the mode for an exam that is mostly or entirely written answers.
 
 **Instructor-filled sheet** mode is for a sheet you bubbled in as the key. Tell it **how many bubble questions** to read and **which question numbers to skip** — the rows you covered over or reused, comma-separated — and the bubbles are read automatically as each page loads. Then draw boxes around the written-answer areas and click **Scan handwriting (OCR)** to have your own handwriting transcribed into the answer fields. That last step needs [AI transcription configured](open-ended-questions.md#handwriting-transcription); check **Use AI OCR** and set an exam context to enable it.
 
@@ -20,9 +20,9 @@ Pick a mode, set the options that appear, and click **Build Key from Exam Scan�
 
 The builder shows the aligned page on the left and the question list on the right.
 
-Add pages with **Add page**, and step between them with the previous and next controls; a multi-page exam keeps each question's page number with its coordinates. Drag on the image to draw a box around an answer area, which creates a new open-ended question. **Undo last box** removes the most recent one — boxes cannot be edited in place, so a badly drawn box gets removed and redrawn.
+Add pages with **Add page**, and step between them with the previous and next controls; a multi-page exam keeps each question's page number with its coordinates. Drag on the image to draw a box around an answer area, which creates a new open-ended question. **Undo last box** removes the most recent one — boxes cannot be edited in place, so a badly drawn box needs to be removed and redrawn.
 
-Select any question in the list to edit it. An open-ended question has two answer lists: **full credit** answers and **partial credit** answers. Every string in either list is compared against what the student wrote, so this is where you decide how generous the grading is. Listing "stratum basale" and "basal layer" as full credit and "stratum basil" as partial is a perfectly ordinary key.
+Select any question in the list to edit it. An open-ended question has two answer lists: **full credit** answers and **partial credit** answers. Every string in either list is compared against what the student wrote, so this is where you decide how generous the grading is. Listing "stratum basale" and "basal layer" as full credit and "stratum basil" as partial is a perfectly ordinary key if you are a little generous with spelling.
 
 Bubble questions can be added, removed, and edited by hand in the same panel, which is how a blank-sheet key gets its multiple choice answers.
 
