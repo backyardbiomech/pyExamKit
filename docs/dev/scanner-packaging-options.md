@@ -1,6 +1,6 @@
 # pyExamScan_v2: what the scientific libraries actually do, and how to package this reliably
 
-*Written 2026-09-04, after an audit of all 6,327 lines. Companion to `pyExamPaper/docs/tauri-port-plan.md`.*
+*Written 2026-09-04, after an audit of all 6,327 lines, to decide how the scanner should be packaged. Option A was taken: `scan_functions.py` runs on OpenCV, scipy and scikit-image are gone from `pyproject.toml`, and the app ships as a PyInstaller bundle built in GitHub Actions.*
 
 ## The short answer
 
@@ -78,7 +78,7 @@ If the outputs match and the clean-machine install works, Option A is done and t
 
 ## Correction, after running the experiment (2026-09-04)
 
-The bundle prediction above was wrong. Phase 0 built both versions with PyInstaller to check: the scipy+scikit-image bundle is 222 MB, and the opencv-python-headless bundle is 253 MB, larger rather than smaller. The "40 MB wheel" figure was the download size, not what PyInstaller collects. Unpacked, `cv2` alone accounts for 118 MB: a 40 MB `cv2.abi3.so` plus a full video-codec stack this project never calls into — `libavcodec`, `libx265`, `libaom`, `libSvtAv1Enc`, `librav1e`, `libavformat`, even `libtesseract`. The headless variant strips the GUI/window bindings, as expected, but "headless" does not mean "codec-free," and there is no way to select individual OpenCV modules from the prebuilt wheel. The functional case for Option A is unaffected — the rewrite still produced byte-identical grading output and PyInstaller still built and ran cleanly — but the size argument in the recommendation below does not hold. If the extra ~30 MB ever matters, Option B (hand-rolled numpy) or a source build of OpenCV limited to `imgproc` are the ways to claw it back; neither was attempted here. Full numbers are in `docs/HANDOFF.md`'s phase 0 result section.
+The bundle prediction above was wrong. Phase 0 built both versions with PyInstaller to check: the scipy+scikit-image bundle is 222 MB, and the opencv-python-headless bundle is 253 MB, larger rather than smaller. The "40 MB wheel" figure was the download size, not what PyInstaller collects. Unpacked, `cv2` alone accounts for 118 MB: a 40 MB `cv2.abi3.so` plus a full video-codec stack this project never calls into — `libavcodec`, `libx265`, `libaom`, `libSvtAv1Enc`, `librav1e`, `libavformat`, even `libtesseract`. The headless variant strips the GUI/window bindings, as expected, but "headless" does not mean "codec-free," and there is no way to select individual OpenCV modules from the prebuilt wheel. The functional case for Option A is unaffected — the rewrite still produced byte-identical grading output and PyInstaller still built and ran cleanly — but the size argument in the recommendation below does not hold. If the extra ~30 MB ever matters, Option B (hand-rolled numpy) or a source build of OpenCV limited to `imgproc` are the ways to claw it back; neither was attempted here. Both figures are unpacked PyInstaller output measured on macOS.
 
 ## Two smaller notes
 

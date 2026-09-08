@@ -1,6 +1,6 @@
 # Ordering (OR) and matching (MT) questions on paper exams
 
-*Written 2026-09-04. A feature for the merged app, to be built after the phase 0 packaging experiment and alongside or before the full merge. Depends on `keyformat.py` from phase 1 of `merge-and-package-plan.md`.*
+*Written 2026-09-04, as the design for OR and MT support before it was built. Implemented since; `parser.py`, `exam_builder.py`, and `exam_key_writer.py` are the code it describes, and `docs/question-bank-format.md` is the user-facing account of the result.*
 
 ## Verdict
 
