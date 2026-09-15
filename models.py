@@ -37,7 +37,7 @@ class MatchRight:
 @dataclass
 class Question:
     q_type: str               # 'MC', 'MA', 'MD', 'MD_EXPANDED', 'OR', 'MT'
-    text: str                 # question stem (may contain inline HTML/MathJax)
+    text: str                 # question stem (may contain inline HTML and $...$ math)
     answers: list[Answer] = field(default_factory=list)      # MC and MA
     dropdowns: list[Dropdown] = field(default_factory=list)  # MD only
     order_items: list[OrderItem] = field(default_factory=list)    # OR only

@@ -36,7 +36,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('images/', 'images'),
-        ('templates/', 'templates'),
         *collect_data_files('customtkinter'),
     ],
     hiddenimports=[

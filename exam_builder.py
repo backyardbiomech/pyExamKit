@@ -15,6 +15,12 @@ from models import Answer, ExamVersion, Question
 from parser import parse_file
 
 
+# Point sizes behind the Build Exam tab's font size choice, smallest first.
+# Medium is the size the HTML exam printed at, so a default build matches
+# the exams printed before the PDF output existed.
+FONT_SIZES = {'smaller': 9, 'small': 10, 'medium': 11, 'large': 13, 'larger': 16}
+
+
 @dataclass
 class PoolConfig:
     filepath: Path
@@ -35,6 +41,7 @@ class BuildConfig:
     version_question_position: str = 'last'  # 'last' or 'first'
     default_points: float = 1.0             # fallback points per question if not set in source
     same_questions: bool = False            # if True, all versions draw from the same question sample
+    font_size: str = 'medium'               # a FONT_SIZES key
 
 
 class BuildError(Exception):

@@ -16,6 +16,8 @@ from parser import parse_file
 from exam_builder import BuildConfig, ExamBuilder, _trim_mt_rights
 from exam_key_writer import _distribute_points, build_key_data
 from models import MatchLeft, MatchRight, Question
+import fitz
+
 from renderer import ExamRenderer
 
 FIXTURE_DIR = Path(__file__).parent / 'fixtures' / 'or_mt'
@@ -232,7 +234,7 @@ class BuildRenderKeyRoundTrip(unittest.TestCase):
         cls.or_q = next(q for q in cls.version.questions if q.q_type == 'OR')
         cls.mt_q = next(q for q in cls.version.questions if q.q_type == 'MT')
         cls.key_data = build_key_data(cls.version, config.default_points)
-        cls.html_path = ExamRenderer().to_html(cls.version, cls.tmpdir, 1, config.default_points)
+        cls.pdf_path, _ = ExamRenderer().to_pdf(cls.version, cls.tmpdir, 1, config.default_points)
         cls.md_path = ExamRenderer().to_markdown(cls.version, cls.tmpdir)
 
     @classmethod
@@ -270,14 +272,17 @@ class BuildRenderKeyRoundTrip(unittest.TestCase):
         pts = self.key_data['point_values']
         self.assertEqual([pts['Q004'], pts['Q005'], pts['Q006']], [0.34, 0.33, 0.33])
 
-    def test_html_contains_lettered_rows_and_slots(self):
-        html = self.html_path.read_text(encoding='utf-8')
-        self.assertIn('Questions 1', html)  # OR range header
-        self.assertIn('shallow', html)
-        self.assertIn('deep', html)
-        self.assertIn('(Question 4)', html)  # MT's first slot
-        self.assertIn('alpha', html)  # MT right-side text shown in the lettered row
-        self.assertIn('first category', html)
+    def test_pdf_contains_lettered_rows_and_slots(self):
+        # Charis SIL prints "fi" as one ligature glyph; expand it back to letters.
+        flags = fitz.TEXTFLAGS_TEXT & ~fitz.TEXT_PRESERVE_LIGATURES
+        with fitz.open(self.pdf_path) as doc:
+            text = ' '.join(page.get_text(flags=flags) for page in doc)
+        self.assertIn('Questions 1', text)  # OR range header
+        self.assertIn('shallow', text)
+        self.assertIn('deep', text)
+        self.assertIn('(Question 4)', text)  # MT's first slot
+        self.assertIn('alpha', text)  # MT left-side text shown in its slot
+        self.assertIn('first category', text)  # MT right-side text shown in the lettered row
 
     def test_markdown_round_trips_to_equivalent_structure(self):
         reparsed, warnings = parse_file(self.md_path)

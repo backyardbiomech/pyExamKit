@@ -17,16 +17,18 @@ root — see tests/test_build_tab_logic.py.
 """
 from __future__ import annotations
 
+import dataclasses
 import traceback
 from pathlib import Path
 
 import customtkinter as ctk
 from tkinter import filedialog
 
-from exam_builder import (BuildConfig, ExamBuilder, PoolConfig, answer_sheet_for,
-                          slot_count)
-from exam_config import load_config, save_config
+from exam_builder import (FONT_SIZES, BuildConfig, ExamBuilder, PoolConfig,
+                          answer_sheet_for, slot_count)
+from exam_config import load_config, load_versions, save_config
 from exam_key_writer import save_key
+from models import ExamVersion
 from parser import parse_file
 from qti_import import convert_qti_zip, peek_titles, summarize
 from renderer import ExamRenderer, safe_name
@@ -75,10 +77,12 @@ def compute_pool_totals(rows: list[dict], default_points: float) -> tuple[int, f
 
 
 def validate_build_fields(*, title: str, output_folder: str, mode: str,
-                           exact_path: str, pool_rows: list[dict]) -> str | None:
+                           exact_path: str, pool_rows: list[dict],
+                           reprint: bool = False) -> str | None:
     """mode: 'exact' or 'pools'. pool_rows: [{'filepath': str,
     'count_text': str, 'points_text': str}, ...], only consulted when
-    mode == 'pools'.
+    mode == 'pools'. reprint: printing an exam saved in a config, whose
+    questions are in the config itself, so no source file is checked.
 
     Returns the first validation failure, matching pyExamPaper's exact
     wording and checking order, or None if everything passes. Touches the
@@ -88,6 +92,8 @@ def validate_build_fields(*, title: str, output_folder: str, mode: str,
         return "Please enter an exam title."
     if not output_folder.strip():
         return "Please select an output folder."
+    if reprint:
+        return None
 
     if mode == 'exact':
         if not exact_path.strip():
@@ -129,7 +135,8 @@ def build_config_from_fields(*, title: str, course: str, num_versions: int,
                               shuffle_questions: bool, shuffle_answers: bool,
                               mode: str, exact_path: str, pool_rows: list[dict],
                               version_question: bool, version_question_position: str,
-                              default_points: float, same_questions: bool) -> BuildConfig:
+                              default_points: float, same_questions: bool,
+                              font_size: str = 'medium') -> BuildConfig:
     """Mirrors ExamCreatorWindow._collect_config's field construction,
     including its blank-title-becomes-'Untitled' fallback (harmless when
     called from the generate path, where title is already validated
@@ -144,6 +151,7 @@ def build_config_from_fields(*, title: str, course: str, num_versions: int,
         version_question_position=version_question_position,
         default_points=default_points,
         same_questions=same_questions,
+        font_size=font_size,
     )
     if mode == 'exact':
         kwargs['exact_file'] = Path(exact_path) if exact_path.strip() else None
@@ -183,6 +191,7 @@ class BuildExamUI(ctk.CTkFrame):
         self.log_fn = log_fn
         self._source_mode = ctk.StringVar(value='exact')
         self._pool_rows: list[dict] = []
+        self._saved_versions: list[ExamVersion] = []
         self.pack(fill='both', expand=True)
         self._build_ui()
 
@@ -324,6 +333,13 @@ class BuildExamUI(ctk.CTkFrame):
                                                     width=140, state='disabled')
         self.version_pos_menu.pack(side='left', padx=(8, 0))
 
+        font_row = ctk.CTkFrame(frame, fg_color='transparent')
+        font_row.grid(row=7, column=0, columnspan=3, sticky='w', pady=2)
+        ctk.CTkLabel(font_row, text='Font size:').pack(side='left', padx=(0, 6))
+        self.font_size_menu = ctk.CTkOptionMenu(font_row, values=list(FONT_SIZES), width=110)
+        self.font_size_menu.set('medium')
+        self.font_size_menu.pack(side='left')
+
     def _build_output_section(self, parent):
         frame = ctk.CTkFrame(parent, fg_color='transparent')
         frame.pack(fill='x', pady=(0, 4))
@@ -336,9 +352,17 @@ class BuildExamUI(ctk.CTkFrame):
     def _build_config_buttons(self, parent):
         frame = ctk.CTkFrame(parent, fg_color='transparent')
         frame.pack(fill='x', pady=(0, 4), anchor='w')
-        ctk.CTkButton(frame, text='Load Config…', command=self._load_config_file).pack(
-            side='left', padx=(0, 8))
-        ctk.CTkButton(frame, text='Save Config…', command=self._save_config_file).pack(side='left')
+        ctk.CTkButton(frame, text='Load Config…', command=self._load_config_file).grid(
+            row=0, column=0, padx=(0, 8), sticky='w')
+        ctk.CTkButton(frame, text='Save Config…', command=self._save_config_file).grid(
+            row=0, column=1, sticky='w')
+
+        self.reprint_var = ctk.BooleanVar(value=False)
+        self._reprint_check = ctk.CTkCheckBox(
+            frame, text='Reprint the saved exam (same questions, order, and answer keys)',
+            variable=self.reprint_var)
+        self._reprint_check.grid(row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        self._reprint_check.grid_remove()
 
     def _build_generate_button(self, parent):
         ctk.CTkButton(parent, text='Generate Exam', height=36, font=ctk.CTkFont(weight='bold'),
@@ -564,9 +588,11 @@ class BuildExamUI(ctk.CTkFrame):
         mode = self._source_mode.get()
         exact_path = self.exact_entry.get()
         pool_rows = self._collect_pool_row_data()
+        reprint = self.reprint_var.get() and bool(self._saved_versions)
 
         error = validate_build_fields(title=title, output_folder=output_folder, mode=mode,
-                                       exact_path=exact_path, pool_rows=pool_rows)
+                                       exact_path=exact_path, pool_rows=pool_rows,
+                                       reprint=reprint)
         if error:
             self.log_fn(error)
             return
@@ -586,16 +612,23 @@ class BuildExamUI(ctk.CTkFrame):
             mode=mode, exact_path=exact_path, pool_rows=pool_rows,
             version_question=self.version_q_var.get(), version_question_position=version_position,
             default_points=default_points, same_questions=self.same_questions_var.get(),
+            font_size=self.font_size_menu.get(),
         )
         output_path = Path(output_folder)
 
-        self.log_fn('Parsing question sources…')
         try:
-            builder = ExamBuilder()
             renderer = ExamRenderer()
-            versions, warnings = builder.build(config)
-            for w in warnings:
-                self.log_fn(f'  WARNING: {w}')
+            if reprint:
+                self.log_fn('Reprinting the exam saved in the config; source files, counts, '
+                            'and shuffle settings are not used.')
+                versions = [dataclasses.replace(v, title=config.title, course=config.course)
+                            for v in self._saved_versions]
+                config.num_versions = len(versions)
+            else:
+                self.log_fn('Parsing question sources…')
+                versions, warnings = ExamBuilder().build(config)
+                for w in warnings:
+                    self.log_fn(f'  WARNING: {w}')
             self.log_fn(f'Building {len(versions)} version(s)…')
             total_versions = len(versions)
             for version in versions:
@@ -609,8 +642,11 @@ class BuildExamUI(ctk.CTkFrame):
                               else 'TOO LARGE for any answer sheet')
                 self.log_fn(f'\n  Version {v_letter} ({len(version.questions)} questions, '
                             f'{slots} answer-sheet slots — {sheet_note})')
-                html_path = renderer.to_html(version, output_path, total_versions, config.default_points)
-                self.log_fn(f'    HTML  → {html_path.name}')
+                pdf_path, pdf_warnings = renderer.to_pdf(version, output_path, total_versions,
+                                                         config.default_points, config.font_size)
+                self.log_fn(f'    PDF   → {pdf_path.name}')
+                for w in pdf_warnings:
+                    self.log_fn(f'      WARNING: {w}')
                 md_path = renderer.to_markdown(version, output_path)
                 self.log_fn(f'    MD    → {md_path.name}')
                 key_name = f'{safe_name(version.title)}_v{v_letter}_key.csv'
@@ -618,12 +654,16 @@ class BuildExamUI(ctk.CTkFrame):
                 save_key(version, key_path, config.default_points)
                 self.log_fn(f'    Key   → {key_path.name}')
 
+            # The config records the exam as printed, which is the only way to
+            # reprint it later with the same keys, so a failed save is logged.
+            config_name = f'{safe_name(config.title)}.exam.json'
             try:
-                config_name = f'{safe_name(config.title)}.exam.json'
-                save_config(config, output_path, output_path / config_name)
+                save_config(config, output_path, output_path / config_name, versions)
                 self.log_fn(f'    Config → {config_name}')
-            except Exception:
-                pass  # Non-fatal, matches the original.
+            except Exception as exc:
+                self.log_fn(f'    WARNING: config not saved, so this exam cannot be '
+                            f'reprinted from it: {exc}')
+            self._set_saved_versions(versions, reprint=reprint)
 
             self.log_fn('\nDone.')
             self.log_fn(f'\nOutput saved to: {self.output_entry.get().strip()}')
@@ -644,6 +684,7 @@ class BuildExamUI(ctk.CTkFrame):
         try:
             config, output_folder = load_config(Path(path))
             self._populate_from_config(config, output_folder)
+            self._set_saved_versions(load_versions(Path(path)), reprint=True)
         except Exception as exc:
             self.log_fn(f'Could not load config:\n{exc}')
 
@@ -673,11 +714,27 @@ class BuildExamUI(ctk.CTkFrame):
                     self.version_pos_menu.get(), 'last'),
                 default_points=self._parse_default_points(),
                 same_questions=self.same_questions_var.get(),
+                font_size=self.font_size_menu.get(),
             )
             output_folder = Path(self.output_entry.get().strip() or '.')
-            save_config(config, output_folder, dest)
+            save_config(config, output_folder, dest,
+                        self._saved_versions if self.reprint_var.get() else None)
         except Exception as exc:
             self.log_fn(f'Could not save config:\n{exc}')
+
+    def _set_saved_versions(self, versions: list[ExamVersion], reprint: bool):
+        """Remember an exam that can be reprinted, and show the reprint box.
+
+        A loaded config's exam starts checked, since reprinting is why the
+        config was loaded. An exam just built starts unchecked, so clicking
+        Generate again still draws a fresh sample, as it always has.
+        """
+        self._saved_versions = versions
+        self.reprint_var.set(reprint and bool(versions))
+        if versions:
+            self._reprint_check.grid()
+        else:
+            self._reprint_check.grid_remove()
 
     def _populate_from_config(self, config: BuildConfig, output_folder: Path):
         self.title_entry.delete(0, 'end')
@@ -694,6 +751,7 @@ class BuildExamUI(ctk.CTkFrame):
             VERSION_POSITION_VALUES.get(config.version_question_position, 'at end of exam'))
         self.default_pts_entry.delete(0, 'end')
         self.default_pts_entry.insert(0, str(config.default_points))
+        self.font_size_menu.set(config.font_size)
 
         out_str = str(output_folder) if str(output_folder) not in ('', '.') else ''
         self.output_entry.delete(0, 'end')
