@@ -16,8 +16,8 @@ from parser import parse_file
 
 
 # Point sizes behind the Build Exam tab's font size choice, smallest first.
-# Medium is the size the HTML exam printed at, so a default build matches
-# the exams printed before the PDF output existed.
+# Medium is the size the exam printed at before the size could be chosen,
+# so a default build matches exams printed earlier.
 FONT_SIZES = {'smaller': 9, 'small': 10, 'medium': 11, 'large': 13, 'larger': 16}
 
 

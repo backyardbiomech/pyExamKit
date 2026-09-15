@@ -20,11 +20,11 @@ MC/MA/SA/TF/MD content is unchanged apart from the MD points-distribution fix.
 OR items are unconditionally shuffled for display (exam_builder._finalize_or_mt),
 so random.seed() is fixed before building to keep this fixture reproducible.
 
-The HTML exam was later replaced by a PDF written directly
-(docs/dev/pdf-output-plan.md), and its golden HTML and copied images went
-with it. A PDF cannot be byte-compared across PyMuPDF releases, so the
-fixture's printed text is checked for content and order instead;
-tests/test_pdf_renderer.py covers the page layout itself.
+The golden HTML was regenerated once more when the template gained a font
+size choice, 0.75 in page margins, and a page footer, after a direct-PDF
+renderer was tried and withdrawn (docs/dev/pdf-output-plan.md). The diff
+against the previous golden file was reviewed before it was replaced: only
+the stylesheet changed, and the question markup is identical.
 """
 import random
 import re
@@ -32,8 +32,6 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-
-import fitz
 
 from exam_builder import BuildConfig, ExamBuilder
 from renderer import ExamRenderer, safe_name
@@ -86,7 +84,7 @@ class BuildMigrationGoldenFixture(unittest.TestCase):
         assert len(versions) == 1, f'expected 1 version, got {len(versions)}'
         cls.version = versions[0]
 
-        cls.pdf_path, _ = renderer.to_pdf(cls.version, cls.tmpdir, len(versions), config.default_points)
+        cls.html_path, _ = renderer.to_html(cls.version, cls.tmpdir, len(versions), config.default_points)
         cls.md_path = renderer.to_markdown(cls.version, cls.tmpdir)
         key_name = f"{safe_name(cls.version.title)}_v{cls.version.version_letter}_key.csv"
         cls.key_path = cls.tmpdir / key_name
@@ -102,33 +100,10 @@ class BuildMigrationGoldenFixture(unittest.TestCase):
         # and are dropped with a warning.
         self.assertEqual(len(self.warnings), 5)
 
-    def test_pdf_prints_the_fixture_in_order(self):
-        # Charis SIL prints "fi" as one ligature glyph; expand it back to letters.
-        flags = fitz.TEXTFLAGS_TEXT & ~fitz.TEXT_PRESERVE_LIGATURES
-        with fitz.open(self.pdf_path) as doc:
-            text = ' '.join(page.get_text(flags=flags) for page in doc)
-        text = re.sub(r'\s+', ' ', text.replace('\xa0', ' '))
-        # OR items and MT rights are shuffled even under a fixed seed's
-        # control, so only their slots, which follow source order, are listed.
-        expected = [
-            'Migration Fixture', 'TEST101', 'Name:',
-            'Each question is worth 1 pts unless otherwise noted.',
-            '1. this is the question text', 'A. correct answer A', 'D. inccorect answer D',
-            '2. this is question 2 text', '(Select all that apply.)',
-            '3. Fill in the answer in this blank __________.',
-            '(Write your answer on the answer sheet.)',
-            'Questions 4–5.', 'Question 4:', 'Question 5:',
-            'Questions 6–8.', '(Question 6) first left option: __________',
-            '(Question 8) third left option: __________',
-            'Questions 9–11.', '(Question 9) most superficial: __________',
-            '(Question 11) deepest: __________',
-            '12. This is a true/false question in new quizzes.', 'A. True', 'B. False',
-        ]
-        position = 0
-        for snippet in expected:
-            found = text.find(snippet, position)
-            self.assertNotEqual(found, -1, f'{snippet!r} is missing or out of order')
-            position = found + len(snippet)
+    def test_html_matches_golden(self):
+        golden = GOLDEN_DIR / self.html_path.name
+        self.assertEqual(self.html_path.read_text(encoding='utf-8'),
+                          golden.read_text(encoding='utf-8'))
 
     def test_markdown_matches_golden(self):
         golden = GOLDEN_DIR / self.md_path.name
@@ -146,6 +121,14 @@ class BuildMigrationGoldenFixture(unittest.TestCase):
         golden = GOLDEN_DIR / self.key_path.name
         self.assertEqual(keyformat.load_key_csv(str(self.key_path)),
                           keyformat.load_key_csv(str(golden)))
+
+    def test_copied_images_match_golden(self):
+        new_images = sorted(p.name for p in (self.tmpdir / 'images').glob('*'))
+        golden_images = sorted(p.name for p in (GOLDEN_DIR / 'images').glob('*'))
+        self.assertEqual(new_images, golden_images)
+        for name in golden_images:
+            self.assertEqual((self.tmpdir / 'images' / name).read_bytes(),
+                              (GOLDEN_DIR / 'images' / name).read_bytes())
 
     def test_md_question_points_bug_fixed(self):
         """Phase 3.5 fix (docs/ordering-matching-spec.md): a 1-point MD

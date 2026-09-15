@@ -1,5 +1,11 @@
 # Direct PDF exam output
 
+## Withdrawn (2026-09-14)
+
+This renderer shipped in v3.2.4 and was withdrawn the same day, because exams must typeset `$…$` math and a PDF laid out with PyMuPDF cannot do that easily or reliably. MuPDF's HTML layout draws MathML as flat text. Typesetting TeX to SVG with ziamath works, but MuPDF rasterizes an SVG image to about 100 dpi, ignores `vertical-align` so an equation cannot sit on the text baseline, and reports an inline image's position as a zero-width point, which defeats drawing vector math over a placeholder afterward. Each could be worked around, at the cost of three new dependencies and a chain of placement tricks that would still cover less TeX than MathJax. Math matters more than skipping the browser's print step, so the exam went back to HTML with MathJax loaded from a CDN, printed from a browser.
+
+Everything that did not depend on the output format stayed: the five font sizes (now set in the HTML's stylesheet), 0.75 in top and bottom page margins, the page footer (CSS page margin boxes, which Chrome and Edge print), the exam recorded in the saved config for exact reprints, and the size suffix on filenames. Keeping a question whole on one page went back to the browser, through `break-inside: avoid` on each question. The rest of this document is the record of the PDF renderer as it was built.
+
 ## Goal
 
 The Build Exam tab writes the exam as a PDF directly instead of an HTML file that has to be printed to PDF, offers a five-step font size choice, and never splits a question across pages. A question here means its stem, its image, its choices, and (for ordering and matching) its answer slots, so an image always lands on the same page as the question it belongs to. Large white gaps at the bottom of a page are acceptable.

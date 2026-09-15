@@ -1,6 +1,6 @@
 # Building an exam
 
-The **Build Exam** tab turns one or more [question bank files](question-bank-format.md) into a printable exam and the answer key CSV that [Scan Exams](scanning-and-grading.md) grades against. It writes a PDF to print and a Markdown version to keep or post.
+The **Build Exam** tab turns one or more [question bank files](question-bank-format.md) into a printable exam and the answer key CSV that [Scan Exams](scanning-and-grading.md) grades against. It writes an HTML version to print and a Markdown version to keep or post.
 
 ## Where the questions come from
 
@@ -29,35 +29,39 @@ One case is *un*-shuffled on purpose. When every choice in a question is a singl
 
 ## Font size and page breaks
 
-**Font size** sets the size of everything printed on the exam, in five steps: smaller (9 pt), small (10 pt), medium (11 pt), large (13 pt), and larger (16 pt). Medium is the default. A larger size gives the exam more pages rather than cramming each one, which makes it the setting to reach for when a student's accommodation calls for large print.
+**Font size** sets the size of the text on the exam, in five steps: smaller (9 pt), small (10 pt), medium (11 pt), large (13 pt), and larger (16 pt). Medium is the default. A larger size gives the exam more pages rather than cramming each one, which makes it the setting to reach for when a student's accommodation calls for large print.
 
-A question is never split across two pages. Its stem, its image, its answer choices, and the numbered slots of an ordering or matching question all print on one page. A question that does not fit in the space left on a page starts the next page instead, which leaves blank space at the bottom of the page before it; an exam with many images will have several of these gaps, and they are expected. If a question does not fit even on a page of its own, its images are shrunk until it does. A question with no image that is still taller than a whole page is the one exception: it continues onto the next page, and the log names it.
+The exam asks the browser never to split a question across two pages when it prints, so a question's stem, image, answer choices, and ordering or matching slots stay on one page, and a question that does not fit in the space left starts the next page instead. That leaves blank space at the bottom of some pages, especially on an exam with many images. Chrome and Edge honor the request; in another browser, check the print preview. A question taller than a whole page still splits, since there is nowhere else for it to go.
 
 ## Output folder and what lands in it
 
 Choose an **Output folder**, then click **Generate Exam**. For each version the app writes:
 
-- `Title_vA.pdf` — the exam, ready to print (at a size other than medium, the size is added to the name, as in `Title_vA_large.pdf`)
+- `Title_vA.html` — the exam laid out for printing, with MathJax for any equations (at a size other than medium, the size is added to the name, as in `Title_vA_large.html`)
 - `Title_vA.md` — the same exam as Markdown - you probably won't use this
 - `Title_vA_key.csv` — the answer key, in the format [Scan Exams](scanning-and-grading.md) reads
 
 Once per build it also writes `Title.exam.json`, the settings and the exact exam, for reprinting later (see below).
 
-Images are embedded in the PDF, so the file can be moved, emailed, or uploaded on its own. Every page has a footer with its page number, so a dropped stack can be put back in order. When more than one version is built, the footer names the version as well, unless the exam carries a version identifier question, which already prints the version where the student needs it.
+Any images the questions use are copied into an `images/` subfolder of the output folder, so the output folder can be moved or shared on its own without breaking the exam. Don't move the html file to a different folder though unless you also bring the images folder.
 
-Print the PDF. The students bubble their answers on a separate [answer sheet](answer-sheets.md), not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
+Equations are drawn by MathJax, which loads from the internet when the exam is opened, so open the exam on a connected computer before printing it.
+
+Every printed page has a footer with its page number, so a dropped stack can be put back in order. When more than one version is built, the footer names the version as well, unless the exam carries a version identifier question, which already prints the version where the student needs it. Chrome and Edge print this footer; Safari and Firefox leave it off. Leave the print dialog's own **Headers and footers** option unchecked, since it adds the file path and date.
+
+Print the HTML from a browser (or print to PDF). The students bubble their answers on a separate [answer sheet](answer-sheets.md), not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
 
 ## Saving and reprinting an exam
 
 Every build writes `Title.exam.json` to the output folder. It holds every setting on the tab (title, course, source files, counts, points, shuffle and version options, font size, and the output folder) and the exam exactly as it was printed: each version's questions in order, with their answer choices in order. **Load Config…** reads one back. **Save Config…** writes the settings on demand, and the saved exam with them while the reprint box described below is checked.
 
-When a loaded config holds a printed exam, a checkbox appears under the config buttons, already checked: **Reprint the saved exam (same questions, order, and answer keys)**. Generate then prints those versions again without drawing a new sample, so the answer keys still match copies already handed out. This is how to make a large-print copy for one student: load the config, set **Font size** to large or larger, and click Generate; the new PDF is named with its size, so it sits beside the original instead of replacing it. A reprint takes question text from the config, not from the bank files, so editing a bank afterward does not change it. Images are still read from the bank's folder, so leave those where they are.
+When a loaded config holds a printed exam, a checkbox appears under the config buttons, already checked: **Reprint the saved exam (same questions, order, and answer keys)**. Generate then prints those versions again without drawing a new sample, so the answer keys still match copies already handed out. This is how to make a large-print copy for one student: load the config, set **Font size** to large or larger, and click Generate; the new file is named with its size, so it sits beside the original instead of replacing it. A reprint takes question text from the config, not from the bank files, so editing a bank afterward does not change it. Images are still read from the bank's folder, so leave those where they are.
 
 Uncheck the box to build from the source files instead. That draws a fresh random sample and a fresh scramble, so a make-up exam that has to be different but equivalent is a matter of loading last week's config, unchecking the box, and clicking Generate. The box also appears right after a build, unchecked, so the exam just made can be reprinted at another size without reloading anything.
 
 ## Watch the log
 
-The log at the bottom of the window is where the builder reports everything it could not do: bank blocks it could not parse, Canvas-only question types it skipped, matching questions whose correct answers exceed the sheet's six options, ordering questions that are too long or numbered wrong, pools that came up short, images that could not be read, questions containing `$…$` math (which print as typed), and questions too tall for one page. None of these stop the build — you get an exam either way — so the question count on the printed page is the number to reconcile against what you expected.
+The log at the bottom of the window is where the builder reports everything it could not do: bank blocks it could not parse, Canvas-only question types it skipped, matching questions whose correct answers exceed the sheet's six options, ordering questions that are too long or numbered wrong, pools that came up short, and images that could not be found. None of these stop the build — you get an exam either way — so the question count on the printed page is the number to reconcile against what you expected.
 
 One warning deserves particular attention. If the exam needs more than **150 answer-sheet slots**, the log gives a warning, and every question past 150 prints normally but has nowhere to be bubbled. Ordering, matching, and multiple dropdown questions each take one slot per item, so an exam of 90 questions can easily need 130 slots.
 

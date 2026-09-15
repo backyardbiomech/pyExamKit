@@ -158,7 +158,7 @@ Markdown-style marks work in stems and in answer choices. Surround text with `**
 
 `<br>` forces a line break inside a question. This is the only way to get one, because a real blank line would end the block and start a new question.
 
-Text between `$…$` or `$$…$$` prints exactly as typed. The printed exam cannot typeset equations, so the log names every question that contains one; for a simple exponent or chemical formula, the `^` and `~` marks above print cleanly instead. Everything outside a math block has its HTML special characters escaped, which means a stray `<` or `&` in a stem prints as itself rather than breaking the page.
+Text between `$…$` or `$$…$$` is passed through untouched for MathJax to render, so equations survive intact. MathJax loads from the internet when the exam is opened, so open it on a connected computer before printing. Everything outside a math block has its HTML special characters escaped, which means a stray `<` or `&` in a stem prints as itself rather than breaking the page.
 
 ---
 

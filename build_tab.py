@@ -642,10 +642,10 @@ class BuildExamUI(ctk.CTkFrame):
                               else 'TOO LARGE for any answer sheet')
                 self.log_fn(f'\n  Version {v_letter} ({len(version.questions)} questions, '
                             f'{slots} answer-sheet slots — {sheet_note})')
-                pdf_path, pdf_warnings = renderer.to_pdf(version, output_path, total_versions,
-                                                         config.default_points, config.font_size)
-                self.log_fn(f'    PDF   → {pdf_path.name}')
-                for w in pdf_warnings:
+                html_path, html_warnings = renderer.to_html(version, output_path, total_versions,
+                                                            config.default_points, config.font_size)
+                self.log_fn(f'    HTML  → {html_path.name}')
+                for w in html_warnings:
                     self.log_fn(f'      WARNING: {w}')
                 md_path = renderer.to_markdown(version, output_path)
                 self.log_fn(f'    MD    → {md_path.name}')

@@ -24,7 +24,7 @@ def _process_formatting(text: str) -> str:
     """Convert markdown-style formatting to HTML tags.
 
     Handles bold, italic, superscript, subscript.
-    Preserves $...$ and $$...$$ math blocks unchanged; the PDF prints them as typed.
+    Preserves $...$ and $$...$$ math blocks unchanged so MathJax can render them.
     Escapes HTML special characters only outside math blocks.
     """
     segments = _MATH_SPLIT.split(text)
