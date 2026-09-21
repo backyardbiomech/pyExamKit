@@ -5,10 +5,11 @@ customtkinter port of pyExamPaper's exam-builder window (its gui.py,
 PySide6/Qt), as a fourth tab in pyExamKit's existing CTkTabview.
 Reproduces its layout and behavior field-for-field. Deliberate departures
 from the original: validation failures log to the shared status box
-instead of a QMessageBox popup (this app has no messagebox usage
-anywhere else), and pool rows get their own remove button instead of
+instead of a QMessageBox popup, and pool rows get their own remove button instead of
 multi-select-then-batch-remove (customtkinter has no selectable-table
-widget).
+widget). The one popup is the yes/no before a build replaces an exam
+already built under the same title, since that needs an answer rather
+than a log line.
 
 The pure functions below (compute_pool_totals, validate_build_fields,
 build_config_from_fields) hold every piece of business logic and take
@@ -22,7 +23,7 @@ import traceback
 from pathlib import Path
 
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 from exam_builder import (FONT_SIZES, BuildConfig, ExamBuilder, PoolConfig,
                           answer_sheet_for, slot_count)
@@ -74,6 +75,33 @@ def compute_pool_totals(rows: list[dict], default_points: float) -> tuple[int, f
         total_count += count
         total_pts += count * pts
     return total_count, total_pts
+
+
+def build_folder(output_folder: str, title: str) -> Path:
+    """The folder one build writes into: the chosen folder, then the exam title."""
+    return Path(output_folder) / safe_name(title.strip())
+
+
+def config_file(output_folder: str, title: str) -> Path:
+    """The .exam.json a build writes, which records the exam as printed."""
+    return build_folder(output_folder, title) / f'{safe_name(title.strip())}.exam.json'
+
+
+def previous_build_files(output_folder: str, title: str) -> list[Path]:
+    """The files an earlier build under this title left: exams, markdown, keys, config.
+
+    Removed before a replacing build, so a version the new build doesn't
+    make (a vC key from a three-version build, now two) can't be scanned
+    against by mistake. images/ is left alone: it may be a bank's own
+    folder, and the renderer never overwrites an image in it.
+    """
+    folder = build_folder(output_folder, title)
+    stem = safe_name(title.strip())
+    found = [p for pattern in (f'{stem}_v?.html', f'{stem}_v?_*.html',
+                               f'{stem}_v?.md', f'{stem}_v?_key.csv')
+             for p in folder.glob(pattern)]
+    config = config_file(output_folder, title)
+    return sorted(found + ([config] if config.exists() else []))
 
 
 def validate_build_fields(*, title: str, output_folder: str, mode: str,
@@ -616,7 +644,20 @@ class BuildExamUI(ctk.CTkFrame):
         )
         # Each build gets its own folder, so its images/ can never be a bank's own
         # images/ folder. The config still records the parent, which is the field.
-        output_path = Path(output_folder) / safe_name(config.title)
+        output_path = build_folder(output_folder, config.title)
+        if not reprint and config_file(output_folder, config.title).exists():
+            if not messagebox.askyesno(
+                    'Replace existing exam?',
+                    f"An exam titled '{config.title}' was already built in\n{output_path}\n\n"
+                    f"Building again draws new questions and new answer keys, and deletes "
+                    f"the old exam files and keys. If that exam has been handed out, "
+                    f"click No and give this one a new title.\n\nReplace it?",
+                    icon='warning', default='no', parent=self):
+                self.log_fn('Build cancelled; the existing exam was left as it is.')
+                return
+            for old in previous_build_files(output_folder, config.title):
+                old.unlink()
+            self.log_fn(f'Deleted the previous build of {config.title}.')
 
         try:
             renderer = ExamRenderer()
@@ -658,10 +699,10 @@ class BuildExamUI(ctk.CTkFrame):
 
             # The config records the exam as printed, which is the only way to
             # reprint it later with the same keys, so a failed save is logged.
-            config_name = f'{safe_name(config.title)}.exam.json'
+            config_path = config_file(output_folder, config.title)
             try:
-                save_config(config, Path(output_folder), output_path / config_name, versions)
-                self.log_fn(f'    Config → {config_name}')
+                save_config(config, Path(output_folder), config_path, versions)
+                self.log_fn(f'    Config → {config_path.name}')
             except Exception as exc:
                 self.log_fn(f'    WARNING: config not saved, so this exam cannot be '
                             f'reprinted from it: {exc}')

@@ -19,6 +19,8 @@ from exam_config import load_config, load_versions, save_config
 from exam_key_writer import build_key_data
 from build_tab import (
     compute_pool_totals,
+    config_file,
+    previous_build_files,
     validate_build_fields,
     build_config_from_fields,
     VERSION_POSITION_LABELS,
@@ -85,6 +87,20 @@ class ValidateBuildFields(unittest.TestCase):
         msg = validate_build_fields(title='Exam 1', output_folder='/tmp', mode='exact',
                                      exact_path=MISSING_FILE, pool_rows=[], reprint=True)
         self.assertIsNone(msg)
+
+    def test_previous_build_files_are_only_what_a_build_writes(self):
+        out = tempfile.mkdtemp(prefix='existing_exam_')
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        folder = Path(out) / 'Exam_1'
+        (folder / 'images').mkdir(parents=True)
+        written = ['Exam_1_vA.html', 'Exam_1_vA_large.html', 'Exam_1_vA.md',
+                   'Exam_1_vA_key.csv', 'Exam_1_vC_key.csv', 'Exam_1.exam.json']
+        kept = ['bank.txt', 'Exam_1_notes.md', 'images/cell.png']
+        for name in written + kept:
+            (folder / name).write_text('x', encoding='utf-8')
+        found = previous_build_files(out, ' Exam 1 ')
+        self.assertEqual(sorted(p.name for p in found), sorted(written))
+        self.assertEqual(config_file(out, 'Exam 1'), folder / 'Exam_1.exam.json')
 
     def test_reprint_still_needs_title_and_output_folder(self):
         msg = validate_build_fields(title=' ', output_folder='/tmp', mode='pools',

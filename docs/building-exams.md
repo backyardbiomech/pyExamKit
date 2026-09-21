@@ -35,7 +35,7 @@ The exam asks the browser never to split a question across two pages when it pri
 
 ## Output folder and what lands in it
 
-Choose an **Output folder**, then click **Generate Exam**. Each build goes in its own folder inside the one you chose, named after the exam title (an exam titled `Title` lands in `Title/`), so the output folder can safely be the folder your banks live in. Building again under the same title writes into the same folder and replaces what is there. For each version the app writes:
+Choose an **Output folder**, then click **Generate Exam**. Each build goes in its own folder inside the one you chose, named after the exam title (an exam titled `Title` lands in `Title/`), so the output folder can safely be the folder your banks live in. If an exam was already built under the same title, the app asks before replacing it. **Yes** deletes the old exam files, keys, and config and builds a new exam in their place; **No** leaves the old exam alone. A new build draws new questions and new keys, so if the old exam has been handed out, answer No and give the new one a different title. Reprinting a saved exam (below) doesn't ask, because it prints the same exam again. For each version the app writes:
 
 - `Title_vA.html` — the exam laid out for printing, with MathJax for any equations (at a size other than medium, the size is added to the name, as in `Title_vA_large.html`)
 - `Title_vA.md` — the same exam as Markdown - you probably won't use this
@@ -57,7 +57,7 @@ Every build writes `Title.exam.json` to the build's folder. It holds every setti
 
 When a loaded config holds a printed exam, a checkbox appears under the config buttons, already checked: **Reprint the saved exam (same questions, order, and answer keys)**. Generate then prints those versions again without drawing a new sample, so the answer keys still match copies already handed out. This is how to make a large-print copy for one student: load the config, set **Font size** to large or larger, and click Generate; the new file is named with its size, so it sits beside the original instead of replacing it. A reprint takes question text from the config, not from the bank files, so editing a bank afterward does not change it. Images are still read from the bank's folder, so leave those where they are.
 
-Uncheck the box to build from the source files instead. That draws a fresh random sample and a fresh scramble, so a make-up exam that has to be different but equivalent is a matter of loading last week's config, unchecking the box, and clicking Generate. The box also appears right after a build, unchecked, so the exam just made can be reprinted at another size without reloading anything.
+Uncheck the box to build from the source files instead. That draws a fresh random sample and a fresh scramble, so a make-up exam that has to be different but equivalent is a matter of loading last week's config, unchecking the box, giving it a new title (say, `Exam 1 makeup`), and clicking Generate. The box also appears right after a build, unchecked, so the exam just made can be reprinted at another size without reloading anything.
 
 ## Watch the log
 
