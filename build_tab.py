@@ -614,7 +614,9 @@ class BuildExamUI(ctk.CTkFrame):
             default_points=default_points, same_questions=self.same_questions_var.get(),
             font_size=self.font_size_menu.get(),
         )
-        output_path = Path(output_folder)
+        # Each build gets its own folder, so its images/ can never be a bank's own
+        # images/ folder. The config still records the parent, which is the field.
+        output_path = Path(output_folder) / safe_name(config.title)
 
         try:
             renderer = ExamRenderer()
@@ -658,7 +660,7 @@ class BuildExamUI(ctk.CTkFrame):
             # reprint it later with the same keys, so a failed save is logged.
             config_name = f'{safe_name(config.title)}.exam.json'
             try:
-                save_config(config, output_path, output_path / config_name, versions)
+                save_config(config, Path(output_folder), output_path / config_name, versions)
                 self.log_fn(f'    Config → {config_name}')
             except Exception as exc:
                 self.log_fn(f'    WARNING: config not saved, so this exam cannot be '
@@ -666,7 +668,7 @@ class BuildExamUI(ctk.CTkFrame):
             self._set_saved_versions(versions, reprint=reprint)
 
             self.log_fn('\nDone.')
-            self.log_fn(f'\nOutput saved to: {self.output_entry.get().strip()}')
+            self.log_fn(f'\nOutput saved to: {output_path}')
         except Exception:
             self.log_fn(f'\nERROR:\n{traceback.format_exc()}')
 

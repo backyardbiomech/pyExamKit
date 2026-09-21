@@ -35,7 +35,7 @@ The exam asks the browser never to split a question across two pages when it pri
 
 ## Output folder and what lands in it
 
-Choose an **Output folder**, then click **Generate Exam**. For each version the app writes:
+Choose an **Output folder**, then click **Generate Exam**. Each build goes in its own folder inside the one you chose, named after the exam title (an exam titled `Title` lands in `Title/`), so the output folder can safely be the folder your banks live in. Building again under the same title writes into the same folder and replaces what is there. For each version the app writes:
 
 - `Title_vA.html` — the exam laid out for printing, with MathJax for any equations (at a size other than medium, the size is added to the name, as in `Title_vA_large.html`)
 - `Title_vA.md` — the same exam as Markdown - you probably won't use this
@@ -43,7 +43,7 @@ Choose an **Output folder**, then click **Generate Exam**. For each version the 
 
 Once per build it also writes `Title.exam.json`, the settings and the exact exam, for reprinting later (see below).
 
-Any images the questions use are copied into an `images/` subfolder of the output folder, so the output folder can be moved or shared on its own without breaking the exam. Don't move the html file to a different folder though unless you also bring the images folder.
+Any images the questions use are copied into an `images/` subfolder of the build's folder, so that folder can be moved or shared on its own without breaking the exam. Don't move the html file to a different folder though unless you also bring the images folder. When two banks each have a different image with the same name, the second is copied as `cell_2.jpg` (and so on) and the exam points at the renamed copy; nothing already in `images/` is overwritten.
 
 Equations are drawn by MathJax, which loads from the internet when the exam is opened, so open the exam on a connected computer before printing it.
 
@@ -53,7 +53,7 @@ Print the HTML from a browser (or print to PDF). The students bubble their answe
 
 ## Saving and reprinting an exam
 
-Every build writes `Title.exam.json` to the output folder. It holds every setting on the tab (title, course, source files, counts, points, shuffle and version options, font size, and the output folder) and the exam exactly as it was printed: each version's questions in order, with their answer choices in order. **Load Config…** reads one back. **Save Config…** writes the settings on demand, and the saved exam with them while the reprint box described below is checked.
+Every build writes `Title.exam.json` to the build's folder. It holds every setting on the tab (title, course, source files, counts, points, shuffle and version options, font size, and the output folder) and the exam exactly as it was printed: each version's questions in order, with their answer choices in order. **Load Config…** reads one back. **Save Config…** writes the settings on demand, and the saved exam with them while the reprint box described below is checked.
 
 When a loaded config holds a printed exam, a checkbox appears under the config buttons, already checked: **Reprint the saved exam (same questions, order, and answer keys)**. Generate then prints those versions again without drawing a new sample, so the answer keys still match copies already handed out. This is how to make a large-print copy for one student: load the config, set **Font size** to large or larger, and click Generate; the new file is named with its size, so it sits beside the original instead of replacing it. A reprint takes question text from the config, not from the bank files, so editing a bank afterward does not change it. Images are still read from the bank's folder, so leave those where they are.
 

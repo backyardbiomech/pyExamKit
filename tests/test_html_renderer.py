@@ -6,6 +6,7 @@ asks for break-inside: avoid on every question), so these tests read the
 HTML the renderer writes rather than a printed page. docs/dev/pdf-output-plan.md
 records why the exam is HTML rather than a PDF the app writes itself.
 """
+import dataclasses
 import re
 import shutil
 import tempfile
@@ -93,6 +94,45 @@ class HtmlOutput(unittest.TestCase):
         self.assertIn('where is it', text)
         self.assertEqual(len(warnings), 1)
         self.assertIn('nope.png', warnings[0])
+
+    def _bank(self, name: str, image_bytes: bytes) -> Path:
+        """A bank folder holding images/cell.png with the given content."""
+        folder = self.tmpdir / name
+        (folder / 'images').mkdir(parents=True)
+        (folder / 'images' / 'cell.png').write_bytes(image_bytes)
+        return folder
+
+    def test_output_in_the_bank_folder_leaves_its_images_alone(self):
+        bank = self._bank('bank', b'one')
+        path, warnings = ExamRenderer().to_html(
+            _exam([_mc('pic', ['images/cell.png'], folder=bank)]), bank)
+        self.assertEqual((bank / 'images' / 'cell.png').read_bytes(), b'one')
+        self.assertIn('src="images/cell.png"', path.read_text(encoding='utf-8'))
+        self.assertEqual(warnings, [])
+
+    def test_same_named_images_from_two_banks_both_survive(self):
+        a, b = self._bank('a', b'one'), self._bank('b', b'two')
+        out = self.tmpdir / 'out'
+        path, _ = ExamRenderer().to_html(
+            _exam([_mc('first', ['images/cell.png'], folder=a),
+                   _mc('second', ['images/cell.png'], folder=b)]), out)
+        text = path.read_text(encoding='utf-8')
+        self.assertEqual((out / 'images' / 'cell.png').read_bytes(), b'one')
+        self.assertEqual((out / 'images' / 'cell_2.png').read_bytes(), b'two')
+        self.assertLess(text.index('images/cell.png'), text.index('images/cell_2.png'))
+
+    def test_a_renamed_image_keeps_its_name_in_every_version(self):
+        a, b = self._bank('a', b'one'), self._bank('b', b'two')
+        out = self.tmpdir / 'out'
+        renderer = ExamRenderer()
+        renderer.to_html(_exam([_mc('first', ['images/cell.png'], folder=a),
+                                _mc('second', ['images/cell.png'], folder=b)]), out)
+        # A later version drawing only bank b must not claim cell.png for it.
+        only_b = dataclasses.replace(_exam([_mc('second', ['images/cell.png'], folder=b)]),
+                                     version_num=2)
+        path, _ = renderer.to_html(only_b, out)
+        self.assertIn('src="images/cell_2.png"', path.read_text(encoding='utf-8'))
+        self.assertEqual((out / 'images' / 'cell.png').read_bytes(), b'one')
 
 
 if __name__ == '__main__':

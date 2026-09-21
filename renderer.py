@@ -9,6 +9,8 @@ replaced it and why that was withdrawn.
 """
 from __future__ import annotations
 
+import dataclasses
+import filecmp
 import html
 import re
 import shutil
@@ -68,17 +70,23 @@ class ExamRenderer:
         # Build render-ready question dicts (handles MD grouping and numbering)
         questions = _prepare_questions(version.questions, default_points, mode_pts)
 
-        # Copy images from source_folder into output/images/
+        # Copy images from source_folder into output/images/, pointing the
+        # question at whatever name the copy landed under.
         for q, qd in zip(version.questions, questions):
             q_folder = q.source_folder or version.source_folder
-            paths = q.image_paths + [ans.image_path for ans in q.answers if ans.image_path]
-            for img_path in paths:
+
+            def place(img_path: str) -> str:
                 src = q_folder / img_path
                 if src.exists():
-                    shutil.copy2(str(src), str(images_folder / src.name))
-                else:
-                    warnings.append(f"Question {_number_label(qd)}: image '{img_path}' was not "
-                                    f"found in {q_folder}, so the question prints without it.")
+                    return _place_image(src, images_folder)
+                warnings.append(f"Question {_number_label(qd)}: image '{img_path}' was not "
+                                f"found in {q_folder}, so the question prints without it.")
+                return img_path
+
+            qd['image_paths'] = [place(p) for p in q.image_paths]
+            if 'answers' in qd:
+                qd['answers'] = [dataclasses.replace(ans, image_path=place(ans.image_path))
+                                 if ans.image_path else ans for ans in qd['answers']]
 
         # Hide version letter when only one version is being produced,
         # or when a version indicator question is already embedded in the exam
@@ -152,6 +160,26 @@ def _escape_math(text: str) -> str:
     for i in range(1, len(segments), 2):
         segments[i] = html.escape(segments[i], quote=False)
     return ''.join(segments)
+
+
+def _place_image(src: Path, images_folder: Path) -> str:
+    """Copy src into images_folder and return the file name it is found under there.
+
+    An existing file is never overwritten. When the name is taken by a
+    different image (two banks each with their own cartilage.jpg), the copy
+    gets a numbered name, cartilage_2.jpg. The name is chosen by content, so
+    every version of a build, each rendered separately, lands on the same one.
+    """
+    for n in range(1, 10_000):
+        name = src.name if n == 1 else f'{src.stem}_{n}{src.suffix}'
+        dst = images_folder / name
+        if not dst.exists():
+            shutil.copy2(src, dst)
+            return name
+        # The same file happens when the output folder is the bank's own folder.
+        if dst.samefile(src) or filecmp.cmp(src, dst, shallow=False):
+            return name
+    raise RuntimeError(f"Too many different images named {src.name} in {images_folder}.")
 
 
 def _number_label(qd: dict) -> str:
