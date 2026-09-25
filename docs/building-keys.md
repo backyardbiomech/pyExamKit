@@ -6,6 +6,8 @@ Grading needs a key: which bubble is correct for each question, where on the pag
 
 **Scan a sheet you filled in yourself.** The **Standard Sheet** tab reads an answer sheet you bubbled by hand and turns it into the same CSV. Use this for an exam that was not built by this app, on a standard sheet from **Make Answer Sheet…** on the same tab. A sheet built with an exam that groups rows by question cannot be read this way; its key comes with it.
 
+**A lab practical is its own key.** Its source `.md` file lists every question's accepted answers, and the scanner loads it directly; [Lab practicals](lab-practicals.md) covers it.
+
 **Put the key sheet at the front of the stack.** The scanner will read the first page as the key. This is the oldest workflow and it still works, but it produces no reusable file, so the key has to be re-read on every scan.
 
 ## The Standard Sheet tab

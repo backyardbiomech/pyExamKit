@@ -64,4 +64,4 @@
 
 ---
 
-Previous: [Outputs](outputs.md)
+Previous: [Lab practicals](lab-practicals.md)

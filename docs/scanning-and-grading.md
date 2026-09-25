@@ -14,7 +14,7 @@ If you are not loading a key file, **the key sheet goes first in the stack**. Wi
 
 The tab asks for three things, in order, and keeps the rest under **More options**. **Scan and Grade**, at the bottom of the tab, starts the run; the line beside it says what is about to be graded.
 
-**1. Answer key.** **Choose key files…** picks the key CSV that the [Build Exam](building-exams.md) tab wrote. Choose any one version's key, and the other versions' keys from the same build are found beside it, so a multi-version stack needs no further setup. You can also choose several key files at once, for keys that were not written together; each must say which version it is for, in its metadata or in a name ending `_vA_key.csv` and so on. The line under the button says what was loaded: how many versions, how many questions and written answers, and whether the points came from the key. The question count, the written rows to skip, the points, and the pages per student all come from the key, so there is nothing to type. **Edit…** opens the key for editing.
+**1. Answer key.** **Choose key files…** picks the key CSV that the [Build Exam](building-exams.md) tab wrote. Choose any one version's key, and the other versions' keys from the same build are found beside it, so a multi-version stack needs no further setup. You can also choose several key files at once, for keys that were not written together; each must say which version it is for, in its metadata or in a name ending `_vA_key.csv` and so on. The line under the button says what was loaded: how many versions, how many questions and written answers, and whether the points came from the key. The question count, the written rows to skip, the points, and the pages per student all come from the key, so there is nothing to type. **Edit…** opens the key for editing. A lab practical's key is its source `.md` file; choose that ([Lab practicals](lab-practicals.md#scanning-and-grading)).
 
 With no key file, the first page of the stack is read as the key (see above). Give the **number of questions** in the box that appears, and the **points per bubble question** and **per written question**. Those point boxes also appear for a key that has no points of its own, such as one built on the [Standard Sheet](building-keys.md) tab.
 
@@ -53,6 +53,8 @@ A mixed stack is graded in one pass whenever more than one version's key is load
 Each student's version bubble is read, and each version group is graded against its own key. Results are written per version: `results_versionA.csv`, `marked_versionA/`, and so on.
 
 Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab from its own `results_versionA.csv`, which also rebuilds `results_all_versions_forCanvas.csv`.
+
+A lab practical's forms are not versions: every form is graded against the one key, the practical's source file, in a single pass. See [Lab practicals](lab-practicals.md).
 
 When a student's version bubble cannot be read — left blank, or two letters filled — a dialog shows that student's sheet and asks you to assign a version by hand, or to skip the student. Skipped students are named in the log and appear in no version's results, so they have to be dealt with separately.
 

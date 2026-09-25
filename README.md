@@ -10,9 +10,11 @@ Written by Brandon E. Jackson, Ph.D. Licensed under [GPLv3](LICENSE).
 
 ## What it does
 
-The app opens to one window with four tabs, sharing a single log at the bottom. Each tab's action button sits at the bottom of the tab, above the log.
+The app opens to one window with five tabs, sharing a single log at the bottom. Each tab's action button sits at the bottom of the tab, above the log.
 
 **Build Exam** turns one or more plain-text question banks into a printable exam — multiple choice, multiple answer, true/false, short answer, multiple dropdown, ordering, and matching — in up to six scrambled versions, with an answer key CSV the scanner grades against. It can also import a Canvas QTI export, so a quiz that already exists in Canvas becomes a paper exam without being retyped.
+
+**Build Practical** turns one plain-text source file into everything a lab practical needs: an answer sheet for each pairing of questions, station placards, a setup guide, and an instructor key. The same file is the key that grades every form's sheets in one scan.
 
 **Scan Exams** reads a stack of completed answer sheets, grades them against the key, and writes out a results spreadsheet, a per-question breakdown, a Canvas-ready upload file, and a marked copy of every student's sheet.
 
@@ -32,7 +34,8 @@ The app opens to one window with four tabs, sharing a single log at the bottom. 
 8. [Class rosters](docs/roster.md) — putting names on results by ID, from a Canvas export or your own spreadsheet
 9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading
 10. [Outputs](docs/outputs.md) — every file the app writes and what to do with it
-11. [FAQ and troubleshooting](docs/faq.md)
+11. [Lab practicals](docs/lab-practicals.md) — writing a practical's source file, building its sheets and placards, and grading every form in one stack
+12. [FAQ and troubleshooting](docs/faq.md)
 
 Design notes and implementation history live in [docs/dev/](docs/dev/). They document why parts of the app are built the way they are, and are aimed at anyone modifying the code rather than at anyone using it.
 

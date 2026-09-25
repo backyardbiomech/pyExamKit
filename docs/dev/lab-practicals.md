@@ -136,7 +136,7 @@ The finder now accepts 0.45 to 1.6 times the full-size area (about 67% to 125% p
 
 ## Status
 
-Steps 1 to 4 are built, with steps 5 and 6 folded into step 4 where they were small. Step 7 is next.
+Steps 1 to 4 are built, with steps 5 and 6 folded into step 4 where they were small. Step 7's user guide is written; the real print and scan remain.
 
 - **Step 1**: `practical.py` (parser, validation, `to_key_data`, `sync_answers`), `keyformat` loading and saving a practical `.md`, `tools/practical_from_keys.py`.
 - **Step 2**: practical geometry and `read_form` in `sheet_layout`, `answer_sheet.build_practical_sheet`, and `practical_build.py` writing each form's sheet and a combined dealing-order PDF. `tools/make_practical_test_stack.py` fills sheets in software and degrades them like a copier scan, printed at 85% by default. No sheet has been printed or scanned on real hardware.
@@ -156,7 +156,7 @@ Built as described under Output format. What remains is to look at it: open the 
 
 ### Step 7: documentation and a real scan
 
-1. **User guide** `docs/lab-practicals.md`, linked from the README's documentation list: writing the source file (the format section above is the reference), building, printing (85% scaling is fine), handing out the combined PDF, scanning, grading, and what the results hold. `docs/scanning-and-grading.md` and `docs/building-keys.md` should point to it where they describe keys and multi-version stacks. Brandon's rules apply: no hard-wrapped paragraphs, prose over bullets, American spelling, no weekday names.
+1. **User guide**: done. `docs/lab-practicals.md`, linked from the README, `outputs.md`, `scanning-and-grading.md`, and `building-keys.md`. It says nothing about **Edit…** on a practical key, which is still an open item below; update the guide when that is settled.
 2. **A real print and scan**, when Brandon has a printer and scanner: a few forms filled by hand (one ID in light pencil, one answer running to a box edge), scanned as one stack, then graded in the app. Nothing has touched real paper yet.
 
 ### Open items
