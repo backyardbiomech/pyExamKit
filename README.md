@@ -10,7 +10,7 @@ Written by Brandon E. Jackson, Ph.D. Licensed under [GPLv3](LICENSE).
 
 ## What it does
 
-The app opens to one window with five tabs, sharing a single log at the bottom. Each tab's action button sits at the bottom of the tab, above the log.
+The app opens to one window with five tabs, sharing a single log at the bottom. Each tab's action button sits at the bottom of the tab, above the log, and **Help**, at the right end of the row of tabs, opens the guide page for the tab you are on.
 
 **Build Exam** turns one or more plain-text question banks into a printable exam — multiple choice, multiple answer, true/false, short answer, multiple dropdown, ordering, and matching — in up to six scrambled versions, with an answer key CSV the scanner grades against. It can also import a Canvas QTI export, so a quiz that already exists in Canvas becomes a paper exam without being retyped.
 

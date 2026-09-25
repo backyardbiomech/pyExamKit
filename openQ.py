@@ -2,6 +2,7 @@ import base64
 import csv
 import io
 import json
+import re
 import numpy as np
 import pandas as pd
 import tkinter as tk
@@ -1670,6 +1671,7 @@ class KeyFileEditorDialog:
         self._open_qs: dict = {}  # {qk: {"full": [...], "partial": [...], "coords": [...] or None}}
         # Per-question point values, carried through unedited — this dialog has
         # no points UI, but must not silently drop them from a loaded key file.
+        self.printed_boxes = False
         self._point_values: dict = {}
         # Metadata this dialog does not edit, carried through the same way:
         # the answer sheet's row runs (without them a sheet printed for this
@@ -1691,8 +1693,14 @@ class KeyFileEditorDialog:
                     }
                 self._point_values = dict(data.get('point_values', {}))
                 _meta = data.get('metadata', {})
-                self._kept_meta = {k: _meta[k] for k in ('sheet_rows', 'version')
+                self._kept_meta = {k: _meta[k] for k in ('sheet_rows', 'version',
+                                                         'answer_boxes')
                                    if _meta.get(k)}
+        # A key Build Exam wrote has its writing boxes where the sheet printed
+        # them; drawing or typing new ones could only misplace them. Older
+        # built keys lack the marker, but only Build Exam writes sheet_rows.
+        self.printed_boxes = bool(self._kept_meta.get('answer_boxes') == 'printed'
+                                  or self._kept_meta.get('sheet_rows'))
 
         self._build_ui()
 
@@ -1744,8 +1752,9 @@ class KeyFileEditorDialog:
         q_btn_frame.pack(fill='x', pady=(4, 0))
         tk.Button(q_btn_frame, text='+ Bubble Q', font=_F,
                   command=self._add_bubble_q).pack(side='left', padx=(0, 4))
-        tk.Button(q_btn_frame, text='+ Open-Ended Q', font=_F,
-                  command=self._add_open_q).pack(side='left', padx=(0, 4))
+        if not self.printed_boxes:      # a new written question needs a printed box
+            tk.Button(q_btn_frame, text='+ Open-Ended Q', font=_F,
+                      command=self._add_open_q).pack(side='left', padx=(0, 4))
         tk.Button(q_btn_frame, text='Remove', font=_F,
                   command=self._remove_q).pack(side='left')
 
@@ -2059,6 +2068,13 @@ class KeyFileEditorDialog:
         tk.Button(part_input_frame, text='Remove selected', command=_remove_part,
                   font=_F).pack(side='left')
 
+        if self.printed_boxes:
+            tk.Frame(f, height=1, bg='gray70').pack(fill='x', padx=4, pady=(8, 4))
+            tk.Label(f, text='The answer area is the box printed on the answer sheet, '
+                             'so it cannot be moved here.', font=('Arial', 10),
+                     fg='gray40', wraplength=380, justify='left').pack(anchor='w', padx=4)
+            return
+
         # ── Coordinates ───────────────────────────────────────────────────
         tk.Frame(f, height=1, bg='gray70').pack(fill='x', padx=4, pady=(8, 4))
         tk.Label(f, text='Answer area coordinates (aligned-image pixels):', font=_F).pack(
@@ -2267,7 +2283,10 @@ class KeyFileEditorDialog:
             except ValueError:
                 pass
         _skip_str = ','.join(str(n) for n in sorted(_skip_ns))
-        _total = sum(1 for v in self._bubble.values() if v != 'ignore')
+        # num_questions is how many rows the scanner reads, so it counts the
+        # rows marked 'ignore' too (a written question's row, a skipped one).
+        _total = max((int(m.group(1)) for qk in self._bubble
+                      if (m := re.fullmatch(r'Q?0*(\d+)', qk))), default=0)
         return {
             'bubble_answers': dict(self._bubble),
             'open_questions': {

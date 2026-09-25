@@ -124,7 +124,10 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     total_questions = counter - 1
 
     # The version letter lets Scan Exams pair each key with its version.
-    metadata: dict = {'num_questions': total_questions, 'version': version.version_letter}
+    # answer_boxes: the writing boxes' positions come from the printed sheet,
+    # so the key editor offers no tools to move them.
+    metadata: dict = {'num_questions': total_questions, 'version': version.version_letter,
+                      'answer_boxes': 'printed'}
     if questions_to_skip:
         metadata['questions_to_skip'] = ','.join(str(n) for n in questions_to_skip)
     try:

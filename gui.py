@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from scanner import Scanner
 import customtkinter as ctk
+import tkinter as tk
 from tkinter import filedialog, messagebox
 import ai_ocr
 import bubbles
@@ -11,6 +12,7 @@ import scan_keys
 import sheet_layout
 from build_tab import BuildExamUI, open_sheet_dialog
 from practical_tab import BuildPracticalUI
+import help_links
 
 
 class TextRedirector(io.TextIOBase):
@@ -54,6 +56,17 @@ class pyScanUI(ctk.CTkFrame):
         # footer outside its scrolling settings, so it is always in view.
         tabs = ctk.CTkTabview(self)
         tabs.pack(fill='both', expand=True)
+        # Help opens the user guide's page for whichever tab is showing. It
+        # sits in the tab row's right corner, beside the centered tab buttons.
+        def show_help():
+            self._log(f'Help: {help_links.open_help(tabs.get())}')
+        help_button = ctk.CTkButton(self, text='Help ↗', width=64, height=26,
+                                    command=show_help, fg_color='transparent',
+                                    border_width=1, text_color=('gray20', 'gray85'))
+        # Level with the tab buttons, whenever they are laid out. Tk's own bind:
+        # customtkinter's refuses <Configure> on a segmented button.
+        tk.Misc.bind(tabs._segmented_button, '<Configure>', lambda e: help_button.place(
+            in_=tabs, relx=1.0, x=-2, y=tabs._segmented_button.winfo_y(), anchor='ne'), '+')
 
         build_tab  = tabs.add("Build Exam")
         practical_tab = tabs.add("Build Practical")
@@ -106,8 +119,9 @@ class pyScanUI(ctk.CTkFrame):
         key_row, self.keyLabel = file_row(
             1, "Choose key files…", self._browse_key_file,
             "The key CSV from Build Exam; the other versions' keys are found beside it")
-        ctk.CTkButton(key_row, text="Edit…", width=70,
-                      command=self._open_key_file_editor).pack(side='right')
+        self.editKeyButton = ctk.CTkButton(key_row, text="Edit…", width=70,
+                                           command=self._open_key_file_editor)
+        self.editKeyButton.pack(side='right')
         self.keySummary = ctk.CTkLabel(scan_frame, text='', anchor='w', justify='left',
                                        wraplength=640)
         self.keySummary.grid(row=2, column=0, padx=(24, 10), pady=(0, 2), sticky='w')
@@ -445,6 +459,10 @@ class pyScanUI(ctk.CTkFrame):
     def _refresh_scan_tab(self):
         """Show what the chosen keys need, and hide what they make unneeded."""
         ks = self._keys
+        # A practical's key is its source .md: edit that file, or add answers
+        # while grading. The key editor's boxes and question list are an
+        # exam's, and mean nothing for a practical.
+        self.editKeyButton.configure(state='disabled' if ks and ks.practical else 'normal')
         if ks is None:
             self._nokey_frame.grid()
             self._points_frame.grid()

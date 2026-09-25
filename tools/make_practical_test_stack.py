@@ -267,13 +267,17 @@ def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207
     '''
     Write the stack and its truth files to outdir; return the scans PDF path.
     print_scale shrinks each sheet as it is printed, before students write on it.
+    Sheets are printed and scanned double-sided, as practical_build prints
+    them, so a sheet with an odd number of pages has its blank back scanned.
     '''
     rng = random.Random(seed)
     p = practical.load(source)
     outdir.mkdir(parents=True, exist_ok=True)
     boxes = L.practical_boxes(len(p.stations))
-    sheets = {f: fitz.open(stream=answer_sheet.build_practical_sheet(len(p.stations), f, p.title),
+    sheets = {f: fitz.open(stream=answer_sheet.build_practical_sheet(
+                               len(p.stations), f, p.title, double_sided=True),
                            filetype='pdf') for f in p.forms}
+    n_pages = L.practical_pages(len(p.stations))
     students = make_students(rng, p, n_students)
 
     pdf = fitz.open()
@@ -286,7 +290,9 @@ def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207
             pix = page.get_pixmap(matrix=fitz.Matrix(DPI / 72, DPI / 72), colorspace=fitz.csRGB)
             img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
             img = printed(img, print_scale)
-            img = scan(fill_page(img, n, s, p, boxes, rng, answers, print_scale), rng)
+            if n <= n_pages:                       # not the blank back
+                img = fill_page(img, n, s, p, boxes, rng, answers, print_scale)
+            img = scan(img, rng)
             buf = io.BytesIO()
             img.save(buf, 'JPEG', quality=80)
             out = pdf.new_page(width=612, height=792)

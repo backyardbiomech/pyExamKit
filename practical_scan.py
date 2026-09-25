@@ -72,7 +72,7 @@ def group_pages(reads: list[PageRead], n_pages: int) -> tuple[list[Sheet], list[
         if r.form != current.form:
             alerts.append(f'PRACTICAL: scan {r.scan} is page {r.page} of form {r.form or "?"}, '
                           f'but follows page 1 of form {current.form} (scan '
-                          f'{current.first_scan}); it was skipped. Check the stapling.')
+                          f'{current.first_scan}); it was skipped. Check the page order.')
             continue
         current.pages[r.page - 1] = r
     for s in sheets:
@@ -80,6 +80,22 @@ def group_pages(reads: list[PageRead], n_pages: int) -> tuple[list[Sheet], list[
         if missing:
             s.notes.append(f'page {", ".join(missing)} missing; its answers are left blank')
     return sheets, alerts
+
+
+def is_blank(path) -> bool:
+    '''
+    A page with next to no ink: the blank back of a sheet printed on both
+    sides. The edges are left out, where a scanner can leave a dark border.
+    On copier-degraded renders at 80% and 100% print scale, a blank back with
+    its "intentionally blank" note is under 0.01% dark, and the emptiest
+    printed page, a last page holding one station, is 0.35% or more; most
+    pages are 5 to 7%. The cut is 0.05%.
+    '''
+    with PILImage.open(path) as im:
+        gray = np.asarray(im.convert('L').reduce(4), dtype=np.uint8)
+    h, w = gray.shape
+    inner = gray[h // 12: -h // 12, w // 12: -w // 12]
+    return float((inner < 160).mean()) < 0.0005
 
 
 def form_problem(form: str, p: practical.Practical) -> str:
@@ -133,8 +149,8 @@ GRADE_MARK = {'CC': ('C', (0, 170, 0)), 'CX': ('P', (230, 140, 0)), 'XX': ('X', 
 def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
                 markeddir: Path, font, small_font) -> None:
     '''
-    Write each student's pages with every graded box marked C, P, or X in
-    the box's right end, and the score and form on page 1. results is the
+    Write each student's pages with every graded box marked C, P, or X just
+    right of the box, and the score and form on page 1. results is the
     graded results frame, indexed '1'.. in sheet order.
     '''
     boxes = L.practical_boxes(len(p.stations))
@@ -153,7 +169,9 @@ def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
                 if d is None or cell[:2] not in GRADE_MARK:
                     continue
                 mark, color = GRADE_MARK[cell[:2]]
-                d.text((x1 - 34, y0 + 6), mark, fill=color, font=font)
+                # Just outside the box's right edge, clear of the writing
+                # and of the next box's printed letter
+                d.text((x1 + 5, (y0 + y1) / 2), mark, fill=color, font=font, anchor='lm')
         if draws[0] is not None:
             score = float(row.get('partialscore', 0) or 0)
             possible = p.total_points(sheet.form) if len(sheet.form) == 2 else 0

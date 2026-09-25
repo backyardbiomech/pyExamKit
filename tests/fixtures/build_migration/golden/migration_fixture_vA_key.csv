@@ -3,6 +3,7 @@ metadata,num_questions,,,,,,12,,
 metadata,questions_to_skip,,,,,,3,,
 metadata,sheet_rows,,,,,,"3,2,3,3,1",,
 metadata,version,,,,,,A,,
+metadata,answer_boxes,,,,,,printed,,
 bubble,Q001,,,,,,A,,1.0
 bubble,Q002,,,,,,BC,,1.0
 bubble,Q003,,,,,,ignore,,

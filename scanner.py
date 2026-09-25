@@ -711,8 +711,13 @@ class Scanner(object):
 
         # 1. Align every page and read what it is; read the ID on each page 1
         reads, id_reads = [], {}
+        blank = 0
         for i, path in enumerate(self.image_list):
             aligned_path = str(self.aligneddir / f'aligned_{i + 1:03d}.jpg')
+            # The blank back of a sheet printed on both sides
+            if not self.reuse_aligned and practical_scan.is_blank(path):
+                blank += 1
+                continue
             try:
                 if self.reuse_aligned:
                     print(f'Re-reading {i + 1}')
@@ -734,6 +739,8 @@ class Scanner(object):
             if page == 1:
                 id_reads[i + 1] = bubbles.read_sheet(aligned, 0, self.ignores, self.cutoff,
                                                      layout=lay)
+        if blank:
+            print(f'[Practical] Skipped {blank} blank page(s), the backs of sheets.', flush=True)
         sheets, alerts = practical_scan.group_pages(reads, n_pages)
         for a in alerts:
             self._alert(a)

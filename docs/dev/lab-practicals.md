@@ -65,7 +65,9 @@ Everything is drawn straight to PDF with PyMuPDF (see Output format below). The 
 
 Page 1 has the v2 name line and ID block, with no bubbling guide and no version row, since the form is printed rather than bubbled. In the guide's place is a note: answer only the letters printed on this sheet, and only what is written inside each box will be graded, and everything written inside a box will be graded. Below the ID bubbles, each station is a row of two boxes, left for the form's first letter and right for its second, labeled with the station number and letters. Boxes are 72 px tall on an 86 px pitch (0.5 and 0.6 in), close to the old practical sheet's; that fits 11 stations on page 1 and 15 on each later page, so 25 stations take two pages and 41 is the most a sheet holds. Later pages have a name line only.
 
-**The form is printed as small black squares**: four squares, one per letter A to D, inked when the form includes that letter, on the bottom margin beside the layout code squares (`sheet_layout.FORM_CELLS`). Layout codes 3, 4, and 5 mark pages 1, 2, and 3 of a form sheet, so a page from the wrong form, or pages out of order, can be caught rather than graded. Every page carries the three registration circles, the layout code, the form squares, and "Form AC, page 1 of 2" in small print for whoever staples and hands them out.
+**The form is printed as small black squares**: four squares, one per letter A to D, inked when the form includes that letter, on the bottom margin beside the layout code squares (`sheet_layout.FORM_CELLS`). Layout codes 3, 4, and 5 mark pages 1, 2, and 3 of a form sheet, so a page from the wrong form, or pages out of order, can be caught rather than graded. Every page carries the three registration circles, the layout code, the form squares, and "Form AC, page 1 of 2" in small print for whoever hands them out.
+
+**Printed double-sided, never stapled** (Brandon, after v3.3.0): a staple stops the document feeder. `build_practical_sheet(double_sided=True)`, as `practical_build` calls it, adds a page marked "intentionally blank" to a sheet with an odd page count, so each student starts on fresh paper. The scanner skips blank pages before aligning (`practical_scan.is_blank`: under 0.05% of the page, less its edges, darker than 160). On copier-degraded renders at 80% and 100% print scale a blank back measures under 0.01% and the emptiest printed page (a 27-station sheet's third, one station) 0.35% or more; ordinary pages are 5 to 7%. Real scanners' show-through and edge shadows are unmeasured.
 
 The printed letters beside each box are for the student; the squares are for the scanner. Nothing about the form comes from anything a student writes.
 
@@ -161,10 +163,13 @@ Built as described under Output format. What remains is to look at it: open the 
 
 ### Open items
 
-- **Seen only by Brandon, once**: the grading window. It has been driven widget by widget here but never seen after the redesign, blank-box, and Back changes; screen capture is blocked in this environment.
-- **Edit… on a practical key** (Scan Exams, next to the key) opens `KeyFileEditorDialog` on the `.md`. It should load and save answers through `keyformat`, but its box-drawing controls mean nothing for a practical and it has never been run. Either hide those controls for a `.md` or disable Edit… for one.
-- **Marks on long answers**: `practical_scan.mark_sheets` puts C, P, or X inside the right end of each box, over writing that fills the box.
-- **Merging and release**: merge `lab-practicals` to `main`, then push a `v*` tag so the packaged apps are built.
+- **Seen only by Brandon, once**: the grading window. It has been driven widget by widget here but never seen after the redesign, blank-box, and Back changes; screen capture is blocked in this environment. The real print and scan will show it.
+
+### Settled after v3.3.0
+
+- **Edit… on a practical key** is disabled (`gui._refresh_scan_tab`); the key is the source file. Checking it found a bug in the editor for every key: saving recomputed `num_questions` from the non-ignored bubble answers, so a key with written questions lost rows from the end and its last questions went unread. It now counts to the highest row, ignored rows included (`tests/test_key_editor.py`).
+- **Grade marks** sit just right of each box (`practical_scan.mark_sheets`), clear of an answer that fills it. A left box's mark falls just before the right box's printed letter; the color and size tell them apart.
+- **Merged and released** as v3.3.0.
 
 ### Working here
 
