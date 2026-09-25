@@ -73,3 +73,14 @@ The stack held no ID or name data (the tool writes neither), so ID reading at th
 ## Status
 
 All phases are built and the cutoffs are set from the stack above.
+
+## Open items (2026-09-25)
+
+These were outstanding when the work shipped to `main` at `7afb96a`.
+
+- **No release yet.** The packaged apps are built only when a `v*` tag is pushed (the last is `v3.2.7`), so faculty on a downloaded app have none of this until the next tag.
+- **The GUI has not been seen running.** Tk would not start in the environment the work was done in, so the Scan Exams roster field and cutoff slider, and the Build Exam **Make Answer Sheet…** dialog, are syntax-checked only. Open the app and use each once.
+- **ID reading on a light sheet is unmeasured.** `bubble_stats.py` writes no ID data by design. Scan 23 of the tuning stack, whose ID the old reader missed, is the case to check by scanning it through the app, if the PDF predates the instructor's hand-darkening of its bubbles.
+- **Canvas roster column.** `docs/roster.md` assumes Canvas's "SIS User ID" holds Longwood L numbers. Confirm on one real export.
+- **Mismatched forms are not detected.** When versions draw different questions, each gets its own sheet ("Form A" in the margin), and nothing checks that a student used the matching one. Encoding the form in the layout code squares and comparing it with the bubbled version would catch it.
+- **Student scans remain in git history.** `428128b` removed the lab-practical scans and outputs from the tree, but they are still in the public repo's history. Purging needs a history rewrite and force push of `main`; the instructor has not yet decided.
