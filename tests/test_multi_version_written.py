@@ -162,8 +162,16 @@ class TestMultiVersionWritten(unittest.TestCase):
     def test_gradebook_tabs(self):
         import openpyxl
         wb = openpyxl.load_workbook(self.results / 'gradebook.xlsx')
-        self.assertEqual(wb.sheetnames, ['Version A', 'Version B', 'By question',
+        self.assertEqual(wb.sheetnames, ['Exam stats', 'Version A', 'Version B', 'By question',
                                          'Item analysis'])
+        stats = wb['Exam stats']
+        self.assertEqual([c.value for c in stats[3]], ['Scores', 'All students', 'Version A',
+                                                       'Version B'])
+        self.assertEqual(len(stats._charts), 1)
+        labels = [stats.cell(row=r, column=1).value for r in range(1, stats.max_row + 1)]
+        self.assertIn("Reliability (Cronbach's alpha)", labels)
+        self.assertEqual(labels[labels.index('Grade') + 1:labels.index('Total')],
+                         [b[0] for b in outputs.BANDS])
         for name in ('Version A', 'Version B', 'By question'):
             ws = wb[name]
             labels = [ws.cell(row=r, column=1).value for r in range(ws.max_row - 2, ws.max_row + 1)]
