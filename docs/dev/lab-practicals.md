@@ -161,10 +161,13 @@ Built as described under Output format. What remains is to look at it: open the 
 
 ### Open items
 
-- **Seen only by Brandon, once**: the grading window. It has been driven widget by widget here but never seen after the redesign, blank-box, and Back changes; screen capture is blocked in this environment.
-- **Edit… on a practical key** (Scan Exams, next to the key) opens `KeyFileEditorDialog` on the `.md`. It should load and save answers through `keyformat`, but its box-drawing controls mean nothing for a practical and it has never been run. Either hide those controls for a `.md` or disable Edit… for one.
-- **Marks on long answers**: `practical_scan.mark_sheets` puts C, P, or X inside the right end of each box, over writing that fills the box.
-- **Merging and release**: merge `lab-practicals` to `main`, then push a `v*` tag so the packaged apps are built.
+- **Seen only by Brandon, once**: the grading window. It has been driven widget by widget here but never seen after the redesign, blank-box, and Back changes; screen capture is blocked in this environment. The real print and scan will show it.
+
+### Settled after v3.3.0
+
+- **Edit… on a practical key** is disabled (`gui._refresh_scan_tab`); the key is the source file. Checking it found a bug in the editor for every key: saving recomputed `num_questions` from the non-ignored bubble answers, so a key with written questions lost rows from the end and its last questions went unread. It now counts to the highest row, ignored rows included (`tests/test_key_editor.py`).
+- **Grade marks** sit just right of each box (`practical_scan.mark_sheets`), clear of an answer that fills it. A left box's mark falls just before the right box's printed letter; the color and size tell them apart.
+- **Merged and released** as v3.3.0.
 
 ### Working here
 

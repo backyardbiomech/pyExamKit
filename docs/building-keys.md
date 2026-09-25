@@ -32,7 +32,7 @@ Bubble questions can be added, removed, and edited by hand in the same panel, wh
 
 ## Editing an existing key
 
-**Create / Edit…**, next to the key file field on the Scan Exams tab, opens the same key in a lighter editor: add or remove questions, change acceptable answers, redraw a coordinate box against a page image, and save in place or save as a copy. Use it when a key is nearly right — when one question's answer was wrong, or when an answer box was drawn a little too tight.
+**Edit…**, next to the key file field on the Scan Exams tab, opens the same key in a lighter editor: add or remove questions, change acceptable answers, redraw a coordinate box against a page image, and save in place or save as a copy. Use it when a key is nearly right — when one question's answer was wrong, or when an answer box was drawn a little too tight.
 
 Note that acceptable answers also get written back to the key file *during* grading. If you add an alternative answer while grading open-ended questions, and you are grading against a key file, that answer is saved to the key as you go. The key you finish a scan with is more permissive than the one you started with, which is what you want the next time the same exam is used.
 
