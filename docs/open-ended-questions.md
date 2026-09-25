@@ -26,11 +26,11 @@ Cropped answer images and an anonymized index — a row number, not a name — a
 
 ## The grading window
 
-For each question, in turn, for each student, in turn, you see the crop from your key sheet on top and the crop from the student's sheet below, along with the transcription of each and a suggested grade.
+The window takes one question at a time and goes through every student who answered it, then moves to the next question. The top line names the question (with its text, for a lab practical) and how far through it you are, and the line below names the student: the roster name, and a picture of the name they wrote, so a student with a spelling accommodation is recognized before you grade.
 
-The **key's** transcription is editable. Fixing it there applies to every student from that point on, so a misread key is corrected once rather than fought with all the way down the stack.
+Below that, **what the student wrote** is on the left and **what the key accepts** is on the right, each shown once. The student's answer is the picture from their sheet, outlined in blue; the AI's reading of it is the small gray line underneath, since it is an interpretation of the handwriting rather than part of the answer. The key box lists the full-credit answers and then the partial-credit ones. On an exam graded without a key file, the key sheet's own crop sits at the top of the key box.
 
-Four keys grade:
+At the bottom are the grade buttons. The suggested grade is the button with a colored ring (green for correct, amber for partial, red for wrong), and the sentence under the buttons says why: which key answer the reading matched, or came closest to, and how alike they are. Color in the window means only that.
 
 | Key | Meaning |
 |---|---|
@@ -40,9 +40,9 @@ Four keys grade:
 | `b` | Back one student |
 | `Enter` | Accept the suggested grade |
 
-Going back re-grades: pressing `b` five times to reach a student five sheets ago means grading those five again on the way forward.
+Going back re-grades: pressing `b` five times to reach a student five sheets ago means grading those five again on the way forward. Going back from the first student of a question returns to the last student of the one before.
 
-Beside the answer is the **acceptable-answers list** for the question. **Add as partial credit** takes what the student wrote, lets you edit it, and adds it to the list — and then **retroactively upgrades every student already graded** whose transcription matches the new entry, reporting how many changed. This is the feature that makes it safe to start grading before you have thought of every acceptable phrasing: the twentieth student's unexpectedly reasonable answer fixes the first nineteen. When you are grading against a key file, additions are written back to that file as you go, so next year's key starts where this year's ended.
+**Changing the key while grading.** Under the student's answer, **Add to key as full credit** and **Add to key as partial credit** take what the student wrote, let you edit it, and add it to the key. The field at the bottom of the key box adds an answer of your own, as full or partial credit. Either way, **every student already graded on that question is re-checked against the new answer and upgraded where it now matches**, and the window reports how many changed. This is what makes it safe to start grading before you have thought of every acceptable phrasing: the twentieth student's unexpectedly reasonable answer fixes the first nineteen. Double-click a key answer to correct it (a misread key sheet, say), which re-checks the same way; select one and press **Remove selected** to take it out, which never lowers a grade already given. When you are grading against a key file, every change is written back to that file as you go, so next year's key starts where this year's ended.
 
 ## How a grade is suggested
 
