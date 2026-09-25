@@ -7,3 +7,4 @@ tests/test_roster.py: headerish
 docs/roster.md: headerish
 docs/outputs.md: headerish
 docs/dev/answer-sheet-redesign.md: headerish
+docs/answer-sheets.md: headerish

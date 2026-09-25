@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ version.title | e }} — Version {{ version.version_letter }}</title>
+  <title>{{ version.title | e }}</title>
 
   <!-- MathJax for rendering $$...$$ equations -->
   <script>
@@ -26,7 +26,7 @@
       margin: 0.75in 0.5in;
 
       @bottom-center {
-        content: "{% if footer_version %}Version {{ footer_version }} · {% endif %}Page " counter(page) " of " counter(pages);
+        content: "Page " counter(page) " of " counter(pages);
         font-family: Georgia, 'Times New Roman', serif;
         font-size: 9pt;
       }
@@ -204,7 +204,7 @@
   <!-- ── Exam Header ─────────────────────────────────────────────── -->
   <div class="exam-header">
     <h1>{{ version.title | e }}</h1>
-    <p class="meta">{{ version.course | e }}{% if not hide_version %}&nbsp;&nbsp;&nbsp;Version {{ version.version_letter }}{% endif %}</p>
+    <p class="meta">{{ version.course | e }}</p>
     <p class="name-line">
       Name:&nbsp;___________________________&nbsp;&nbsp;&nbsp;&nbsp;Date:&nbsp;___________
     </p>
@@ -389,7 +389,12 @@
   </div>
   {% endif %}
 
-  {% endfor %}
+  {% endfor %}{% if end_version %}
+
+  <div class="version-end" style="margin-top: 2em; padding-top: 0.6em; border-top: 1px solid #000; break-inside: avoid;">
+    This is exam version <strong>{{ end_version }}</strong>. On your answer sheet, fill in
+    bubble <strong>{{ end_version }}</strong> under &ldquo;Exam version.&rdquo;
+  </div>{% endif %}
 
 </div>
 </body>

@@ -88,9 +88,10 @@ class ExamRenderer:
                 qd['answers'] = [dataclasses.replace(ans, image_path=place(ans.image_path))
                                  if ans.image_path else ans for ans in qd['answers']]
 
-        # Hide version letter when only one version is being produced,
-        # or when a version indicator question is already embedded in the exam
-        hide_version = total_versions <= 1 or any(
+        # The version letter is printed once, at the end, where a neighbor
+        # cannot read it off the first page or a footer. Not needed with one
+        # version, or when a version indicator question already carries it.
+        show_version = total_versions > 1 and not any(
             q.text.startswith('EXAM VERSION') for q in version.questions
         )
 
@@ -98,10 +99,9 @@ class ExamRenderer:
         html_text = template.render(
             version=version,
             questions=questions,
-            hide_version=hide_version,
             default_pts_label=default_pts_label,  # None when there is no clear single point value
             font_pt=FONT_SIZES[font_size],
-            footer_version=None if hide_version else version.version_letter,
+            end_version=version.version_letter if show_version else None,
         )
 
         # A reprint at another size sits beside the medium original instead of replacing it.

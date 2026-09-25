@@ -91,7 +91,7 @@ C. stratum basil
 
 Starring is what separates full credit from partial: **starred answers earn full credit, unstarred answers earn half**. If no answer is starred, every listed answer earns full credit, which is the sensible reading of a bank that predates the distinction. Unlike every other type, `SA` answer text is stored exactly as written, with no formatting or HTML processing, because those strings are compared character by character against what a student wrote.
 
-Because an `SA` question is answered on the page rather than in a bubble, its bubble row has to be excluded from bubble grading. [Answer sheets](answer-sheets.md) covers how to lay one out, and [Scanning and grading](scanning-and-grading.md) covers telling the scanner to ignore that row.
+Because an `SA` question is answered in writing rather than in a bubble, its bubble row is excluded from bubble grading. An exam built here does this for you: the answer sheet it writes replaces that row's bubbles with an arrow to a numbered writing box, and the key both skips the row and records where the box is. [Answer sheets](answer-sheets.md) covers the limits on how many boxes fit.
 
 ## Multiple dropdown
 

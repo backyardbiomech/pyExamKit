@@ -95,13 +95,13 @@ def _classic() -> Layout:
 # ── v2: the generated sheet ────────────────────────────────────────────────
 # Question grid: five columns of 30, a gap after every fifth row.
 V2_Q_COL_X = [126, 346, 566, 786, 1006]     # bubble A centers
-V2_Q_TOP = 610                              # row 1 center
+V2_Q_TOP = 580                              # row 1 center
 V2_Q_ROW = 28                               # row pitch
 V2_Q_GROUP_GAP = 14                         # extra space after every 5 rows
 V2_ID_X = 890                               # first ID column center
 V2_ID_TOP = 250                             # digit 0 center
 V2_ID_COL = 30
-V2_VERSION_Y = 470
+V2_VERSION_Y = 420
 V2_VERSION_X = 250                          # bubble A center
 
 
@@ -119,7 +119,7 @@ def _v2() -> Layout:
     id_digits = {f'ID{c + 1:02d}': _row(DIGITS, V2_ID_X + V2_ID_COL * c, V2_ID_TOP,
                                         0, BUBBLE_PITCH)
                  for c in range(8)}
-    version = {'V': _row('ABCD', V2_VERSION_X, V2_VERSION_Y, BUBBLE_PITCH + 8, 0)}
+    version = {'V': _row('ABCDEF', V2_VERSION_X, V2_VERSION_Y, BUBBLE_PITCH + 8, 0)}
     return Layout('v2', 1, questions, id_digits, version=version)
 
 

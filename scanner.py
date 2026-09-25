@@ -477,6 +477,8 @@ class Scanner(object):
             # For multi-page: only run bubble scan on key (i=0) and first page per student
             if i == 0 or (i - 1) % pps == 0:
                 self._read(0 if i == 0 else (i - 1) // pps + 1, aligned)
+        if 0 in self.reads and self.reads[0].layout is not sheet_layout.CLASSIC:
+            self.resdf.loc[0, 'LastName'] = 'KEY'   # no name bubbles to write it in
         self._apply_roster(skip_rows=(0,))
         self._write_read_alerts()
         #get the aligned image dir

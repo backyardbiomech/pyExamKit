@@ -64,11 +64,15 @@ class HtmlOutput(unittest.TestCase):
         text, _, _ = self._render(_exam([_mc('one')]))
         self.assertRegex(text, r'\.question-block \{[^}]*break-inside: avoid;')
 
-    def test_footer_names_the_version_only_when_several_are_built(self):
+    def test_version_appears_only_at_the_end_when_several_are_built(self):
+        # Printed where a neighbor cannot read it: never in the header or footer.
         single, _, _ = self._render(_exam([_mc('one')]))
         several, _, _ = self._render(_exam([_mc('one')]), total_versions=2)
-        self.assertIn('content: "Page " counter(page) " of " counter(pages);', single)
-        self.assertIn('content: "Version A · Page " counter(page) " of " counter(pages);', several)
+        for text in (single, several):
+            self.assertIn('content: "Page " counter(page) " of " counter(pages);', text)
+            self.assertNotIn('Version A', text)
+        self.assertNotIn('class="version-end"', single)
+        self.assertIn('This is exam version <strong>A</strong>', several)
 
     def test_math_reaches_mathjax_with_markup_characters_escaped(self):
         bank = self.tmpdir / 'math.txt'

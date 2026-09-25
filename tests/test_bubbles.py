@@ -104,5 +104,44 @@ class TestAdaptiveReading(unittest.TestCase):
         self.assertEqual(r.answers['studentID'], '-' * 8)
 
 
+class TestV2Layout(unittest.TestCase):
+    def test_generated_sheet_round_trip(self):
+        import answer_sheet
+        pdf = answer_sheet.build_sheet(questions=150).pdf
+        page = fitz.open(stream=pdf, filetype='pdf')[0]
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), colorspace=fitz.csRGB)
+        img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3).copy()
+        lay = sheet_layout.detect_layout(bubbles.to_gray(img))
+        self.assertIs(lay, sheet_layout.V2)
+        for i, a in enumerate(ANSWERS, 1):
+            paint(img, lay, f'Q{i:03d}', a, 120)
+        for c, d in enumerate('00123456', 1):
+            paint(img, lay, f'ID{c:02d}', d, 120)
+        lab, cx, cy = lay.version['V'][1]
+        yy, xx = np.mgrid[:img.shape[0], :img.shape[1]]
+        img[(xx - cx) ** 2 + (yy - cy) ** 2 <= 81] = 120
+        r = bubbles.read_sheet(img, len(ANSWERS))
+        self.assertEqual(''.join(r.answers[f'Q{i:03d}'] for i in range(1, 21)), ANSWERS)
+        self.assertEqual(r.answers['studentID'], '00123456')
+        self.assertEqual(r.version, 'B')
+
+    def test_written_rows_read_blank_and_boxes_fit(self):
+        import answer_sheet
+        res = answer_sheet.build_sheet(questions=60, written=[14, 15, 40])
+        page = fitz.open(stream=res.pdf, filetype='pdf')[0]
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), colorspace=fitz.csRGB)
+        img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3)
+        r = bubbles.read_sheet(img, 60)
+        self.assertTrue(all(r.answers[f'Q{i:03d}'] == '-' for i in range(1, 61)))
+        self.assertEqual(sorted(res.boxes), [14, 15, 40])
+        for x1, y1, x2, y2 in res.boxes.values():
+            self.assertTrue(0 < x1 < x2 < sheet_layout.PAGE_W and 0 < y1 < y2 < sheet_layout.PAGE_H)
+
+    def test_written_questions_need_free_columns(self):
+        import answer_sheet
+        with self.assertRaises(answer_sheet.SheetError):
+            answer_sheet.build_sheet(questions=150, written=[3])
+
+
 if __name__ == '__main__':
     unittest.main()

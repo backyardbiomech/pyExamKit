@@ -34,7 +34,8 @@ def _distribute_points(total: float, n: int) -> list[float]:
     return [(base + 1) / 100 if i < remainder else base / 100 for i in range(n)]
 
 
-def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
+def build_key_data(version: ExamVersion, default_points: float = 1.0,
+                   open_coords: dict | None = None) -> dict:
     """Translate an ExamVersion into the generic dict keyformat.py expects:
     bubble_answers, open_questions, metadata, point_values.
 
@@ -43,6 +44,10 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
     MD, OR, and MT questions each produce one bubble row per dropdown/item/
     left, sequential, with the question's points split across those rows.
     Every other question type produces a single bubble row.
+
+    open_coords maps an SA question's row number to the crop region of its
+    writing box on a generated answer sheet, so the scanner needs no boxes
+    drawn by hand.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
@@ -96,10 +101,12 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
             full_ans = [a.text for a in q.answers if a.is_correct]
             part_ans = [a.text for a in q.answers if not a.is_correct]
             open_key = f"openQ_{counter}"
+            box = (open_coords or {}).get(counter)
             open_questions[open_key] = {
                 'full': full_ans,
                 'partial': part_ans,
-                'coords': None,
+                'coords': list(box) if box else None,
+                'page': 1,
             }
             point_values[open_key] = pts
             counter += 1
@@ -125,10 +132,19 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0) -> dict:
     }
 
 
-def save_key(version: ExamVersion, filepath: Path, default_points: float = 1.0) -> None:
+def save_key(version: ExamVersion, filepath: Path, default_points: float = 1.0,
+             open_coords: dict | None = None) -> None:
     """Save the key CSV for one exam version to a file."""
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    save_key_file(str(filepath), build_key_data(version, default_points))
+    save_key_file(str(filepath), build_key_data(version, default_points, open_coords))
+
+
+def answer_rows(version: ExamVersion) -> tuple[int, list[int]]:
+    """(answer-sheet rows the version uses, row numbers answered in writing)."""
+    data = build_key_data(version)
+    skip = data['metadata'].get('questions_to_skip', '')
+    return (data['metadata']['num_questions'],
+            [int(n) for n in skip.split(',') if n])
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ On the [Scan Exams](scanning-and-grading.md) tab, check **Open-ended questions t
 
 After the bubble questions are graded, the key image appears. **Drag a box around the answer area for each open-ended question**, in question order. Include only the space where students wrote — not the printed question number, not the label, not the printed line. Each box prompts for a label, which defaults to the next number in your ignore list, so a question numbered 14 on the exam stays question 14 in the results; labels can also be alphanumeric, so `1A` and `1B` work for two blanks in one question. The only way to correct a box is to remove the last one drawn and redraw it. When all the boxes are drawn, **press `g`** and the window closes.
 
-Those same coordinates can be prepared ahead of time and stored in a key file, which is what the [Build Key](building-keys.md) tab is for. With a key file loaded, the boxes are already known and the drawing step is skipped.
+Those same coordinates can be prepared ahead of time and stored in a key file, which is what the [Build Key](building-keys.md) tab is for. An exam built on the [Build Exam](building-exams.md) tab needs neither: its answer sheet prints a writing box for each short-answer question, and its key already records where each box is. With a key file that has the boxes, the drawing step is skipped.
 
 ## Handwriting transcription
 

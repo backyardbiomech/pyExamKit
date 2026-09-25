@@ -25,7 +25,7 @@ One case is *un*-shuffled on purpose. When every choice in a question is a singl
 
 **Use same questions across all versions** changes what "version" means. Left off, each version draws its own fresh random sample from the pools, so version B may ask about things version A never mentions. Turned on, all versions ask the identical set of questions and differ only in order. Same-questions versions are the ones to use when the versions have to be comparable to each other.
 
-**Add version identifier question** appends — or, set to first, prepends — a synthetic question that instructs each student to fill in the bubble for their version letter. That one bubble is what lets the scanner sort a mixed stack of sheets and grade each one against the right key, so turn it on any time you print more than one version. It occupies a question slot like any other question, but is worth zero points. The default is to make it the last question so students can't easily find the version when passing out exams.
+**Add version identifier question** appends — or, set to first, prepends — a synthetic question that instructs each student to fill in the bubble for their version letter. That one bubble is what lets the scanner sort a mixed stack of sheets and grade each one against the right key. The current answer sheets have version bubbles in their header, and the exam prints its version letter once, at the end, with a line telling the student to bubble it; so this option is only needed when students will use the older sheets. It occupies a question slot like any other question, but is worth zero points. The default is to make it the last question so students can't easily find the version when passing out exams.
 
 ## Font size and page breaks
 
@@ -41,15 +41,17 @@ Choose an **Output folder**, then click **Generate Exam**. Each build goes in it
 - `Title_vA.md` — the same exam as Markdown - you probably won't use this
 - `Title_vA_key.csv` — the answer key, in the format [Scan Exams](scanning-and-grading.md) reads
 
+It also writes `Title_answer_sheet.pdf`, the [answer sheet](answer-sheets.md) for this exam: sized to its number of answer rows, headed with the course and title, and with a numbered writing box for each short-answer question. The key records where each box is, so the scanner crops the handwriting without being told. If versions put a short-answer question on different rows, each version gets its own `Title_vA_answer_sheet.pdf` instead, marked "Form A" in small print at the bottom. The log says which, and warns if the written questions do not fit (the boxes need an exam of 90 or fewer answer rows).
+
 Once per build it also writes `Title.exam.json`, the settings and the exact exam, for reprinting later (see below).
 
 Any images the questions use are copied into an `images/` subfolder of the build's folder, so that folder can be moved or shared on its own without breaking the exam. Don't move the html file to a different folder though unless you also bring the images folder. When two banks each have a different image with the same name, the second is copied as `cell_2.jpg` (and so on) and the exam points at the renamed copy; nothing already in `images/` is overwritten.
 
 Equations are drawn by MathJax, which loads from the internet when the exam is opened, so open the exam on a connected computer before printing it.
 
-Every printed page has a footer with its page number, so a dropped stack can be put back in order. When more than one version is built, the footer names the version as well, unless the exam carries a version identifier question, which already prints the version where the student needs it. Chrome and Edge print this footer; Safari and Firefox leave it off. Leave the print dialog's own **Headers and footers** option unchecked, since it adds the file path and date.
+Every printed page has a footer with its page number, so a dropped stack can be put back in order. The version letter appears nowhere on the first page or in the footer, so students cannot compare versions with a neighbor; when more than one version is built, it is printed once, at the end of the exam. Chrome and Edge print this footer; Safari and Firefox leave it off. Leave the print dialog's own **Headers and footers** option unchecked, since it adds the file path and date.
 
-Print the HTML from a browser (or print to PDF). The students bubble their answers on a separate [answer sheet](answer-sheets.md), not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
+Print the HTML from a browser (or print to PDF). The students bubble their answers on the separate [answer sheet](answer-sheets.md) written with the build, not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
 
 ## Saving and reprinting an exam
 

@@ -185,7 +185,8 @@ def read_sheet(aligned, quests: int, ignores=None, cutoff: float = CUTOFF,
     names = read_one_per_row(layout.name_rows)
     version = read_one_per_row(layout.version).get('V', '-')
 
-    answers['LastName'] = ''.join(names.get(f'N{i}', '') for i in range(1, 6))
-    answers['FirstName'] = ''.join(names.get(f'F{i}', '') for i in range(1, 4))
+    # A sheet without name bubbles reads like a blank name grid: '-'
+    answers['LastName'] = ''.join(names.get(f'N{i}', '') for i in range(1, 6)) or '-'
+    answers['FirstName'] = ''.join(names.get(f'F{i}', '') for i in range(1, 4)) or '-'
     answers['studentID'] = ''.join(ids[k] for k in sorted(ids))
     return SheetRead(answers, layout, F, cut, flags, version)

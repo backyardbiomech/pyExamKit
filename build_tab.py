@@ -28,7 +28,8 @@ from tkinter import filedialog, messagebox
 from exam_builder import (FONT_SIZES, BuildConfig, ExamBuilder, PoolConfig,
                           answer_sheet_for, slot_count)
 from exam_config import load_config, load_versions, save_config
-from exam_key_writer import save_key
+from exam_key_writer import answer_rows, save_key
+import answer_sheet
 from models import ExamVersion
 from parser import parse_file
 from qti_import import convert_qti_zip, peek_titles, summarize
@@ -98,10 +99,59 @@ def previous_build_files(output_folder: str, title: str) -> list[Path]:
     folder = build_folder(output_folder, title)
     stem = safe_name(title.strip())
     found = [p for pattern in (f'{stem}_v?.html', f'{stem}_v?_*.html',
-                               f'{stem}_v?.md', f'{stem}_v?_key.csv')
+                               f'{stem}_v?.md', f'{stem}_v?_key.csv',
+                               f'{stem}_answer_sheet.pdf', f'{stem}_v?_answer_sheet.pdf')
              for p in folder.glob(pattern)]
     config = config_file(output_folder, title)
     return sorted(found + ([config] if config.exists() else []))
+
+
+def write_answer_sheets(versions: list[ExamVersion], output_path: Path,
+                        heading: str) -> tuple[dict[str, dict], list[str]]:
+    """Draw the answer sheet(s) for a build.
+
+    Written (SA) questions get numbered boxes on the sheet. When every version
+    puts them in the same rows, one sheet serves all versions; otherwise each
+    version gets its own sheet, labeled with its letter, since a box has to
+    sit where that version's key expects it.
+
+    Returns ({version letter: {row: crop}}, log lines).
+    """
+    output_path.mkdir(parents=True, exist_ok=True)
+    rows = {v.version_letter: answer_rows(v) for v in versions}
+    shared = len(set((n, tuple(w)) for n, w in rows.values())) == 1
+    crops, log = {}, []
+    groups = ([(None, versions)] if shared
+              else [(v.version_letter, [v]) for v in versions])
+    for letter, group in groups:
+        n, written = rows[group[0].version_letter]
+        title = safe_name(group[0].title)
+        name = (f'{title}_v{letter}_answer_sheet.pdf' if letter
+                else f'{title}_answer_sheet.pdf')
+        try:
+            res = answer_sheet.build_sheet(n, written, heading, version_letter=letter or '')
+        except answer_sheet.SheetError as exc:
+            log.append(f'    WARNING: no answer sheet drawn: {exc}')
+            continue
+        (output_path / name).write_bytes(res.pdf)
+        for v in group:
+            crops[v.version_letter] = res.boxes
+        note = f' ({len(written)} written-answer box(es))' if written else ''
+        log.append(f'    Sheet → {name}{note}')
+    if not shared and any(w for _, w in rows.values()):
+        log.append('    Written questions fall in different rows in each version, so each '
+                   'version has its own answer sheet; hand each out with its exam.')
+    return crops, log
+
+
+def parse_question_list(text: str) -> list[int]:
+    '''"14, 15 20" -> [14, 15, 20]; raises ValueError naming a bad entry.'''
+    out = []
+    for tok in text.replace(',', ' ').split():
+        if not tok.isdigit():
+            raise ValueError(f'"{tok}" is not a question number.')
+        out.append(int(tok))
+    return out
 
 
 def validate_build_fields(*, title: str, output_folder: str, mode: str,
@@ -384,6 +434,8 @@ class BuildExamUI(ctk.CTkFrame):
             row=0, column=0, padx=(0, 8), sticky='w')
         ctk.CTkButton(frame, text='Save Config…', command=self._save_config_file).grid(
             row=0, column=1, sticky='w')
+        ctk.CTkButton(frame, text='Make Answer Sheet…', command=self._open_sheet_dialog).grid(
+            row=0, column=2, padx=(8, 0), sticky='w')
 
         self.reprint_var = ctk.BooleanVar(value=False)
         self._reprint_check = ctk.CTkCheckBox(
@@ -396,6 +448,64 @@ class BuildExamUI(ctk.CTkFrame):
         ctk.CTkButton(parent, text='Generate Exam', height=36, font=ctk.CTkFont(weight='bold'),
                        fg_color='#2563eb', hover_color='#1d4ed8',
                        command=self._on_generate).pack(fill='x', pady=(4, 8))
+
+    # -- answer sheet without building an exam ------------------------------
+
+    def _open_sheet_dialog(self):
+        '''A blank answer sheet for an exam made elsewhere. Generate Exam
+        writes its own sheet, so this is only for exams not built here.'''
+        win = ctk.CTkToplevel(self)
+        win.title('Make Answer Sheet')
+        win.transient(self.winfo_toplevel())
+        win.grab_set()
+        pad = {'padx': 12, 'pady': 4, 'sticky': 'w'}
+
+        ctk.CTkLabel(win, text='Number of questions:').grid(row=0, column=0, **pad)
+        n_entry = ctk.CTkEntry(win, width=80)
+        n_entry.insert(0, '50')
+        n_entry.grid(row=0, column=1, **pad)
+
+        ctk.CTkLabel(win, text='Written-answer questions:').grid(row=1, column=0, **pad)
+        w_entry = ctk.CTkEntry(win, width=200, placeholder_text='e.g. 14, 15')
+        w_entry.grid(row=1, column=1, **pad)
+        ctk.CTkLabel(win, text='Each gets a numbered writing box in place of its bubbles. '
+                               'Needs 90 or fewer questions.',
+                     font=ctk.CTkFont(size=11), text_color='gray').grid(
+            row=2, column=0, columnspan=2, padx=12, sticky='w')
+
+        ctk.CTkLabel(win, text='Heading (optional):').grid(row=3, column=0, **pad)
+        h_entry = ctk.CTkEntry(win, width=260, placeholder_text='e.g. BIOL 206 Exam 2')
+        h_entry.grid(row=3, column=1, **pad)
+
+        logo_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(win, text='Longwood logo', variable=logo_var).grid(
+            row=4, column=0, columnspan=2, **pad)
+
+        def save():
+            try:
+                n = int(n_entry.get())
+                written = parse_question_list(w_entry.get())
+                res = answer_sheet.build_sheet(
+                    n, written, h_entry.get().strip(),
+                    logo=answer_sheet.DEFAULT_LOGO if logo_var.get() else None)
+            except ValueError as exc:     # SheetError is a ValueError
+                messagebox.showerror('Make Answer Sheet', str(exc), parent=win)
+                return
+            path = filedialog.asksaveasfilename(
+                parent=win, title='Save answer sheet', defaultextension='.pdf',
+                initialfile=f'answer_sheet_{n}q.pdf', filetypes=[('PDF', '*.pdf')])
+            if not path:
+                return
+            Path(path).write_bytes(res.pdf)
+            self.log_fn(f'Answer sheet → {path}')
+            if written:
+                self.log_fn('  In Scan Exams, list these as questions to ignore: '
+                            + ', '.join(map(str, written)) + '. Draw each answer box when '
+                            'the scan asks, or build the exam here to have them placed for you.')
+            win.destroy()
+
+        ctk.CTkButton(win, text='Save PDF…', command=save).grid(
+            row=5, column=0, columnspan=2, pady=(8, 12))
 
     # -- source-mode / conditional-row wiring -------------------------------
 
@@ -674,17 +784,19 @@ class BuildExamUI(ctk.CTkFrame):
                     self.log_fn(f'  WARNING: {w}')
             self.log_fn(f'Building {len(versions)} version(s)…')
             total_versions = len(versions)
+            heading = ' '.join(s for s in (config.course.strip(), config.title.strip()) if s)
+            sheet_crops, sheet_log = write_answer_sheets(versions, output_path, heading)
+            for line in sheet_log:
+                self.log_fn(line)
             for version in versions:
                 v_letter = version.version_letter
                 slots = sum(slot_count(q) for q in version.questions)
-                sheet = answer_sheet_for(slots)
                 # The slot count, not the question count, is what has to fit
-                # the paper -- OR/MT/MD each take several slots -- so name the
-                # answer sheet to print rather than making the user work it out.
-                sheet_note = (f'print the {sheet}-question answer sheet' if sheet
-                              else 'TOO LARGE for any answer sheet')
+                # the paper -- OR/MT/MD each take several slots.
+                sheet_note = ('' if answer_sheet_for(slots)
+                              else ' — TOO LARGE for the answer sheet')
                 self.log_fn(f'\n  Version {v_letter} ({len(version.questions)} questions, '
-                            f'{slots} answer-sheet slots — {sheet_note})')
+                            f'{slots} answer-sheet rows{sheet_note})')
                 html_path, html_warnings = renderer.to_html(version, output_path, total_versions,
                                                             config.default_points, config.font_size)
                 self.log_fn(f'    HTML  → {html_path.name}')
@@ -694,7 +806,8 @@ class BuildExamUI(ctk.CTkFrame):
                 self.log_fn(f'    MD    → {md_path.name}')
                 key_name = f'{safe_name(version.title)}_v{v_letter}_key.csv'
                 key_path = output_path / key_name
-                save_key(version, key_path, config.default_points)
+                save_key(version, key_path, config.default_points,
+                         open_coords=sheet_crops.get(v_letter))
                 self.log_fn(f'    Key   → {key_path.name}')
 
             # The config records the exam as printed, which is the only way to

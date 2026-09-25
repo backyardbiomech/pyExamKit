@@ -49,3 +49,15 @@ The layout code is four small squares on the bottom margin between the lower reg
 4. Sheet generator and the new layout, with layout-code detection.
 5. Roster loading, matching, GUI field, and the user-facing roster guide.
 6. Tune cutoffs once the user has run phase 1 on real scans.
+
+## Additions made during the build
+
+**Written-answer boxes from the exam.** Build Exam knows which answer rows are short-answer (`SA`) questions, so it now writes the answer sheet itself. Those rows show a dashed arrow in place of bubbles, pointing to a numbered writing box in the columns the exam does not use, and the key records each box as that question's crop region, which removes the hand-drawing step at scan time. The arrow's shaft is broken at every bubble position so that nothing prints inside a measured disk; an earlier solid arrow read as bubble F. Boxes need free columns, so they fit only on exams of 90 or fewer rows (7 boxes, or 14 at 30 rows or fewer). A row cannot hold a box inline, because every bubble must stay where the layout says it is, with no per-exam geometry for the scanner to learn. When versions put a short-answer question on different rows, each version gets its own sheet, marked "Form A" in small print in the bottom margin.
+
+**The version letter is hidden.** Students could read a neighbor's version off the exam header or the page footer. The letter now appears only at the end of the exam, with a line telling the student which header bubble to fill, and it is gone from the page title too, which browsers print when headers are left on.
+
+**The version row runs A to F**, matching the six versions the builder can make.
+
+## Status
+
+Phases 2 to 5 are built. Phase 6 waits on `tools/bubble_stats.py` output from real stacks; until then `CUTOFF`, `FLOOR`, `ROW_RATIO` and `BAND` in `bubbles.py` are provisional, chosen from synthetic sheets.
