@@ -37,6 +37,7 @@ C. Name the structure at pointer C.
 
 D. Name the structure at pointer D.
 = renal capsule | capsule
+~ simple columnar epithelium
 
 # Station 3: urinary system model
 setup: Urinary system model. Pins A to D.

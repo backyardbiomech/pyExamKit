@@ -139,6 +139,19 @@ def load_acceptable_answers_file(path: str) -> tuple:
     return full_result, partial_result
 
 
+def looks_blank(crop: np.ndarray) -> bool:
+    '''
+    True when an answer box holds essentially no writing. Ink is anything
+    clearly darker than the box's own paper, so light pencil counts and scan
+    speckle does not; a few dozen dark pixels are allowed for dust.
+    '''
+    if crop.size == 0:
+        return True
+    gray = crop.mean(axis=2) if crop.ndim == 3 else crop
+    paper = float(np.percentile(gray, 90))
+    return int((gray < paper - 60).sum()) < 40
+
+
 def _pil_to_tkphoto(pil_img, master=None):
     """Convert a PIL Image to tk.PhotoImage via PNG bytes (no _imagingtk needed)."""
     buf = io.BytesIO()
@@ -914,9 +927,17 @@ class OpenQs(object):
             self._transcriptions.setdefault(k, {})[img_idx] = (student_text, ocr_conf)
         _key_list = self.acceptable_answers.get(k) or ([key_text] if key_text else [])
         _partial_list = self.partial_credit_answers.get(k, [])
-        suggestion = suggest_grade(student_text, _key_list, ocr_conf,
-                                   partial_texts=_partial_list,
-                                   partial_threshold=self._strictness if self._strictness > 0 else None)
+        # A box with no ink is wrong whatever the reading; one with ink but
+        # no reading is left to the grader.
+        blank = not student_text and looks_blank(student_crop)
+
+        def _suggest(full, part):
+            if blank:
+                return 'XX'
+            return suggest_grade(student_text, full, ocr_conf, partial_texts=part,
+                                 partial_threshold=self._strictness if self._strictness > 0
+                                 else None)
+        suggestion = _suggest(_key_list, _partial_list)
 
         # Auto-grade perfect matches without showing the window
         if not self._review_perfect and suggestion == 'CC':
@@ -994,9 +1015,12 @@ class OpenQs(object):
         s_lbl.pack()
         s_lbl.tk_img = s_img
         if student_text:
-            small(left, f'{ocr_source} reading:  {student_text}', fg=FAINT).pack(anchor='w', pady=(3, 0))
+            reading = f'{ocr_source} reading:  {student_text}'
+        elif blank:
+            reading = 'Blank box'
         else:
-            small(left, 'No reading of the handwriting', fg=FAINT).pack(anchor='w', pady=(3, 0))
+            reading = 'No reading of the handwriting'
+        small(left, reading, fg=FAINT).pack(anchor='w', pady=(3, 0))
         add_row = tk.Frame(left)
         add_row.pack(anchor='w', pady=(8, 0))
         status_var = tk.StringVar(value='')
@@ -1145,13 +1169,12 @@ class OpenQs(object):
         def update_suggestion():
             full, part = answers('CC'), answers('CX')
             thr = self._strictness if self._strictness > 0 else None
-            sug = suggest_grade(student_text, full, ocr_conf, partial_texts=part,
-                                partial_threshold=thr)
+            sug = _suggest(full, part)
             current['val'] = sug
             for g, ring in rings.items():
                 ring.configure(bg=GRADE_STYLE[g][0] if g == sug else _win_bg)
             suggestion_lbl.configure(
-                text=explain_suggestion(student_text, full, part, sug, thr),
+                text=explain_suggestion(student_text, full, part, sug, thr, blank=blank),
                 fg=GRADE_STYLE[sug][0] if sug in GRADE_STYLE else MUTED)
 
         def set_grade(g):
@@ -1174,10 +1197,10 @@ class OpenQs(object):
             if typing():
                 win.focus_set()   # leave the field; the next Enter grades
                 return
+            # With no suggestion (writing the AI could not read), Enter does
+            # nothing, so an unread answer is never marked wrong by reflex.
             if current['val']:
                 set_grade(current['val'])
-            elif not student_text:
-                set_grade('XX')
         win.bind('<Return>', on_return)
 
         refresh_lists()

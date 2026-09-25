@@ -80,13 +80,17 @@ def suggest_grade(student_text: str, key_texts,
 
 
 def explain_suggestion(student_text: str, full: list, partial: list,
-                       suggestion: str | None, partial_threshold: float | None = None) -> str:
+                       suggestion: str | None, partial_threshold: float | None = None,
+                       blank: bool = False) -> str:
     """
     One plain sentence for the grading window: what is suggested and why,
-    naming the key answer the reading came closest to.
+    naming the key answer the reading came closest to. blank is a box with
+    no writing in it.
     """
+    if blank:
+        return 'Suggested: wrong. The box is blank. Enter accepts.'
     if not student_text:
-        return 'No reading of the handwriting. Grade it by eye.'
+        return 'No reading of the handwriting. Grade it by eye with C, P, or X.'
     reading = student_text.strip().lower()
     scored = [(_levenshtein_ratio(a.strip().lower(), reading), a, 'full') for a in full if a]
     scored += [(_levenshtein_ratio(a.strip().lower(), reading), a, 'partial')

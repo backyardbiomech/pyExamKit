@@ -45,6 +45,10 @@ class TestExplain(unittest.TestCase):
     def test_no_reading(self):
         self.assertIn('by eye', explain_suggestion('', FULL, PARTIAL, None))
 
+    def test_blank_box(self):
+        msg = explain_suggestion('', FULL, PARTIAL, 'XX', blank=True)
+        self.assertEqual(msg, 'Suggested: wrong. The box is blank. Enter accepts.')
+
     def test_empty_key(self):
         self.assertIn('no answers', explain_suggestion('urine', [], [], None))
 

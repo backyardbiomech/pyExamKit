@@ -91,6 +91,7 @@ class TestPracticalScan(unittest.TestCase):
             cls.shown.append({'q': q, 'student': img_idx, 'label': label,
                               'name_ink': name_crop is not None and name_crop.min() < 150,
                               'ink': int((crop < 200).sum()), 'text': text,
+                              'blank': openQ.looks_blank(crop),
                               'title': self._q_text.get(k, ''), 'progress': self._progress})
             if (img_idx, q) == cls.add_at:
                 # The grader accepts this student's spelling for everyone
@@ -133,6 +134,11 @@ class TestPracticalScan(unittest.TestCase):
                 self.assertGreater(s['ink'], 40, s)
             else:
                 self.assertLess(s['ink'], 10, s)
+
+    def test_blank_boxes_are_told_from_written_ones(self):
+        # Including the student who writes in very light pencil
+        for s in self.shown:
+            self.assertEqual(s['blank'], not s['text'], s)
 
     def test_window_names_the_student_and_the_question(self):
         s = self.shown[0]

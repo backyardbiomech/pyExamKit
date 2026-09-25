@@ -30,7 +30,7 @@ The window takes one question at a time and goes through every student who answe
 
 Below that, **what the student wrote** is on the left and **what the key accepts** is on the right, each shown once. The student's answer is the picture from their sheet, outlined in blue; the AI's reading of it is the small gray line underneath, since it is an interpretation of the handwriting rather than part of the answer. The key box lists the full-credit answers and then the partial-credit ones. On an exam graded without a key file, the key sheet's own crop sits at the top of the key box.
 
-At the bottom are the grade buttons. The suggested grade is the button with a colored ring (green for correct, amber for partial, red for wrong), and the sentence under the buttons says why: which key answer the reading matched, or came closest to, and how alike they are. Color in the window means only that.
+At the bottom are the grade buttons. The suggested grade is the button with a colored ring (green for correct, amber for partial, red for wrong), and the sentence under the buttons says why: which key answer the reading matched, or came closest to, and how alike they are. An empty box is suggested as wrong, so Enter moves past it. When the box has writing but no reading came back (AI transcription off, or handwriting it could not read), nothing is suggested and Enter does nothing: grade it with `c`, `p`, or `x`, so an unread answer is never marked wrong by reflex. Color in the window means only the suggestion.
 
 | Key | Meaning |
 |---|---|
@@ -54,7 +54,7 @@ Below that, the **partial credit strictness** slider decides. It is the similari
 
 Two shortcuts skip the window entirely. A perfect-match suggestion is **accepted automatically** unless you check **Review perfect matches?**, which is the setting to use when you would rather see every sheet. And a partial suggestion is auto-accepted when it came from an explicit partial answer in the key or from a strictness threshold you set, on the grounds that you already made that decision when you set it.
 
-Where no transcription came back at all, no grade is suggested and the answer is shown to you to grade by eye.
+A box with no writing in it is suggested as wrong. Where the box has writing but no transcription came back, no grade is suggested and the answer is shown to you to grade by eye.
 
 Basically, no points are lost unless you confirm it, but points can be gained without confirmation (depending on settings).
 
