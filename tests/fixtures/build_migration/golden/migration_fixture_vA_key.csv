@@ -1,6 +1,7 @@
 type,question,page,x1,y1,x2,y2,answer,partial_answers,points
 metadata,num_questions,,,,,,12,,
 metadata,questions_to_skip,,,,,,3,,
+metadata,sheet_rows,,,,,,"3,2,3,3,1",,
 bubble,Q001,,,,,,A,,1.0
 bubble,Q002,,,,,,BC,,1.0
 bubble,Q003,,,,,,ignore,,

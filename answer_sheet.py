@@ -8,6 +8,11 @@ writing box in the columns the exam does not use. The box positions are
 returned so the exam key can carry them as crop regions, which saves drawing
 them by hand at scan time.
 
+A sheet built for an exam with ordering, matching, or dropdown questions
+takes its row runs from the exam (sheet_layout.keyed_layout), so each such
+question's rows sit together between gaps; the layout code tells the
+scanner to take the rows from the key.
+
     uv run python answer_sheet.py -n 60 --written 14,15 -o sheet.pdf
 '''
 import argparse
@@ -194,9 +199,9 @@ def _version(page, version_letter):
         _text(page, 300, 1537, f'Form {version_letter}', size=7, color=GUIDE)
 
 
-def _layout_code(page):
+def _layout_code(page, code):
     cells = L.LAYOUT_CODE_CELLS
-    bits = [1] + [(L.V2.code >> i) & 1 for i in range(len(cells) - 1)]
+    bits = [1] + [(code >> i) & 1 for i in range(len(cells) - 1)]
     h = L.LAYOUT_CODE_SIZE / 2
     for (cx, cy), on in zip(cells, bits):
         if on:
@@ -238,11 +243,23 @@ def _place_boxes(written: list[int], first_free_col: int) -> dict[int, tuple]:
 
 
 def build_sheet(questions: int = 150, written=(), title: str = '', version_letter: str = '',
-                logo=DEFAULT_LOGO) -> SheetResult:
+                logo=DEFAULT_LOGO, columns: list[list[int]] | None = None) -> SheetResult:
     '''
     Draw a sheet with `questions` answer rows. Question numbers in `written`
-    get writing boxes instead of bubbles. Returns the PDF and the box crops.
+    get writing boxes instead of bubbles. `columns` gives the row runs of a
+    sheet grouped by question (sheet_layout.keyed_layout); without it the
+    rows fall in the standard groups of five. Returns the PDF and the box
+    crops.
     '''
+    if columns:
+        layout = L.keyed_layout(columns)
+        if layout.max_questions != questions:
+            raise SheetError(f'The row runs hold {layout.max_questions} rows, '
+                             f'not {questions}.')
+        used_cols = len(columns)
+    else:
+        layout = L.V2
+        used_cols = math.ceil(questions / 30)
     if not 1 <= questions <= L.V2.max_questions:
         raise SheetError(f'An answer sheet holds 1 to {L.V2.max_questions} questions.')
     written = sorted(set(int(q) for q in written))
@@ -254,7 +271,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
     doc = fitz.open()
     page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
     _registration(page)
-    _layout_code(page)
+    _layout_code(page, layout.code)
     _header(page, logo, title)
     _guide(page)
     _id_block(page)
@@ -266,7 +283,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
               'Rows with an arrow are answered in writing, in the numbered box.',
               size=8, color=GUIDE)
 
-    for k, row in L.V2.question_rows(questions).items():
+    for k, row in layout.question_rows(questions).items():
         q = int(k[1:])
         _, ax, ay = row[0]
         _text(page, ax - 17, ay + 4, str(q), size=9, bold=True, align='right')
@@ -275,7 +292,6 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
         else:
             _grid_row(page, row)
 
-    used_cols = math.ceil(questions / 30)
     boxes = _place_boxes(written, used_cols)
     for q, (x0, y0, x1, y1) in boxes.items():
         _text(page, x0, y0 - 6, f'{q}.', size=10, bold=True)

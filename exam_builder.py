@@ -73,6 +73,41 @@ def slot_count(q: Question) -> int:
     return 1
 
 
+# Question types whose rows belong together. On a built answer sheet each
+# one gets its own run of rows, with a gap before and after.
+GROUPED_TYPES = ('OR', 'MT', 'MD')
+
+
+def is_grouped(q: Question) -> bool:
+    return q.q_type in GROUPED_TYPES and slot_count(q) > 1
+
+
+def row_runs(questions: list[Question]) -> list[int]:
+    """Answer-sheet rows as runs, each followed by a gap.
+
+    Every grouped question is its own run, one row per item. The other
+    questions between two grouped ones split into runs of at most five, as
+    even as possible, so no lone row sits between gaps looking like a group
+    of its own (seven rows become 4 and 3, not 5 and 2). After the last
+    grouped question they fall in fives, so an exam without grouped
+    questions gets the standard gap every five rows.
+    """
+    runs: list[int] = []
+    loose = 0
+    for q in questions:
+        if is_grouped(q):
+            if loose:
+                k = -(-loose // 5)
+                base, extra = divmod(loose, k)
+                runs += [base + 1] * extra + [base] * (k - extra)
+                loose = 0
+            runs.append(slot_count(q))
+        else:
+            loose += 1
+    runs += [5] * (loose // 5) + ([loose % 5] if loose % 5 else [])
+    return runs
+
+
 def answer_sheet_for(slots: int) -> int | None:
     """Smallest shipped answer sheet that fits `slots`, or None if none does."""
     return next((size for size in ANSWER_SHEET_SIZES if slots <= size), None)
@@ -127,9 +162,10 @@ class ExamBuilder:
                     q.source_folder = folder
                 shared_sample.extend(chosen)
 
-        # With shared questions, written (SA) questions keep version A's
-        # positions in every version, so one answer sheet's writing boxes
-        # fit them all. Set from version A's shuffle.
+        # With shared questions, written (SA) and grouped (OR, MT, MD)
+        # questions keep version A's positions in every version, so one
+        # answer sheet's writing boxes and gaps fit them all. Set from
+        # version A's shuffle.
         base_order: list[int] | None = None
 
         for v in range(1, config.num_versions + 1):
@@ -139,13 +175,13 @@ class ExamBuilder:
                 # Deep-copy so each version can shuffle independently
                 selected = copy.deepcopy(shared_sample)
                 if config.shuffle_questions:
-                    written = [q.q_type == 'SA' for q in selected]
+                    pinned = [q.q_type == 'SA' or is_grouped(q) for q in selected]
                     if base_order is None:
                         base_order = list(range(len(selected)))
                         random.shuffle(base_order)
                         order = base_order
-                    elif any(written):
-                        order = _shuffle_between_pinned(base_order, written)
+                    elif any(pinned):
+                        order = _shuffle_between_pinned(base_order, pinned)
                     else:
                         order = random.sample(base_order, len(base_order))
                     selected = [selected[i] for i in order]
@@ -229,9 +265,8 @@ def _shuffle_between_pinned(base_order: list[int], pinned: list[bool]) -> list[i
 
     Questions move only within the stretch between two pinned ones. Each
     stretch then holds the same questions in every version, so it takes the
-    same number of answer-sheet rows even when ordering, matching, or
-    dropdown questions take several, and every pinned question lands on the
-    same row number.
+    same number of answer-sheet rows, every pinned question lands on the
+    same row number, and the sheet's gaps fall in the same places.
     """
     order: list[int] = []
     stretch: list[int] = []

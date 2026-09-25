@@ -2,7 +2,7 @@
 
 ## Recommended workflows
 
-**All bubbles.** Build the exam here and use the key CSV it writes. For an exam built elsewhere, either fill in an answer sheet by hand and scan it as the first page of the stack, or build a reusable key from that filled sheet on the [Build Key](building-keys.md) tab.
+**All bubbles.** Build the exam here and use the key CSV it writes. For an exam built elsewhere, either fill in an answer sheet by hand and scan it as the first page of the stack, or build a reusable key from that filled sheet on the [Standard Sheet](building-keys.md) tab.
 
 **A few written questions mixed into a bubble exam.** Filling in the key by hand is usually easiest, especially when you intend to be strict about the written answers. Scan the key as its own file, load it in the key builder, set the bubble answers and draw the boxes around the written-answer areas, and save it as a CSV. Then scan the students' sheets against that key.
 

@@ -87,6 +87,15 @@ class Scanner(object):
                 print(f'[Scanner] Warning: failed to load key file "{key_file_path}". '
                       'Falling back to scan-key mode.', flush=True)
                 self.key_file_path = ''
+        # Question grids for sheets printed with rows grouped by question,
+        # by version letter ('' for a single key); see bubbles.read_sheet
+        self._keyed = {}
+        for _ver, _kd in ([('', self._key_data)] if self._key_data else []) + \
+                list(self.version_keys.items()):
+            _runs = (_kd or {}).get('metadata', {}).get('sheet_rows')
+            if _runs:
+                self._keyed[_ver] = sheet_layout.keyed_layout(
+                    sheet_layout.parse_columns(_runs))
         if len(ignores)>0:
             ignores=ignores+','
             self.ignores=list(ast.literal_eval(ignores))
@@ -159,11 +168,15 @@ class Scanner(object):
         with PILImage.open(path) as pil:
             return np.array(pil.convert('RGB'))
 
-    def _read(self, row, aligned):
-        """Read one sheet's bubbles into resdf row `row`."""
-        r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff)
+    def _read(self, row, aligned, layout=None, answers_only=False):
+        """Read one sheet's bubbles into resdf row `row`. answers_only keeps
+        the name and ID already there, which the roster may have replaced."""
+        r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff,
+                               layout=layout, keyed=self._keyed)
         self.reads[row] = r
         for k, v in r.answers.items():
+            if answers_only and not k.startswith('Q'):
+                continue
             self.resdf.loc[row, k] = v
 
     def _alert(self, line):
@@ -352,6 +365,15 @@ class Scanner(object):
                     print(f'[MultiVersion] Student row {row_idx} ({name}) manually '
                           f'assigned to version {chosen}.', flush=True)
                     version_groups.setdefault(chosen, []).append(row_idx)
+                    # A grouped-row sheet was read with a guessed grid; read
+                    # it again with the grid of the version now known.
+                    _r = self.reads.get(row_idx)
+                    _grid = self._keyed.get(chosen)
+                    if (_r is not None and _grid is not None and img_path
+                            and _r.layout.code == _grid.code
+                            and _r.layout.columns != _grid.columns):
+                        self._read(row_idx, self._load_aligned(img_path), layout=_grid,
+                                   answers_only=True)
                 else:
                     print(f'[MultiVersion] Student row {row_idx} ({name}) skipped — '
                           'will NOT appear in any output.', flush=True)

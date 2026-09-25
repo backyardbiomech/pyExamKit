@@ -172,8 +172,8 @@ def load_key_csv(path: str) -> dict | None:
                             metadata['num_questions'] = int(value)
                         except ValueError:
                             pass
-                    elif question == 'questions_to_skip' and value:
-                        metadata['questions_to_skip'] = value
+                    elif question in ('questions_to_skip', 'sheet_rows') and value:
+                        metadata[question] = value
                     continue
 
                 # ── Wide format ──────────────────────────────────────────
@@ -302,13 +302,12 @@ def save_key_csv(path: str, data: dict) -> None:
         writer = csv.writer(fh)
         writer.writerow(KEY_CSV_HEADER)
 
-        # Metadata rows (num_questions, questions_to_skip)
-        if meta.get('num_questions'):
-            writer.writerow(['metadata', 'num_questions', '', '', '', '', '',
-                             meta['num_questions'], '', ''])
-        if meta.get('questions_to_skip'):
-            writer.writerow(['metadata', 'questions_to_skip', '', '', '', '', '',
-                             meta['questions_to_skip'], '', ''])
+        # Metadata rows. sheet_rows is the answer sheet's row runs, present
+        # only when the exam's sheet groups rows by question (sheet_layout).
+        for field in ('num_questions', 'questions_to_skip', 'sheet_rows'):
+            if meta.get(field):
+                writer.writerow(['metadata', field, '', '', '', '', '',
+                                 meta[field], '', ''])
 
         # Bubble answers (sorted by question key)
         for qk in sorted(bubble.keys()):

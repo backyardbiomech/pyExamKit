@@ -8,11 +8,11 @@ Scan at **200 dpi or better, in color**. Put every scan in a folder containing n
 
 You can scan the whole stack to a single PDF, or to a folder of JPGs. **JPGs are the safer choice for a large stack**, because a page that scanned badly can be rescanned and dropped into the folder, while a PDF has to be remade.
 
-If you are not loading a key file, **the key sheet goes first in the stack**. With a key file loaded, the stack is students only.
+If you are not loading a key file, **the key sheet goes first in the stack**. With a key file loaded, the stack is students only. A sheet built with an exam that groups rows by question needs its key file; without one the scan stops and says so.
 
 ## Setting up the run
 
-**Load Key File…** picks the key CSV — either one the [Build Exam](building-exams.md) tab wrote or one from the [Build Key](building-keys.md) tab. Loading it fills in the question count and the skip list from the key's own metadata, so those fields agree with the key by construction. **Create / Edit…** opens the same file for editing.
+**Load Key File…** picks the key CSV — either one the [Build Exam](building-exams.md) tab wrote or one from the [Standard Sheet](building-keys.md) tab. Loading it fills in the question count and the skip list from the key's own metadata, so those fields agree with the key by construction. **Create / Edit…** opens the same file for editing.
 
 **Choose PDF of scans or JPG of key** points at the scans. Select the PDF, or select the first JPG with the rest in the same folder.
 

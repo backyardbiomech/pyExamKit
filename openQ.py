@@ -1620,6 +1620,9 @@ class KeyFileEditorDialog:
         # Per-question point values, carried through unedited — this dialog has
         # no points UI, but must not silently drop them from a loaded key file.
         self._point_values: dict = {}
+        # The answer sheet's row runs, carried through the same way: without
+        # them a sheet printed for this exam cannot be read.
+        self._sheet_rows: str = ''
 
         if path and Path(path).exists():
             data = load_key_file(path)
@@ -1635,6 +1638,7 @@ class KeyFileEditorDialog:
                         'page': int(qdata.get('page', 1) or 1),
                     }
                 self._point_values = dict(data.get('point_values', {}))
+                self._sheet_rows = data.get('metadata', {}).get('sheet_rows', '')
 
         self._build_ui()
 
@@ -2224,6 +2228,7 @@ class KeyFileEditorDialog:
             'metadata': {
                 'num_questions': _total,
                 'questions_to_skip': _skip_str,
+                'sheet_rows': self._sheet_rows,
             },
             'point_values': dict(self._point_values),
         }
@@ -2797,7 +2802,7 @@ class KeyBuilderDialog:
         if self._use_ai and not self._api_key:
             self._status_var.set(
                 'AI OCR requested but no API key configured \u2014 '
-                'falling back to local OCR. Use "Configure API Key\u2026" on the Build Key tab.')
+                'falling back to local OCR. Use "Configure API Key\u2026" on the Standard Sheet tab.')
             self._win.update()
 
         self._status_var.set('Running OCR \u2014 please wait\u2026')

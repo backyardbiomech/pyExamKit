@@ -4,13 +4,13 @@ Grading needs a key: which bubble is correct for each question, where on the pag
 
 **Build the exam here and the key comes with it.** The [Build Exam](building-exams.md) tab writes `Title_vA_key.csv` beside each version. Load it on the Scan Exams tab and you are done. This is the path to prefer, since the key cannot disagree with the exam it came from, as long as your exam files were correct.
 
-**Scan a sheet you filled in yourself.** The **Build Key** tab reads an answer sheet you bubbled by hand and turns it into the same CSV. Use this for an exam that was not built by this app.
+**Scan a sheet you filled in yourself.** The **Standard Sheet** tab reads an answer sheet you bubbled by hand and turns it into the same CSV. Use this for an exam that was not built by this app, on a standard sheet from **Make Answer Sheet…** on the same tab. A sheet built with an exam that groups rows by question cannot be read this way; its key comes with it.
 
 **Put the key sheet at the front of the stack.** The scanner will read the first page as the key. This is the oldest workflow and it still works, but it produces no reusable file, so the key has to be re-read on every scan.
 
-## The Build Key tab
+## The Standard Sheet tab
 
-Pick a mode, set the options that appear, and click **Build Key from Exam Scan…** to open the builder on your scanned sheet.
+**Make Answer Sheet…** at the top prints a blank standard sheet (see [Answer sheets](answer-sheets.md)). Below it, pick a mode, set the options that appear, and click **Build Key from Exam Scan…** to open the builder on your scanned sheet.
 
 **Blank sheet** mode is for marking where the **written answers** go, and nothing else. Load a blank sheet — a PDF, which can run to several pages, each of which needs the three registration circles— draw a box around each answer area, and save. You then type the bubble answers in afterward, either in this dialog or in a spreadsheet. This is the mode for an exam that is mostly or entirely written answers.
 
@@ -44,7 +44,7 @@ type, question, page, x1, y1, x2, y2, answer, partial_answers, points
 
 **`type`** is `metadata`, `bubble`, or `open`. A row with a blank type, or a type starting with `#`, is ignored, which makes comment rows possible.
 
-**Metadata rows** carry the settings the Scan Exams tab fills in for you. `num_questions` holds the bubble question count and `questions_to_skip` holds the comma-separated skip list, each with its value in the `answer` column.
+**Metadata rows** carry the settings the Scan Exams tab fills in for you. `num_questions` holds the bubble question count and `questions_to_skip` holds the comma-separated skip list, each with its value in the `answer` column. A key built with an exam whose sheet groups rows by question also has `sheet_rows`, which says where the rows are printed: the number of rows in each run between gaps, comma-separated, with columns separated by a slash (`5,4,3,5/2,5`). Keep it when editing a key by hand, since that sheet cannot be read without it.
 
 **Bubble rows** name the question in `question` — `Q001`, or just `1`, which is normalized on read — and put the correct letters in `answer`. Multiple letters run together with no separator: `ABD`. The coordinate columns stay empty. `points` is the value of that question, and it is what the grader uses; leave it blank and the question falls back to the exam-wide points-per-bubble-question setting.
 

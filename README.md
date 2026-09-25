@@ -14,7 +14,7 @@ The app opens to one window with four tabs, sharing a single log at the bottom.
 
 **Build Exam** turns one or more plain-text question banks into a printable exam — multiple choice, multiple answer, true/false, short answer, multiple dropdown, ordering, and matching — in up to six scrambled versions, with an answer key CSV the scanner grades against. It can also import a Canvas QTI export, so a quiz that already exists in Canvas becomes a paper exam without being retyped.
 
-**Build Key** produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
+**Standard Sheet** prints a blank answer sheet for an exam made elsewhere, and produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
 
 **Scan Exams** reads a stack of completed answer sheets, grades them against the key, and writes out a results spreadsheet, a per-question breakdown, a Canvas-ready upload file, and a marked copy of every student's sheet.
 
@@ -27,7 +27,7 @@ The app opens to one window with four tabs, sharing a single log at the bottom.
 3. [Building an exam](docs/building-exams.md) — the Build Exam tab: pools, versions, shuffling, and what it writes out
 4. [Importing a Canvas quiz](docs/importing-canvas-quizzes.md) — turning a QTI export into a question bank
 5. [Answer sheets](docs/answer-sheets.md) — the printable sheets, and how far you can modify them
-6. [Building a key](docs/building-keys.md) — the Build Key tab, plus the key CSV format
+6. [Building a key](docs/building-keys.md) — the Standard Sheet tab, plus the key CSV format
 7. [Scanning and grading](docs/scanning-and-grading.md) — the Scan Exams tab and how each score is calculated
 8. [Class rosters](docs/roster.md) — putting names on results by ID, from a Canvas export or your own spreadsheet
 9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading

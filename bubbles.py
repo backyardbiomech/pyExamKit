@@ -150,16 +150,43 @@ def decide_one(key, labels, scores, cut, F, band=BAND, row_ratio=ROW_RATIO):
     return labels[order[0]], flags
 
 
+class KeyedSheetError(ValueError):
+    '''A sheet printed for one exam, read without that exam's rows.'''
+
+
 def read_sheet(aligned, quests: int, ignores=None, cutoff: float = CUTOFF,
-               layout: sheet_layout.Layout | None = None) -> SheetRead:
+               layout: sheet_layout.Layout | None = None,
+               keyed: dict[str, sheet_layout.Layout] | None = None) -> SheetRead:
     '''
     Read an aligned page. Returns answers in the dictionary shape the rest of
     the pipeline already uses: Q001.. -> 'A', 'AC', '-' or 'ignore';
     LastName, FirstName, studentID.
+
+    `keyed` maps a version letter to the question grid its key describes
+    (use '' for a single key); it is used only on a sheet whose layout code
+    says its rows came from the exam. When versions differ, the version
+    bubble picks the grid; when it cannot be read, the first is used and the
+    caller can read again with `layout` once the version is known.
     '''
     gray = to_gray(aligned)
     if layout is None:
         layout = sheet_layout.detect_layout(gray)
+    if layout is sheet_layout.V2_KEYED:
+        if not keyed:
+            raise KeyedSheetError(
+                'This answer sheet was printed for one exam, with its rows grouped by '
+                'question, and can only be read with that exam\'s key file. Load the key '
+                'file built with the exam.')
+        grids = list(keyed.values())
+        first = _read_gray(gray, quests, ignores, cutoff, grids[0])
+        chosen = keyed.get(first.version[:1], grids[0])
+        if chosen.columns == grids[0].columns:
+            return first
+        return _read_gray(gray, quests, ignores, cutoff, chosen)
+    return _read_gray(gray, quests, ignores, cutoff, layout)
+
+
+def _read_gray(gray, quests, ignores, cutoff, layout) -> SheetRead:
     ignores = set(int(i) for i in (ignores or []))
     # The paper level: the page is mostly blank, so a high percentile is paper.
     paper = max(float(np.percentile(gray, 95)), 1.0)

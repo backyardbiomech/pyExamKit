@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 from scanner import Scanner
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import ai_ocr
-from build_tab import BuildExamUI
+import bubbles
+import sheet_layout
+from build_tab import BuildExamUI, open_sheet_dialog
 
 
 class TextRedirector(io.TextIOBase):
@@ -49,7 +51,7 @@ class pyScanUI(ctk.CTkFrame):
         tabs.pack(fill='both', expand=True)
 
         scan_tab   = tabs.add("Scan Exams")
-        key_tab    = tabs.add("Build Key")
+        key_tab    = tabs.add("Standard Sheet")
         regrade_tab = tabs.add("Re-grade")
         build_tab  = tabs.add("Build Exam")
         BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
@@ -69,7 +71,7 @@ class pyScanUI(ctk.CTkFrame):
                       command=self._browse_key_file, width=180).pack(side='left', padx=(0, 6))
         self.scanKeyFileEntry = ctk.CTkEntry(
             key_file_row, width=400,
-            placeholder_text="Load the key CSV built in the 'Build Key' tab (auto-fills question count & skips)")
+            placeholder_text="Load the key CSV from Build Exam or Standard Sheet (auto-fills question count & skips)")
         self.scanKeyFileEntry.pack(side='left', padx=(0, 6))
         ctk.CTkButton(key_file_row, text="Create / Edit…",
                       command=self._open_key_file_editor, width=110).pack(side='left')
@@ -272,8 +274,24 @@ class pyScanUI(ctk.CTkFrame):
             self._version_key_entries[_ver] = _entry
 
         # ════════════════════════════════════════════════════════
-        # TAB 2 — Build Key
+        # TAB 2 — Standard Sheet: a generic answer sheet and a key built
+        # by scanning it, for exams not built on the Build Exam tab
         # ════════════════════════════════════════════════════════
+        sheet_frame = ctk.CTkFrame(key_tab, fg_color='transparent')
+        sheet_frame.pack(fill='x', pady=(0, 4))
+        ctk.CTkLabel(sheet_frame, text="For an exam made outside this app:",
+                     font=ctk.CTkFont(weight='bold')).grid(
+            row=0, column=0, padx=10, pady=(8, 2), sticky='w')
+        ctk.CTkLabel(sheet_frame,
+                     text="Print a standard answer sheet, then build its key below from a "
+                          "sheet you fill in yourself.\nExams from Build Exam come with their "
+                          "own sheet and key, and do not need this tab.",
+                     justify='left', text_color='gray').grid(
+            row=1, column=0, padx=10, pady=(0, 4), sticky='w')
+        ctk.CTkButton(sheet_frame, text="Make Answer Sheet…",
+                      command=lambda: open_sheet_dialog(self, self._log)).grid(
+            row=2, column=0, padx=10, pady=(2, 8), sticky='w')
+
         key_frame = ctk.CTkFrame(key_tab, fg_color='transparent')
         key_frame.pack(fill='x', pady=(0, 8))
 
@@ -715,6 +733,11 @@ class pyScanUI(ctk.CTkFrame):
                     version_key_paths=version_key_paths or None,
                     reuse_aligned=reuse_aligned,
                     roster_path=self.rosterEntry.get().strip())
+        except (bubbles.KeyedSheetError, sheet_layout.RunsError) as exc:
+            sys.stdout = old_stdout
+            self._log(f'Scan stopped: {exc}')
+            messagebox.showerror('Scan stopped', str(exc))
+            return
         finally:
             sys.stdout = old_stdout
         self._log('Done.')

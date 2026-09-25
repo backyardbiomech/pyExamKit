@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sheet_layout
+from exam_builder import row_runs
 from models import ExamVersion, Question
 from keyformat import save_key_file
 
@@ -47,7 +49,8 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
 
     open_coords maps an SA question's row number to the crop region of its
     writing box on a generated answer sheet, so the scanner needs no boxes
-    drawn by hand.
+    drawn by hand. When the sheet groups rows by question, the key records
+    its row runs as sheet_rows, which is how the scanner finds the rows.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
@@ -123,6 +126,12 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     metadata: dict = {'num_questions': total_questions}
     if questions_to_skip:
         metadata['questions_to_skip'] = ','.join(str(n) for n in questions_to_skip)
+    try:
+        columns = sheet_columns(version)
+    except sheet_layout.RunsError:
+        columns = None     # no grouped sheet can be drawn; any standard sheet reads it
+    if columns:
+        metadata['sheet_rows'] = sheet_layout.format_columns(columns)
 
     return {
         'bubble_answers': bubble_answers,
@@ -137,6 +146,20 @@ def save_key(version: ExamVersion, filepath: Path, default_points: float = 1.0,
     """Save the key CSV for one exam version to a file."""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     save_key_file(str(filepath), build_key_data(version, default_points, open_coords))
+
+
+def sheet_columns(version: ExamVersion) -> list[list[int]] | None:
+    """The version's row runs packed into sheet columns, or None when they
+    match the standard sheet. Raises sheet_layout.RunsError when they cannot
+    be printed.
+
+    Row numbers are the same on either sheet, so a key with these runs still
+    grades a standard sheet; the runs matter only for reading a sheet
+    printed with them.
+    """
+    columns = sheet_layout.pack_runs(row_runs(version.questions))
+    rows = sum(map(sum, columns))
+    return None if columns == sheet_layout.standard_columns(rows) else columns
 
 
 def answer_rows(version: ExamVersion) -> tuple[int, list[int]]:
