@@ -113,21 +113,30 @@ def _header(page, logo, title):
 
 
 def _guide(page, top=170):
-    '''How to fill a bubble: one right way, five wrong ones.'''
+    '''How to fill a bubble: one right way, six wrong ones.'''
     _text(page, 60, top, 'How to mark your answers', size=11, bold=True)
-    _text(page, 60, top + 26, 'Use a No. 2 pencil. Fill the bubble completely and darkly.',
-          size=9)
+    _text(page, 60, top + 26, 'Fill the bubble completely and darkly.', size=9)
     _text(page, 60, top + 46, 'To change an answer, erase the old mark completely.', size=9)
     r = 13                                      # small enough not to look like a registration mark
-    y = top + 88
+    y = top + 112
     x = 90
+    label_y = y - 30
+    _text(page, x, label_y, 'RIGHT', size=9, bold=True, align='center')
     _bubble(page, x, y, r=r, fill=BLACK)
-    _text(page, x, y + 34, 'Right', size=8, bold=True, align='center')
-    page.draw_line(_p(x + 50, y - 22), _p(x + 50, y + 38), color=GUIDE, width=0.5)
+    page.draw_line(_p(x + 50, y - 44), _p(x + 50, y + 38), color=GUIDE, width=0.5)
 
     wrong = ['Check', 'X', 'Dot', 'Half', 'Too light', 'Circled']
+    first, last = x + 110, x + 110 + (len(wrong) - 1) * 92
+    # One label and a bracket over the whole group, so no single example
+    # reads as the exception
+    _text(page, (first + last) / 2, label_y, 'WRONG: ALL SIX OF THESE', size=9, bold=True,
+          align='center')
+    by = label_y + 8
+    page.draw_line(_p(first - 30, by), _p(last + 30, by), color=BLACK, width=0.8)
+    for bx in (first - 30, last + 30):
+        page.draw_line(_p(bx, by), _p(bx, by + 8), color=BLACK, width=0.8)
     for i, name in enumerate(wrong):
-        cx = x + 110 + i * 92
+        cx = first + i * 92
         if name == 'Too light':
             _bubble(page, cx, y, r=r, fill=(0.82, 0.82, 0.82))
         else:
@@ -148,8 +157,9 @@ def _guide(page, top=170):
         elif name == 'Circled':
             page.draw_circle(_p(cx, y), (r + 5) * PT, color=BLACK, width=1.2)
         _text(page, cx, y + 34, name, size=8, align='center')
-    _text(page, x + 110 + 2.5 * 92, y + 56, 'Wrong: these may not be read', size=8,
-          color=GUIDE, align='center')
+    _text(page, (first + last) / 2, y + 56,
+          'Each of these may be read as blank or as the wrong answer.', size=8,
+          align='center')
 
 
 def _id_block(page):
@@ -174,7 +184,7 @@ def sheet_layout_rows(rows: dict):
 def _version(page, version_letter):
     row = L.V2.version['V']
     _text(page, 60, L.V2_VERSION_Y + 4, 'Exam version', size=10, bold=True)
-    _text(page, 60, L.V2_VERSION_Y + 20, 'printed at the end of your exam', size=6.5,
+    _text(page, 60, L.V2_VERSION_Y + 20, 'see the end of your exam', size=6.5,
           color=GUIDE)
     for lab, cx, cy in row:
         _bubble(page, cx, cy, lab)
