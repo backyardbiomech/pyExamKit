@@ -58,6 +58,18 @@ The layout code is four small squares on the bottom margin between the lower reg
 
 **The version row runs A to F**, matching the six versions the builder can make.
 
+## Tuning from a real stack (2026-09-25)
+
+`tools/bubble_stats.py` was run on 69 pencil sheets of a 48-question exam, 19,872 bubbles. Scored against each student's own fill level, the bubbles are cleanly bimodal: 16,545 fall under 0.35 of it, 3,321 at 0.55 or above (up to 1.87), and only 6 between. At the final settings the reader takes 3,325 answers from the stack. Sheet fill levels ranged from 0.17 to 0.48 (median 0.40).
+
+Erasures sit beside a fresh mark at 18 to 46% of its darkness; the 17 rows with two genuine marks, all on five select-all questions, run 67% and up. So the row rule at 50% separates them with room on both sides, and it is what protects heavy erasures at every cutoff tried. The erasure-heavy sheet in the stack (scan 36, a student who changed many answers) had five erasures within 25% of the cutoff, every one beside a darker mark.
+
+The first run (cutoff 0.50, floor 0.08) missed two lone light marks, on the two lightest sheets. Any cutoff from 0.30 to 0.45 with a floor of 0.05 to 0.06 recovered exactly those two and changed nothing else. 0.35 was chosen because it centers the line on the lightest sheet (scan 23, fill level 0.17), whose darkest empty bubble was 0.050 and lightest answer 0.072; the instructor independently reported that sheet as very light, with ID and name marks the old reader could not see. The floor of 0.06 sits above that sheet's darkest empty.
+
+The first run also flagged 22 bubbles, 20 of them lone marks correctly read as filled. Flags now go only to calls that could go either way: a lone light mark just under the cutoff, read as blank, and a mark near half the darkness of its row's darkest. Replayed on the stack, that is 2 flags, both erasures at 40 to 46% of the mark beside them. Sheets with a fill level under 0.25 (3 of 69) are reported for a look by eye.
+
+The stack held no ID or name data (the tool writes neither), so ID reading at these settings was not measured; it uses the same cutoff, per student.
+
 ## Status
 
-Phases 2 to 5 are built. Phase 6 waits on `tools/bubble_stats.py` output from real stacks; until then `CUTOFF`, `FLOOR`, `ROW_RATIO` and `BAND` in `bubbles.py` are provisional, chosen from synthetic sheets.
+All phases are built and the cutoffs are set from the stack above.

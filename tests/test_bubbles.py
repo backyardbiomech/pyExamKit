@@ -80,14 +80,23 @@ class TestAdaptiveReading(unittest.TestCase):
         r = self.sheet(60, erased, erase_gray=175)
         self.assertEqual(self.answers(r), ANSWERS)
 
-    def test_erasure_on_blank_row_flagged_not_silent(self):
+    def test_lone_mark_just_under_cutoff_flagged_not_silent(self):
         img = self.blank.copy()
         for i, a in enumerate(ANSWERS, 1):
             if i != 3:
                 paint(img, self.lay, f'Q{i:03d}', a, 60)
-        paint(img, self.lay, 'Q003', 'C', 150)       # a half-erased lone mark
+        paint(img, self.lay, 'Q003', 'C', 190)       # about 0.3 of this hand's marks
         r = bubbles.read_sheet(img, len(ANSWERS), layout=self.lay)
+        self.assertEqual(r.answers['Q003'], '-')
         self.assertTrue(any(f.field == 'Q003' for f in r.flags))
+
+    def test_clean_sheet_raises_no_flags(self):
+        img = self.blank.copy()
+        for i, a in enumerate(ANSWERS, 1):
+            paint(img, self.lay, f'Q{i:03d}', a, 60)
+        paint(img, self.lay, 'Q001', 'F', 185)       # a clear erasure beside a mark
+        r = bubbles.read_sheet(img, len(ANSWERS), layout=self.lay)
+        self.assertEqual(r.flags, [])
 
     def test_ignored_rows(self):
         img = self.blank.copy()

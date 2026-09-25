@@ -20,9 +20,9 @@
 
 ## Scanning
 
-**Answers came back blank, or a `-` shows up in the results.** Check `ALERT.txt` first: it names every student and question affected, and any mark close to the cutoff. If light marks are being missed across many sheets, check **Skip alignment** and re-run with the fill cutoff lowered toward 0.40, which reuses the aligned images and takes seconds.
+**Answers came back blank, or a `-` shows up in the results.** Check `ALERT.txt` first: it names every student and question affected, and any mark close to the cutoff. If light marks are being missed across many sheets, check **Skip alignment** and re-run with the fill cutoff lowered toward 0.30, which reuses the aligned images and takes seconds.
 
-**Erasures are being counted as answers.** Raise the fill cutoff toward 0.60.
+**Erasures are being counted as answers.** Raise the fill cutoff toward 0.45.
 
 **A page failed to align, or the whole scan looks wrong.** Alignment depends on the three large black registration circles. Anything covering, cropping, or badly reproducing one of them breaks it. Rescan that page in color at 200 dpi or higher, with the whole sheet inside the scan area.
 

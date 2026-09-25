@@ -32,3 +32,7 @@ env/
 # Real student scans and their outputs never enter the repo
 tests/practicaltest/AB.pdf
 tests/practicaltest/ExamScanner_outputs/
+
+# Bubble measurements from tools/bubble_stats.py
+stats.csv
+bubble_stats.csv

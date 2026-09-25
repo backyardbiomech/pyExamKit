@@ -17,11 +17,15 @@ import numpy as np
 
 import sheet_layout
 
-# Defaults; the cutoff is exposed in the GUI, the rest are tuned from data.
-CUTOFF = 0.5          # fraction of the student's fill level
-FLOOR = 0.08          # minimum fill score to count at all
+# Set from 69 real pencil sheets (docs/dev/answer-sheet-redesign.md). The
+# cutoff is exposed in the GUI; any value from 0.30 to 0.45 read that stack
+# identically, and 0.35 centers the line on its lightest sheet.
+CUTOFF = 0.35         # fraction of the student's fill level
+FLOOR = 0.06          # minimum fill score to count at all
 ROW_RATIO = 0.5       # fraction of the darkest bubble in the same row
-BAND = 0.15           # +/- this fraction of fill level is flagged for review
+BAND = 0.15           # a lone mark this far (x fill level) under the cutoff is flagged
+ROW_BAND = 0.1        # a mark this close to ROW_RATIO of its row's darkest is flagged
+LIGHT_SHEET = 0.25    # sheets whose fill level is under this are reported
 FALLBACK_FILL = 0.45  # fill level assumed when a sheet has too few marks
 MEASURE_RADIUS = 7    # px; inside the printed ring even when 2 px misaligned
 
@@ -108,20 +112,26 @@ def decide_multi(key, labels, scores, cut, F, band=BAND, row_ratio=ROW_RATIO):
     '''
     A question row, where more than one bubble may legitimately be filled.
     Returns (answer string, flags).
+
+    Only calls that could go either way are flagged. On real sheets a lone
+    mark just over the cutoff was always an answer, and an erasure beside a
+    fresh mark was always well under half its darkness, so neither is
+    flagged; what is flagged is a mark near half the darkness of its row's
+    darkest, and a lone light mark just under the cutoff.
     '''
     top = scores.max()
-    marked, flags = [], []
-    for lab, s in zip(labels, scores):
-        above = s >= cut
-        kept = above and s >= row_ratio * top
-        if kept:
-            marked.append(lab)
-        elif above:
+    kept = [s >= cut and s >= row_ratio * top for s in scores]
+    marked, flags = [lab for lab, k in zip(labels, kept) if k], []
+    for lab, s, k in zip(labels, scores, kept):
+        close_to_row = top > 0 and abs(s / top - row_ratio) < ROW_BAND
+        if s >= cut and not k and close_to_row:
             flags.append(Flag(key, lab, 'lighter than another mark in the row; read as erased', s))
-            continue
-        if s >= FLOOR and abs(s - cut) < band * F:
-            flags.append(Flag(key, lab, 'close to the cutoff; read as '
-                              + ('filled' if kept else 'empty'), s))
+        elif k and len(marked) > 1 and close_to_row:
+            flags.append(Flag(key, lab, 'much lighter than another mark in the row; '
+                              'read as filled', s))
+    if not marked and top >= FLOOR and top >= cut - band * F:
+        lab = labels[int(np.argmax(scores))]
+        flags.append(Flag(key, lab, 'a light mark just under the cutoff; read as blank', top))
     return (''.join(marked) or '-'), flags
 
 
@@ -137,8 +147,6 @@ def decide_one(key, labels, scores, cut, F, band=BAND, row_ratio=ROW_RATIO):
     if second >= cut and second >= row_ratio * best:
         flags.append(Flag(key, labels[order[1]],
                           f'second bubble filled; read as {labels[order[0]]}', second))
-    elif best - cut < band * F:
-        flags.append(Flag(key, labels[order[0]], 'close to the cutoff; read as filled', best))
     return labels[order[0]], flags
 
 

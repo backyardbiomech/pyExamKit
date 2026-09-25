@@ -205,7 +205,7 @@ class Scanner(object):
             r = self.reads[row]
             who = (f'scan {row} ({self.resdf.loc[row, "LastName"]}, '
                    f'{self.resdf.loc[row, "FirstName"]}, ID {self.resdf.loc[row, "studentID"]})')
-            if r.fill_level < bubbles.FLOOR * 2.5:
+            if r.fill_level < bubbles.LIGHT_SHEET:
                 self._alert(f'LIGHT MARKS: {who}: marks are very light; check this sheet by eye.')
             for f in r.flags:
                 self._alert(f'CHECK MARK: {who}: {f.field} bubble {f.label} {f.reason}.')

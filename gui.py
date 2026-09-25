@@ -194,13 +194,13 @@ class pyScanUI(ctk.CTkFrame):
         ).grid(row=12, column=0, padx=10, pady=4, sticky='w')
         thresh_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
         thresh_frame.grid(row=12, column=1, padx=10, pady=4, sticky='w')
-        self.threshVar = ctk.DoubleVar(value=0.50)
-        self.threshSlider = ctk.CTkSlider(thresh_frame, from_=0.30, to=0.70,
+        self.threshVar = ctk.DoubleVar(value=0.35)
+        self.threshSlider = ctk.CTkSlider(thresh_frame, from_=0.25, to=0.60,
                                           variable=self.threshVar,
                                           command=self._update_thresh_label,
                                           width=200)
         self.threshSlider.pack(side='left')
-        self.threshLabel = ctk.CTkLabel(thresh_frame, text='0.50', width=40)
+        self.threshLabel = ctk.CTkLabel(thresh_frame, text='0.35', width=40)
         self.threshLabel.pack(side='left', padx=6)
 
         ctk.CTkLabel(
