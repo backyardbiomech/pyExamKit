@@ -1027,20 +1027,22 @@ class OpenQs(object):
         else:
             reading = 'No reading of the handwriting'
         small(left, reading, fg=FAINT).pack(anchor='w', pady=(3, 0))
-        add_row = tk.Frame(left)
-        add_row.pack(anchor='w', pady=(8, 0))
-        status_var = tk.StringVar(value='')
 
-        # ── Right: what the key accepts ────────────────────────────────────
-        right = tk.Frame(body)
-        right.grid(row=0, column=1, sticky='nw', padx=(16, 0))
-        small(right, 'Key accepts').pack(anchor='w')
-        key_box = tk.Frame(right, highlightthickness=1, highlightbackground='#888888',
+        # ── Below it: what the key accepts, so the two read top to bottom ──
+        small(left, 'Key accepts').pack(anchor='w', pady=(10, 0))
+        key_box = tk.Frame(left, highlightthickness=1, highlightbackground='#888888',
                            padx=8, pady=6)
         key_box.pack(anchor='w', fill='x', pady=(2, 0))
+
+        # ── Right: adding the student's answer to the key ──────────────────
+        right = tk.Frame(body)
+        right.grid(row=0, column=1, sticky='nw', padx=(16, 0))
+        add_row = tk.Frame(right)
+        add_row.pack(anchor='w', pady=(18, 0))
+        status_var = tk.StringVar(value='')
         if key_crop is not None:
             small(key_box, 'Key sheet').pack(anchor='w')
-            k_img = photo(key_crop, 300, key_box)
+            k_img = photo(key_crop, 560, key_box, min_w=480)
             k_lbl = tk.Label(key_box, image=k_img, relief='solid', bd=1)
             k_lbl.pack(anchor='w', pady=(0, 6))
             k_lbl.tk_img = k_img
@@ -1057,8 +1059,8 @@ class OpenQs(object):
         custom_var = tk.StringVar()
         custom_entry = tk.Entry(custom, textvariable=custom_var, width=18, font=('Arial', 12))
         custom_entry.pack(side='left')
-        small(right, 'Double-click an answer to edit it. Removing one never lowers\n'
-                     'a grade already given.', fg=FAINT).pack(anchor='w', pady=(4, 0))
+        small(left, 'Double-click an answer to edit it. Removing one never lowers\n'
+                    'a grade already given.', fg=FAINT).pack(anchor='w', pady=(4, 0))
 
         def answers(kind):
             return (self.acceptable_answers if kind == 'CC'
@@ -1142,10 +1144,10 @@ class OpenQs(object):
                 other.selection_clear(0, tk.END) for kk, other in lists.items() if kk != me])
 
         tk.Button(add_row, text='Add to key as full credit',
-                  command=lambda: add_student('CC')).pack(side='left')
+                  command=lambda: add_student('CC')).pack(anchor='w', fill='x')
         tk.Button(add_row, text='Add to key as partial credit',
-                  command=lambda: add_student('CX')).pack(side='left', padx=(6, 0))
-        small(left, '', fg='#15803d', textvariable=status_var, wraplength=560).pack(
+                  command=lambda: add_student('CX')).pack(anchor='w', fill='x', pady=(6, 0))
+        small(right, '', fg='#15803d', textvariable=status_var, wraplength=260).pack(
             anchor='w', pady=(4, 0))
         tk.Button(custom, text='Add as full', command=lambda: add_custom('CC')).pack(
             side='left', padx=(6, 0))
