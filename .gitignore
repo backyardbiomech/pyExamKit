@@ -28,3 +28,7 @@ env/
 # Misc
 *.log
 *.tmp
+
+# Real student scans and their outputs never enter the repo
+tests/practicaltest/AB.pdf
+tests/practicaltest/ExamScanner_outputs/
