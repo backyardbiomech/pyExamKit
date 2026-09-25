@@ -6,7 +6,7 @@
 
 import re
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 
 def _bundle_version():
@@ -38,6 +38,8 @@ a = Analysis(
         ('images/', 'images'),
         ('templates/', 'templates'),
         *collect_data_files('customtkinter'),
+        # The app's own version, so Help links to the docs of this release
+        *copy_metadata('pyexamkit'),
     ],
     hiddenimports=[
         *collect_submodules('pandas'),
