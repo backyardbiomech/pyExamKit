@@ -29,9 +29,10 @@ The app opens to one window with four tabs, sharing a single log at the bottom.
 5. [Answer sheets](docs/answer-sheets.md) — the printable sheets, and how far you can modify them
 6. [Building a key](docs/building-keys.md) — the Build Key tab, plus the key CSV format
 7. [Scanning and grading](docs/scanning-and-grading.md) — the Scan Exams tab and how each score is calculated
-8. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading
-9. [Outputs](docs/outputs.md) — every file the app writes and what to do with it
-10. [FAQ and troubleshooting](docs/faq.md)
+8. [Class rosters](docs/roster.md) — putting names on results by ID, from a Canvas export or your own spreadsheet
+9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading
+10. [Outputs](docs/outputs.md) — every file the app writes and what to do with it
+11. [FAQ and troubleshooting](docs/faq.md)
 
 Design notes and implementation history live in [docs/dev/](docs/dev/). They document why parts of the app are built the way they are, and are aimed at anyone modifying the code rather than at anyone using it.
 

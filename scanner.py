@@ -8,11 +8,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image as PILImage
 
-from dicts import Dicts
 from settings import Settings
 from image import Image
 import init_functions
 import scan_functions
+import bubbles
+import sheet_layout
+import roster as roster_mod
 import grade_functions
 from openQ import OpenQs
 from keyformat import load_key_file, save_key_file
@@ -27,7 +29,7 @@ class Scanner(object):
     and panda data tables for grading
     '''
     
-    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5, version_question: int = 0, version_key_paths: dict | None = None, reuse_aligned: bool = False):
+    def __init__(self, input_file, quests, markmissing, openQ, corrmark, ignores, thresh, bubbleVal, openVal, parent=None, ai_ocr=False, api_key='', ai_context='', preloaded_file: str = '', review_perfect: bool = True, key_file_path: str = '', pages_per_student: int = 1, save_marked: bool = True, strictness: float = 0.5, version_question: int = 0, version_key_paths: dict | None = None, reuse_aligned: bool = False, roster_path: str = ''):
         '''
         retrieve values from the gui (or call from command line)
         input_file is path to key jpg or pdf of all scans
@@ -42,6 +44,11 @@ class Scanner(object):
         key_file_path is the path to a JSON or CSV exam key file (optional)
         pages_per_student is the number of scanned pages per student (default 1)
         strictness is a float (0-1) controlling how strict partial credit is for bubble questions.
+        thresh is the fill cutoff: the fraction of each student's own typical
+        mark a bubble must reach to count as filled (see bubbles.py)
+        version_question is the question row holding the version letter; 0
+        reads the version bubbles printed in the header of a v2 sheet
+        roster_path is an optional class roster CSV used to fill in names by ID
         '''
         self.input_file = input_file
         self.quests = quests
@@ -87,7 +94,16 @@ class Scanner(object):
             self.ignores=None
         # pull settings into scanner object
         self.scan_settings=Settings()
-        self.scan_settings.sigma = thresh
+        self.cutoff = thresh
+        # What the reader found on each scanned row: layout, flags, version
+        self.reads: dict[int, bubbles.SheetRead] = {}
+        self.roster = None
+        if roster_path:
+            try:
+                self.roster, _desc = roster_mod.load_roster(roster_path)
+                print(f'[Roster] {_desc}', flush=True)
+            except roster_mod.RosterError as exc:
+                print(f'[Roster] Not used: {exc}', flush=True)
         # self.path is a Path object
         #Get the file path as a Path object
         self.path=Path(input_file).parent
@@ -121,7 +137,7 @@ class Scanner(object):
         # initialize the pandas dataframe to contain results
         # In key-file mode we need one extra row for the synthetic key row 0.
         # For multi-page, there are pages_per_student images per student.
-        if (self.key_file_path and self._key_data) or (self.version_keys and self.version_question):
+        if (self.key_file_path and self._key_data) or self.version_keys:
             n_actual_students = len(self.image_list) // self.pages_per_student
             n_rows = n_actual_students + 1  # +1 for placeholder row 0
         elif self.pages_per_student > 1:
@@ -130,21 +146,85 @@ class Scanner(object):
         else:
             n_rows = len(self.image_list)
         self.resdf = init_functions.makeResDf(quests, n_rows)
-        # make the dictionaries containing scanning coordinates
-        self.qAreas, self.idAreas, self.nAreas = init_functions.makeAreaDict(quests)
+        # Question rectangles for marking; rows on another layout override
+        # these per row (see _row_areas)
+        self.qAreas = sheet_layout.CLASSIC.q_areas(quests)
         # make the dictionaries to convert coordinates to letters or numbers
         self.Ndict, self.Idict, self.Qdict = init_functions.makeResDict()
         self.run()
         
-    def _load_scanimg(self, path):
-        """Load a saved aligned JPEG and return its thresholded scanimg array.
-        Used in reuse_aligned mode — skips registration and warping."""
+    def _load_aligned(self, path):
+        """Load a saved aligned JPEG. Used in reuse_aligned mode, which skips
+        registration and warping."""
         with PILImage.open(path) as pil:
-            arr = np.array(pil.convert('RGB'))
-        return scan_functions.autothresh(arr, self.scan_settings)
+            return np.array(pil.convert('RGB'))
+
+    def _read(self, row, aligned):
+        """Read one sheet's bubbles into resdf row `row`."""
+        r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff)
+        self.reads[row] = r
+        for k, v in r.answers.items():
+            self.resdf.loc[row, k] = v
+
+    def _alert(self, line):
+        alert_path = self.outdir / 'ALERT.txt'
+        with open(alert_path, 'a') as f:
+            if alert_path.stat().st_size:
+                f.write('\n')
+            f.write(line)
+
+    def _apply_roster(self, skip_rows=()):
+        """Replace bubbled names with roster names, matched by ID."""
+        if not self.roster:
+            return
+        seen: dict[str, int] = {}
+        for row in sorted(self.reads):
+            if row in skip_rows:
+                continue
+            scanned = str(self.resdf.loc[row, 'studentID'])
+            student, note = roster_mod.match_id(scanned, self.roster)
+            if student is None:
+                self._alert(f'ROSTER: scan {row} (ID read as {scanned}, name bubbles '
+                            f'"{self.resdf.loc[row, "LastName"]}"): {note}. Check the '
+                            'handwritten name on the marked sheet.')
+                continue
+            self.resdf.loc[row, 'LastName'] = student.last
+            self.resdf.loc[row, 'FirstName'] = student.first
+            self.resdf.loc[row, 'studentID'] = student.id
+            if note:
+                self._alert(f'ROSTER: scan {row} ({student.last}, {student.first}): '
+                            f'ID read as {scanned}, {note}.')
+            if student.id in seen:
+                self._alert(f'ROSTER: scans {seen[student.id]} and {row} both read as '
+                            f'ID {student.id} ({student.last}, {student.first}).')
+            seen.setdefault(student.id, row)
+
+    def _write_read_alerts(self):
+        """Report marks the reader could not call confidently."""
+        for row in sorted(self.reads):
+            r = self.reads[row]
+            who = (f'scan {row} ({self.resdf.loc[row, "LastName"]}, '
+                   f'{self.resdf.loc[row, "FirstName"]}, ID {self.resdf.loc[row, "studentID"]})')
+            if r.fill_level < bubbles.FLOOR * 2.5:
+                self._alert(f'LIGHT MARKS: {who}: marks are very light; check this sheet by eye.')
+            for f in r.flags:
+                self._alert(f'CHECK MARK: {who}: {f.field} bubble {f.label} {f.reason}.')
+
+    def _row_areas(self, row_map):
+        """Per-row question areas and flags for markSheets, keyed by csv row.
+        row_map maps csv row string -> resdf row."""
+        areas, flags = {}, {}
+        for row_str, row in row_map.items():
+            r = self.reads.get(row)
+            if r is None:
+                continue
+            if r.layout is not sheet_layout.CLASSIC:
+                areas[row_str] = r.layout.q_areas(self.quests)
+            flags[row_str] = [f for f in r.flags if f.field.startswith('Q')]
+        return areas, flags
 
     def run(self):
-        if self.version_keys and self.version_question:
+        if self.version_keys:
             self._run_multi_version()
         elif self.key_file_path and self._key_data:
             self._run_with_key_file()
@@ -220,22 +300,17 @@ class Scanner(object):
         # 1. Scan all pages (no key row — all rows are students)
         for i in range(len(self.image_list)):
             if self.reuse_aligned:
-                print(f'Re-scanning (threshold only) {i + 1}')
-                scanimg = self._load_scanimg(self.image_list[i])
+                print(f'Re-reading {i + 1}')
+                aligned = self._load_aligned(self.image_list[i])
             else:
                 img = Image(self.image_list[i], self.scan_settings)
                 print(f'Processing scan {i + 1}')
                 scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
-                scanimg = img.scanimg
+                aligned = img.aligned
             if i % pps == 0:   # first page per student — scan MC bubbles
-                student_row = i // pps + 1
-                self.qRes = scan_functions.rundots(
-                    scanimg,
-                    self.qAreas, self.idAreas, self.nAreas,
-                    self.ignores,
-                    self.Qdict, self.Idict, self.Ndict)
-                for k, v in self.qRes.items():
-                    self.resdf.loc[student_row, k] = v
+                self._read(i // pps + 1, aligned)
+        self._apply_roster()
+        self._write_read_alerts()
 
         # 2. Build sorted aligned image list (files numbered 1..N)
         n_scanned = len(self.image_list)
@@ -251,7 +326,11 @@ class Scanner(object):
 
         version_groups: dict[str, list[int]] = {}
         for row_idx in student_rows:
-            if ver_qk in self.resdf.columns:
+            if not self.version_question:
+                # v2 sheets print their own version bubbles in the header
+                _r = self.reads.get(row_idx)
+                raw_ver = _r.version if _r is not None else '-'
+            elif ver_qk in self.resdf.columns:
                 raw_ver = str(self.resdf.loc[row_idx, ver_qk]).strip()
             else:
                 raw_ver = '-'
@@ -338,9 +417,12 @@ class Scanner(object):
                 ver_markeddir = self.outdir / f'marked_version{ver}'
                 ver_markeddir.mkdir(exist_ok=True)
 
+                _areas, _flags = self._row_areas(
+                    {str(j + 1): orig for j, orig in enumerate(row_indices)})
                 keyname = grade_functions.markSheets(
                     ver_csv, marked_list, ver_markeddir,
-                    self.qAreas, self.Qdict, self.markmissing, self.corrMark)
+                    self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                    row_areas=_areas, flags=_flags)
 
                 print(f'Saving marked files for version {ver}')
                 ver_pdf = FPDF('P', 'pt', 'Letter')
@@ -381,28 +463,22 @@ class Scanner(object):
             if self.reuse_aligned:
                 if not is_first_page:
                     continue  # aligned images already exist; only scan first page per student
-                print('Re-scanning (threshold only) {0:1d}'.format(i))
-                scanimg = self._load_scanimg(self.image_list[i])
+                print('Re-reading {0:1d}'.format(i))
+                aligned = self._load_aligned(self.image_list[i])
             else:
                 # create image object, which will load and align image
-                # makes img.aligned, img.scanimg
                 img = Image(self.image_list[i], self.scan_settings)
                 print('Processing scan {0:1d}'.format(i))
                 #save the aligned image aligned_00i.jpg in ./aligned
                 scan_functions.saveimg(i, img.aligned, self.aligneddir)
                 if not is_first_page:
                     continue  # aligned image saved; only scan first page per student
-                scanimg = img.scanimg
+                aligned = img.aligned
             # For multi-page: only run bubble scan on key (i=0) and first page per student
             if i == 0 or (i - 1) % pps == 0:
-                student_row = 0 if i == 0 else (i - 1) // pps + 1
-                self.qRes=scan_functions.rundots(scanimg,
-                                                self.qAreas, self.idAreas, self.nAreas,
-                                                self.ignores,
-                                                self.Qdict, self.Idict, self.Ndict)
-                # save results dictionary data to data frame
-                for k, v in self.qRes.items():
-                    self.resdf.loc[student_row, k] = v
+                self._read(0 if i == 0 else (i - 1) // pps + 1, aligned)
+        self._apply_roster(skip_rows=(0,))
+        self._write_read_alerts()
         #get the aligned image dir
         self.aligned_image_list = []
         for file in os.listdir(str(self.aligneddir)):
@@ -515,12 +591,14 @@ class Scanner(object):
             q_pages = {}
             if self.openQ and openQs is not None:
                 q_pages.update(openQs._q_pages)
+            _areas, _flags = self._row_areas({str(r): r for r in self.reads})
             # Pass the full aligned_image_list so markSheets can access all pages per student.
             # Layout: [0]=key page, [(r-1)*pps+1 .. r*pps]=student r's pages (r 1-based)
             keyname = grade_functions.markSheets(
                 self.resCsv, self.aligned_image_list, self.markeddir,
                 self.qAreas, self.Qdict, self.markmissing, self.corrMark,
-                pages_per_student=pps, q_pages=q_pages)
+                pages_per_student=pps, q_pages=q_pages,
+                row_areas=_areas, flags=_flags)
             # intialize the output pdf
             print('Saving marked files')
             self.outpdf=FPDF('P','pt','Letter')
@@ -553,25 +631,20 @@ class Scanner(object):
             if self.reuse_aligned:
                 if not is_first_page:
                     continue  # aligned images already exist; only scan first page per student
-                print('Re-scanning (threshold only) {:1d}'.format(i + 1))
-                scanimg = self._load_scanimg(self.image_list[i])
+                print('Re-reading {:1d}'.format(i + 1))
+                aligned = self._load_aligned(self.image_list[i])
             else:
                 img = Image(self.image_list[i], self.scan_settings)
                 print('Processing scan {:1d}'.format(i + 1))
                 scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
                 if not is_first_page:
                     continue  # aligned image saved; only scan first page per student
-                scanimg = img.scanimg
+                aligned = img.aligned
             page_within = i % pps
             if page_within == 0:   # first page per student — scan MC bubbles
-                student_row = i // pps + 1
-                self.qRes = scan_functions.rundots(
-                    scanimg,
-                    self.qAreas, self.idAreas, self.nAreas,
-                    self.ignores,
-                    self.Qdict, self.Idict, self.Ndict)
-                for k, v in self.qRes.items():
-                    self.resdf.loc[student_row, k] = v
+                self._read(i // pps + 1, aligned)
+        self._apply_roster()
+        self._write_read_alerts()
 
         # 3. Build sorted aligned_image_list (all student images)
         # Only include files numbered 1..N that we just wrote; ignore any
@@ -668,10 +741,12 @@ class Scanner(object):
             # [None] at index 0 = synthetic key row (no image); then all student pages
             # Layout: [None, s1_p1, s1_p2, s2_p1, s2_p2, ...]
             marked_list = [None] + self.aligned_image_list
+            _areas, _flags = self._row_areas({str(r): r for r in self.reads})
             keyname = grade_functions.markSheets(
                 self.resCsv, marked_list, self.markeddir,
                 self.qAreas, self.Qdict, self.markmissing, self.corrMark,
-                pages_per_student=pps, q_pages=q_pages)
+                pages_per_student=pps, q_pages=q_pages,
+                row_areas=_areas, flags=_flags)
 
             # 10. Save PDF
             print('Saving marked files')

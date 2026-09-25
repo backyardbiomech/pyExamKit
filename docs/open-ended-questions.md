@@ -72,4 +72,4 @@ Point the tab at the `results.csv` from the scan, click **Open Re-grader**, edit
 
 ---
 
-Previous: [Scanning and grading](scanning-and-grading.md) · Next: [Outputs](outputs.md)
+Previous: [Class rosters](roster.md) · Next: [Outputs](outputs.md)

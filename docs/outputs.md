@@ -12,7 +12,7 @@ Everything a scan produces lands in an **`ExamScanner_outputs/`** folder inside 
 
 **`results_gradebook.xlsx`** is the working copy. Each question gets an answer column and a points column, the key is on a highlighted row at the top, and **each student's total is a live `SUM` formula** — so changing a points cell after a regrade discussion updates the total immediately, without recomputing anything by hand. The key row shows the acceptable answers for open-ended questions, pipe-separated.
 
-**`ALERT.txt`** appears only when something needs attention. It names every student and question where no answer could be read at all. The usual cause is a badly scanned sheet rather than a skipped question, so this is the file to check before entering grades.
+**`ALERT.txt`** appears only when something needs attention, and it is the file to check before entering grades. It names every student and question where no answer could be read at all (usually a badly scanned sheet rather than a skipped question). It lists marks the scanner was unsure of (`CHECK MARK`) and sheets marked very lightly (`LIGHT MARKS`). With a class roster loaded, it lists IDs not on the roster, IDs corrected by one digit, and two sheets reading as the same ID (`ROSTER`). Each line gives the scan number, which is the sheet's position in the stack.
 
 ## The marked sheets
 
@@ -36,13 +36,13 @@ When a mixed stack is graded by version, the outputs are written per version ins
 
 ## app_data/
 
-**`aligned/`** holds every page after skew and scale correction. These are what the **Skip alignment** option reuses, so keeping them makes a second pass at a different fill threshold nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
+**`aligned/`** holds every page after skew and scale correction. These are what the **Skip alignment** option reuses, so keeping them makes a second pass at a different fill cutoff nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
 
 **`scanJPGs/`** holds the page images extracted from a scanned PDF. The app converts a PDF to images and works on those.
 
 **`results_openq_transcriptions.json`** holds every handwriting transcription, and **`results_openq_answers.json`** holds the acceptable-answer lists as they stood at the end of grading. Together they are what makes the [Re-grade](open-ended-questions.md#re-grading-afterward) tab possible without rescanning. **`results_openq_gradeconfig.json`** records the grading settings that run used, and a `results_openq_progress.json` appears mid-run so an interrupted session can be resumed; it is removed when grading finishes.
 
-Delete `app_data/` and the results stay valid, but re-grading open-ended questions and fast threshold re-scans are no longer possible.
+Delete `app_data/` and the results stay valid, but re-grading open-ended questions and fast re-reads at a new fill cutoff are no longer possible.
 
 ---
 

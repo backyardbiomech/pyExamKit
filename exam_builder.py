@@ -48,10 +48,9 @@ class BuildError(Exception):
     pass
 
 
-# The printed answer sheet has 150 numbered question slots; init_functions
-# .makeAreaDict lays them out against fixed coordinates and runs off the
-# bottom of the aligned image past roughly 151, so anything beyond this can
-# be printed on the exam but never bubbled or graded.
+# The printed answer sheet has 150 numbered question slots (sheet_layout
+# defines every one), so anything beyond this can be printed on the exam but
+# never bubbled or graded.
 MAX_QUESTION_SLOTS = 150
 
 # The answer sheets shipped in images/, smallest first.

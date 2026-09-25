@@ -22,7 +22,9 @@ If you are not loading a key file, **the key sheet goes first in the stack**. Wi
 
 **Points per bubble question** and **points per open-ended question** set the default value of each. A per-question `points` value in the key file overrides both, so a key built from an exam carries its own weighting.
 
-**Fill threshold** decides how dark a mark has to be to count as filled. The default of 0.25 suits ordinary pencil. Lower it toward 0.20 to catch light marks; raise it toward 0.30 to ignore incomplete erasures. This is the setting to revisit when a scan produces a suspicious number of blank answers, and the **Skip alignment** checkbox exists to make that cheap — it reuses the aligned images from the previous run, so a second pass at a different threshold takes seconds instead of reprocessing every page.
+**Load Class Roster…** is optional. With a roster loaded, each sheet's bubbled ID is looked up and the names in the results come from the roster rather than from the sheet. The new answer sheets have no name bubbles, so without a roster their results carry IDs only. [Class rosters](roster.md) explains what file to use and how to get it out of Canvas.
+
+**Fill cutoff** decides how dark a mark has to be to count as filled, measured against that student's own marks rather than a fixed darkness (see [How a bubble becomes an answer](#how-a-bubble-becomes-an-answer)). The default of 0.50 means a bubble counts when it is at least half as dark as the student's typical mark. Lower it toward 0.40 if light marks are being missed; raise it toward 0.60 if erasures are being counted. Sheets that fall close to the cutoff are listed in `ALERT.txt` either way. The **Skip alignment** checkbox makes a second try cheap: it reuses the aligned images from the previous run, so a pass at a different cutoff takes seconds instead of reprocessing every page.
 
 **Save marked answer sheets** writes the annotated copies; turn it off to save time when you only need the numbers. **Mark correct answers on graded sheets** adds the green marks as well as the red ones.
 
@@ -40,7 +42,7 @@ With it on, partial credit applies. If *n* is the number of correct answers on t
 
 ## Multiple versions
 
-Check **Multiple exam versions?** to grade a mixed stack in one pass. Give the **version question number** — the question where students bubble their version letter, which the [Build Exam](building-exams.md) tab can add for you — and a key file for each version in use. Leave a version's key blank if that version was not printed.
+Check **Multiple exam versions?** to grade a mixed stack in one pass, and give a key file for each version in use. On the new answer sheets, leave **version question number** blank: students bubble their version in the header. On the older sheets, give the question where students bubble their version letter, which the [Build Exam](building-exams.md) tab can add for you. Leave a version's key blank if that version was not printed.
 
 Each student's version bubble is read, and each version group is graded against its own key. Results are written per version: `results_versionA.csv`, `marked_versionA/`, and so on.
 
@@ -54,10 +56,14 @@ Remember to also list any mid-exam written question in **Question numbers to ign
 
 ## How a bubble becomes an answer
 
-The scanner locates the three registration circles on each page and warps the image to a fixed size, correcting skew and scale. It reads the four calibration bubbles on the outside to learn how dark a filled bubble looks on this scan, then measures each answer bubble against the fill threshold. Anything at or above the threshold counts as marked, so multiple marks on one row produce a multi-letter answer such as `ABD`, and a row with nothing above the threshold produces `-`.
+The scanner locates the three registration circles on each page and warps the image to a fixed size, correcting skew and scale. A small printed code tells it which answer sheet design it is reading, so old and new sheets can be scanned in one stack.
+
+It then measures how dark the inside of every bubble is, minus the printed letter. Students shade differently, so instead of one darkness for everyone, the scanner learns each student's typical mark from the darkest bubble in each of their rows. A bubble counts as filled when it reaches the fill cutoff (half, by default) of that student's typical mark, and when it is at least half as dark as the darkest bubble in its own row. The first rule lets a light pencil count. The second is what separates an erasure from a real answer: a heavy hand's erasure can be darker than a light hand's mark, but it is always much lighter than the fresh mark beside it. Multiple marks on one row produce a multi-letter answer such as `ABD`, and a row with nothing filled produces `-`.
+
+Marks the scanner cannot call confidently are reported rather than guessed. A bubble close to the cutoff, or one read as erased that would otherwise have counted, is listed in `ALERT.txt` and drawn on the marked sheet as an orange `?` and the letter, just right of the row. A sheet whose marks are all very light is listed too.
 
 A `-` is not silently treated as a wrong answer. Every student with an unscanned answer is written to an `ALERT.txt` file beside the results, naming the student and the question, because the usual cause is a sheet that scanned badly rather than a student who skipped a question.
 
 ---
 
-Previous: [Building a key](building-keys.md) · Next: [Open-ended questions](open-ended-questions.md)
+Previous: [Building a key](building-keys.md) · Next: [Class rosters](roster.md)

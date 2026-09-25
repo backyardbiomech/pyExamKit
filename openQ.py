@@ -2731,25 +2731,17 @@ class KeyBuilderDialog:
     def _auto_scan_bubbles(self, page_idx: int):
         """Scan MC bubble answers from the aligned image at page_idx.
 
-        Uses the same pipeline as the main Scanner so coordinates and
-        thresholds are identical.  Results are merged into self._bubble.
+        Uses the same reader as the main Scanner, at its default cutoff.
+        Results are merged into self._bubble.
         """
-        from settings import Settings as _Settings
-        import scan_functions as _sf
-        import init_functions as _if
+        import bubbles as _bubbles
 
         page_data = self._pages[page_idx]
         aligned_arr = page_data['aligned_arr']
 
-        settings = _Settings()
-        settings.sigma = 0.25  # default fill threshold
-
         try:
-            scanimg = _sf.autothresh(aligned_arr.copy(), settings)
-            qAreas, idAreas, nAreas = _if.makeAreaDict(self._num_mc_questions)
-            Ndict, Idict, Qdict = _if.makeResDict()
-            qRes = _sf.rundots(scanimg, qAreas, idAreas, nAreas,
-                               self._ignores, Qdict, Idict, Ndict)
+            qRes = _bubbles.read_sheet(aligned_arr, self._num_mc_questions,
+                                       self._ignores).answers
         except Exception as exc:
             tkinter.messagebox.showerror(
                 'Auto-scan bubbles',

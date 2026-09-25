@@ -1,0 +1,9 @@
+# Files that name roster columns in code or prose, or hold invented test
+# rows; still checked for real L numbers, emails and SSNs.
+roster.py: headerish
+grade_functions.py: headerish
+scanner.py: headerish
+tests/test_roster.py: headerish
+docs/roster.md: headerish
+docs/outputs.md: headerish
+docs/dev/answer-sheet-redesign.md: headerish

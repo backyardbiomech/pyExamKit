@@ -61,8 +61,10 @@ class pyScanUI(ctk.CTkFrame):
         scan_frame.pack(fill='both', expand=True, pady=(0, 8))
 
         # ── Key File row — load first so its metadata auto-fills fields below ──
-        key_file_row = ctk.CTkFrame(scan_frame, fg_color='transparent')
-        key_file_row.grid(row=0, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+        top_rows = ctk.CTkFrame(scan_frame, fg_color='transparent')
+        top_rows.grid(row=0, column=0, columnspan=2, padx=10, pady=4, sticky='w')
+        key_file_row = ctk.CTkFrame(top_rows, fg_color='transparent')
+        key_file_row.pack(anchor='w')
         ctk.CTkButton(key_file_row, text="Load Key File…",
                       command=self._browse_key_file, width=180).pack(side='left', padx=(0, 6))
         self.scanKeyFileEntry = ctk.CTkEntry(
@@ -71,6 +73,16 @@ class pyScanUI(ctk.CTkFrame):
         self.scanKeyFileEntry.pack(side='left', padx=(0, 6))
         ctk.CTkButton(key_file_row, text="Create / Edit…",
                       command=self._open_key_file_editor, width=110).pack(side='left')
+
+        # ── Class roster — names come from here, matched by bubbled ID ──
+        roster_row = ctk.CTkFrame(top_rows, fg_color='transparent')
+        roster_row.pack(anchor='w', pady=(8, 0))
+        ctk.CTkButton(roster_row, text="Load Class Roster…",
+                      command=self._browse_roster, width=180).pack(side='left', padx=(0, 6))
+        self.rosterEntry = ctk.CTkEntry(
+            roster_row, width=400,
+            placeholder_text="Optional: Canvas gradebook export or LastName,FirstName,ID CSV")
+        self.rosterEntry.pack(side='left', padx=(0, 6))
 
         ctk.CTkButton(scan_frame, text="Choose PDF of scans or JPG of key",
                       command=self.button_browse_callback).grid(
@@ -178,17 +190,17 @@ class pyScanUI(ctk.CTkFrame):
 
         ctk.CTkLabel(
             scan_frame,
-            text="Fill threshold (0.20 = lighter marks, 0.30 = ignore light erases):",
+            text="Fill cutoff (lower = count lighter marks, higher = ignore more erasures):",
         ).grid(row=12, column=0, padx=10, pady=4, sticky='w')
         thresh_frame = ctk.CTkFrame(scan_frame, fg_color='transparent')
         thresh_frame.grid(row=12, column=1, padx=10, pady=4, sticky='w')
-        self.threshVar = ctk.DoubleVar(value=0.25)
-        self.threshSlider = ctk.CTkSlider(thresh_frame, from_=0.10, to=0.40,
+        self.threshVar = ctk.DoubleVar(value=0.50)
+        self.threshSlider = ctk.CTkSlider(thresh_frame, from_=0.30, to=0.70,
                                           variable=self.threshVar,
                                           command=self._update_thresh_label,
                                           width=200)
         self.threshSlider.pack(side='left')
-        self.threshLabel = ctk.CTkLabel(thresh_frame, text='0.25', width=40)
+        self.threshLabel = ctk.CTkLabel(thresh_frame, text='0.50', width=40)
         self.threshLabel.pack(side='left', padx=6)
 
         ctk.CTkLabel(
@@ -215,7 +227,7 @@ class pyScanUI(ctk.CTkFrame):
         self.reuseAlignedVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(
             scan_frame,
-            text="Skip alignment — re-use existing aligned images (fast threshold re-scan)",
+            text="Skip alignment — re-use existing aligned images (fast re-read at a new cutoff)",
             variable=self.reuseAlignedVar,
         ).grid(row=15, column=0, columnspan=2, padx=10, pady=(0, 4), sticky='w')
 
@@ -236,10 +248,12 @@ class pyScanUI(ctk.CTkFrame):
                      text="Version question number:").grid(
             row=0, column=0, padx=(0, 6), pady=2, sticky='w')
         self.versionQEntry = ctk.CTkEntry(self._version_frame, width=80,
-                                          placeholder_text="e.g. 64")
+                                          placeholder_text="blank = header")
         self.versionQEntry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky='w')
         ctk.CTkLabel(self._version_frame,
-                     text="(students fill A/B/C/D/E/F on this question to identify their version)",
+                     text="(leave blank for sheets with version bubbles in the header;\n"
+                          " otherwise the question row where students bubble their version)",
+                     justify='left',
                      font=ctk.CTkFont(size=11), text_color='gray').grid(
             row=0, column=2, padx=(0, 4), pady=2, sticky='w')
 
@@ -499,6 +513,13 @@ class pyScanUI(ctk.CTkFrame):
             self.scanKeyFileEntry.insert(0, filename)
             self._load_key_metadata(filename)
 
+    def _browse_roster(self):
+        filename = filedialog.askopenfilename(
+            title='Choose class roster', filetypes=[('CSV file', '*.csv')])
+        if filename:
+            self.rosterEntry.delete(0, 'end')
+            self.rosterEntry.insert(0, filename)
+
     def _load_key_metadata(self, path: str):
         """Read metadata from a key file and populate num questions / skip fields."""
         try:
@@ -657,11 +678,12 @@ class pyScanUI(ctk.CTkFrame):
         if self.multiVersionVar.get():
             vq_str = self.versionQEntry.get().strip()
             try:
-                version_question = int(vq_str)
-                if version_question < 1:
-                    raise ValueError('must be >= 1')
+                version_question = int(vq_str) if vq_str else 0
+                if version_question < 0:
+                    raise ValueError('must be >= 0')
             except ValueError:
-                self._log('Version question number must be a positive integer (e.g. 64). Please fix and retry.')
+                self._log('Version question number must be blank (header version bubbles) '
+                          'or a question number (e.g. 64). Please fix and retry.')
                 return
             for ver, entry in self._version_key_entries.items():
                 # Use full path from _version_key_paths; fall back to entry text
@@ -691,7 +713,8 @@ class pyScanUI(ctk.CTkFrame):
                     strictness=strictness,
                     version_question=version_question,
                     version_key_paths=version_key_paths or None,
-                    reuse_aligned=reuse_aligned)
+                    reuse_aligned=reuse_aligned,
+                    roster_path=self.rosterEntry.get().strip())
         finally:
             sys.stdout = old_stdout
         self._log('Done.')

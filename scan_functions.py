@@ -2,7 +2,6 @@ import numpy as np
 import fnmatch
 import os
 import cv2
-import grade_functions
 from pathlib import Path
 from PIL import Image as PILImage
 
@@ -94,119 +93,12 @@ def getRegPts(img, scan_settings):
     return np.array(pts, dtype=np.float32)
 
 
-def autothresh(aligned_img, scan_settings):
-    '''
-    Auto-threshold the aligned image based on calibration box medians.
-    aligned_img: RGB uint8 ndarray
-    Returns binary uint8 ndarray (0/255) where 255 = filled region.
-    '''
-    gray = _rgb2gray_u8(aligned_img)
-    blurred = cv2.medianBlur(gray, 15)
-
-    threshdict = scan_settings.threshdict
-    threshvals = np.full(4, np.nan)
-    for j in range(1, 5):
-        keyName = 'thresh' + format(j, '02d')
-        startX, startY = threshdict[keyName][0]
-        endX, endY = threshdict[keyName][1]
-        patch = blurred[startY:endY, startX:endX]
-        threshvals[j - 1] = np.median(patch)
-
-    v = np.median(threshvals)
-    thresh = int(v * (1 - scan_settings.sigma))
-    # THRESH_BINARY_INV: pixels darker than thresh become foreground (filled
-    # regions). Kept as a plain numpy compare rather than cv2.threshold,
-    # since THRESH_BINARY_INV treats pixels equal to thresh as foreground
-    # (<=) where the original code used a strict <.
-    mask = (blurred < thresh).astype(np.uint8) * 255
-
-    kern_shape = scan_settings.kern.shape
-    struct = cv2.getStructuringElement(cv2.MORPH_RECT, kern_shape)
-    eroded = cv2.erode(mask, struct, iterations=3)
-    dilated = cv2.dilate(eroded, struct, iterations=3)
-    return dilated
-
-
-def scanDots(img, areaDict, ignores, convDict):
-    '''
-    Scan an aligned, thresholded image in the areas of areaDict.
-    img: binary uint8 ndarray (0/255) or bool from autothresh
-    Returns a dictionary of results keyed by area name.
-    '''
-    binary_img = (img > 0).astype(np.uint8) * 255
-
-    resDict = dict.fromkeys(areaDict, '-')
-
-    for k, v in sorted(areaDict.items()):
-        if k[0] == 'Q':
-            if ignores and int(k[1:]) in ignores:
-                resDict[k] = 'ignore'
-                continue
-        pt1, pt2 = v[0], v[1]
-        # Extract region; numpy indexing is [rows, cols] = [y, x]
-        scanArea = np.ascontiguousarray(binary_img[pt1[1]:pt2[1], pt1[0]:pt2[0]])
-
-        # Label connected components; filter out tiny regions (area < 10)
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            scanArea, connectivity=8)
-        regions = [i for i in range(1, num_labels)
-                   if stats[i, cv2.CC_STAT_AREA] >= 10]
-
-        if not regions:
-            resDict[k] = '-'
-        elif k[0] == 'Q':
-            resDict[k] = ''
-
-        for i in regions:
-            x, y, w, h, area = stats[i]
-
-            if k[0] == 'F':
-                for lett, coord in convDict.items():
-                    if x < coord < x + w and h > 10:
-                        resDict[k] = lett
-            if k[0] == 'N':
-                for lett, coord in convDict.items():
-                    if x < coord < x + w and h > 10:
-                        resDict[k] = lett
-            if k[0] == 'I':
-                for lett, coord in convDict.items():
-                    if y < coord < y + h and w > 10:
-                        resDict[k] = lett
-            if k[0] == 'Q':
-                for lett, coord in convDict.items():
-                    if x < coord < x + w and h > 10:
-                        if lett not in resDict[k]:
-                            resDict[k] = ''.join(sorted(resDict[k] + lett))
-            if len(resDict[k]) == 0:
-                resDict[k] = '-'
-            # Fix odd behavior: remove '-' if uppercase letters are also present
-            if '-' in resDict[k] and resDict[k].isupper():
-                resDict[k] = resDict[k].replace('-', '')
-
-    return resDict
-
-
 def saveimg(i, scanimg, aligneddir):
     if not aligneddir.is_dir():
         aligneddir.mkdir()
     savename = str(aligneddir / 'aligned_{:03d}.jpg'.format(i))
     # scanimg is a RGB uint8 ndarray
     PILImage.fromarray(scanimg).save(savename, quality=95)
-
-
-def rundots(img, qAreas, idAreas, nAreas, ignores, Qdict, Idict, Ndict):
-    '''
-    Scans the thresholded image for all bubble areas.
-    Returns a dictionary ready to be added to the main results dataframe.
-    '''
-    qRes = scanDots(img, qAreas, ignores, Qdict)
-    idRes = scanDots(img, idAreas, ignores, Idict)
-    nRes = scanDots(img, nAreas, ignores, Ndict)
-    lastName, firstName, studentID = grade_functions.getid(idRes, nRes)
-    qRes['LastName'] = lastName
-    qRes['FirstName'] = firstName
-    qRes['studentID'] = studentID
-    return qRes
 
 
 def savePdf(markeddir, outpdf, keyname):

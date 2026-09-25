@@ -3,7 +3,6 @@ import json
 import numpy as np
 import pandas as pd
 import fnmatch
-import scan_functions
 import difflib
 import os
 from pathlib import Path
@@ -34,17 +33,6 @@ def _get_font(size=28):
             except Exception:
                 pass
     return ImageFont.load_default(size=size)
-
-    
-def getid(idRes, nRes):
-    #compile student name
-    lastName=nRes['N1']+nRes['N2']+nRes['N3']+nRes['N4']+nRes['N5']
-    firstName=nRes['F1']+nRes['F2']+nRes['F3']
-    #get list of ID keys
-    studentID = ''
-    for k, v in sorted(idRes.items()):
-        studentID = studentID + str(v)    
-    return lastName, firstName, studentID
 
     
 def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5, point_values=None):
@@ -373,7 +361,7 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
 
 
 def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr,
-               pages_per_student=1, q_pages=None):
+               pages_per_student=1, q_pages=None, row_areas=None, flags=None):
     """Mark student answer sheets with correct/incorrect indicators.
 
     aligned_image_list layout (both single- and multi-page):
@@ -384,6 +372,10 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     q_pages           — {question_key: page_number (1-based)} for open-ended
                         questions that live on a page other than page 1.
                         Bubble questions always default to page 1.
+    row_areas         — {row: question areas} for rows on a different sheet
+                        layout from qAreas; merged over qAreas for that row
+    flags             — {row: [bubbles.Flag]} marks the reader was unsure of,
+                        drawn as an orange '?letter' beside the row
     """
     # load results csv
     df = pd.read_csv(resCsv)
@@ -402,6 +394,11 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     GREEN = (0, 255, 0)
     RED   = (255, 0, 0)
     BLUE  = (0, 0, 255)
+    ORANGE = (255, 140, 0)
+    flag_font = _get_font(size=20)
+    row_areas = row_areas or {}
+    flags = flags or {}
+    base_areas = qAreas
 
     keyname = None
 
@@ -440,6 +437,12 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                 pil_pages.append(pil_img)
                 draws.append(ImageDraw.Draw(pil_img))
 
+        qAreas = {**base_areas, **row_areas.get(row_str, {})}
+        if draws[0] is not None:
+            for f in flags.get(row_str, []):
+                if f.field in qAreas:
+                    (x0, y0), (x1, _) = qAreas[f.field]
+                    draws[0].text((x1 + 2, y0 + 3), '?' + f.label, fill=ORANGE, font=flag_font)
         for col in df.columns[3:-2]:
             key = df.loc['0', col]
             if key == 'ignore':

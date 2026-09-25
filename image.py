@@ -8,7 +8,6 @@ class Image(object):
     '''
     image object, most important values are:
     Image.aligned is the sized and aligned image (RGB uint8 ndarray) to copy and mark
-    Image.scanimg is the binary uint8 ndarray (0/255) ready for bubble scanning
     '''
     def __init__(self, fname, scan_settings):
         # Load as RGB
@@ -27,5 +26,3 @@ class Image(object):
         self.regPts = scan_functions.getRegPts(imgsized, scan_settings)
         # Affine-align to the canonical template; output shape = scan_settings.sz
         self.aligned = scan_functions.imgReg(imgsized, self.regPts, scan_settings)
-        # Threshold the aligned image to produce the binary scan image
-        self.scanimg = scan_functions.autothresh(self.aligned.copy(), scan_settings)
