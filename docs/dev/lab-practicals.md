@@ -46,7 +46,7 @@ setup: Microscope, slide 14 (kidney, H&E), 40x, pointer on a glomerulus.
 ...
 ```
 
-`setup:` lines go to the setup guide only; students never see them. `image:` under a station heading prints on that station's placard; under a question, it prints beside that question. A `(2 pts)` line sets one question's points, as in the question bank. `forms:` lists the pairings in the order the builder deals them out (below).
+`setup:` lines go to the setup guide only; students never see them. `image:` under a station heading prints on that station's placard; under a question, it prints under that question. A `(2 pts)` line sets one question's points, as in the question bank. `forms:` lists the pairings in the order the builder deals them out (below).
 
 The question bank's own short-answer syntax (starred lettered answers) cannot be reused, because the letters A to D are already the question letters. `=` and `~` stay readable in a markdown preview, where list bullets would all look alike.
 
@@ -122,7 +122,7 @@ Placards, the setup guide, and the instructor key are written as PDFs by `practi
 
 Text is set with PyMuPDF's `Story` (HTML and CSS). Two limits of its HTML engine shaped the code. It sizes table columns by their content and ignores `width`, so one long answer squeezed the question column; the guide and key therefore draw their own rows, each cell a `Story` at a fixed fraction of the page width, with rules added afterward. And `Page.insert_htmlbox` costs about 20 ms per call against 0.4 ms for drawing a `Story` on a `DocumentWriter`, which took the setup guide from 8 s to under 1 s. The CSS engine also reads only a cell's first class.
 
-**Placards** (decided with Brandon): one station per letter-size portrait page. "Station N" at 60 pt, the questions at 20 pt, a question's own images to its right (up to 2.5 in tall), and the station's images filling the rest of the page, two columns when there are several. No station name or setup lines. When the images would get less than 2.5 in, they move to a second page headed "Station N (continued)" and the build warns. A missing image prints as a dashed red box naming the file, and the build warns.
+**Placards** (decided with Brandon): one station per letter-size portrait page. "Station N" at 60 pt, the questions at 20 pt full width, each question's own images under it, and the station's images last, two columns when a block has several. The height the text leaves is shared among the image blocks, none taking more than it needs to fill the page width; a question's image started out beside its text, but a landscape image in a 40% column printed at about 3 by 2 in on a half-empty page. No station name or setup lines. When the station's images would get less than 2.5 in, they move to a second page headed "Station N (continued)" and the build warns. A missing image prints as a dashed red box naming the file, and the build warns.
 
 **Setup guide and instructor key** are separate PDFs (decided with Brandon). The guide gives each station a heading with a box to tick, its name, setup lines, and images at 2.4 in wide with their file names, then a row per question: a box to tick, the letter, the question (with its images), full credit, and partial credit. The key is the same table at 9 pt with a points column that shows only overridden points, and no images. A station starts on a new page when it would not fit the rest of the current one; rows never split. Pages carry "title: setup guide · page N of M".
 
@@ -148,7 +148,7 @@ Steps 1 to 4 are built, with steps 5 and 6 folded into step 4 where they were sm
 
 ## Handoff: what remains (2026-09-25)
 
-All work is on the `lab-practicals` branch, committed, with 262 tests passing (`uv run python -m unittest discover -s tests`). It is not merged to `main` and no release tag has been pushed, so faculty on a downloaded app have none of it.
+All work is on the `lab-practicals` branch, committed, with 264 tests passing (`uv run python -m unittest discover -s tests`). It is not merged to `main` and no release tag has been pushed, so faculty on a downloaded app have none of it.
 
 ### Step 3: done
 

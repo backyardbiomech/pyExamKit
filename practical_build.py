@@ -44,8 +44,8 @@ p { margin: 0; }
 '''
 STATION_SIZE = 60                    # points, for "Station 12"
 QUESTION_GAP = 14                    # points between questions
-QUESTION_IMAGE_H = 180               # tallest a question's own image prints (2.5 in)
-MIN_STATION_IMAGE_H = 180            # below this, station images move to their own page
+IMAGE_GAP = 8                        # points between a question and its images
+MIN_IMAGE_H = 180                    # 2.5 in; below this, station images move to a second page
 
 DOC_CSS = '''
 body { font-family: sans-serif; font-size: 10pt; margin: 0; }
@@ -111,41 +111,94 @@ class Builder:
         return doc.tobytes(garbage=4, deflate=True)
 
     def _placard(self, doc, s: practical.Station):
+        '''
+        Each question prints full width with its own images under it, and the
+        station's images come last. Whatever height the text leaves is shared
+        among the image blocks, none taking more than it needs to fill the
+        page width. If the station's images would get less than MIN_IMAGE_H,
+        they move to a second page.
+        '''
         page = doc.new_page(width=PAGE.width, height=PAGE.height)
         left, right = MARGIN, PAGE.width - MARGIN
         bottom = PAGE.height - MARGIN - FOOTER
         self._placard_footer(page)
         page.insert_text((left, MARGIN + STATION_SIZE * 0.8), f'Station {s.number}',
                          fontname='hebo', fontsize=STATION_SIZE)
-        y = MARGIN + STATION_SIZE + 10
-        page.draw_line((left, y), (right, y), color=(0, 0, 0), width=1.5)
-        y += 16
+        top = MARGIN + STATION_SIZE + 10
+        page.draw_line((left, top), (right, top), color=(0, 0, 0), width=1.5)
+        top += 16
 
         # Only the letters some form uses
-        for q in [s.questions[c] for c in self.p.letters if c in s.questions]:
-            body = f'<p><b>{q.letter}.</b> {html.escape(q.text)}</p>'
-            images = q.images
-            text_w = (right - left) * (0.58 if images else 1)
-            text_h = _html_height(body, text_w, PLACARD_CSS)
-            row_h = max(text_h, QUESTION_IMAGE_H if images else 0)
-            if y + row_h > bottom:
-                self.warnings.append(f'Station {s.number}: the questions run past one page; '
-                                     f'shorten them or shrink their images.')
-                page = self._continuation(doc, s)
-                y = MARGIN + 40
-            page.insert_htmlbox(fitz.Rect(left, y, left + text_w, y + text_h + 4), body,
-                                css=PLACARD_CSS)
-            if images:
-                self._images(page, images, fitz.Rect(left + text_w + 12, y, right, y + row_h))
-            y += row_h + QUESTION_GAP
+        qs = [s.questions[c] for c in self.p.letters if c in s.questions]
+        bodies = [f'<p><b>{q.letter}.</b> {html.escape(q.text)}</p>' for q in qs]
+        heights = [_html_height(b, right - left, PLACARD_CSS) for b in bodies]
+        text_h = sum(heights) + QUESTION_GAP * len(qs) + IMAGE_GAP * sum(bool(q.images)
+                                                                          for q in qs)
+        blocks = [q.images for q in qs if q.images]
+        station_here = bool(s.images)
+        shares = self._shares(bottom - top - text_h, blocks + [s.images] * station_here,
+                              right - left)
+        if station_here and shares[-1] < MIN_IMAGE_H:
+            self.warnings.append(f'Station {s.number}: its images did not fit under the '
+                                 f'questions, so they print on a second page.')
+            station_here = False
+            shares = self._shares(bottom - top - text_h, blocks, right - left)
+        if bottom - top - text_h < 0 or any(h < MIN_IMAGE_H / 2 for h in shares):
+            self.warnings.append(f'Station {s.number}: the questions and their images are '
+                                 f'crowded; shorten the questions or use fewer images.')
 
-        if s.images:
-            if bottom - y < MIN_STATION_IMAGE_H:
-                self.warnings.append(f'Station {s.number}: its images did not fit under the '
-                                     f'questions, so they print on a second page.')
-                page = self._continuation(doc, s)
-                y = MARGIN + 40
-            self._images(page, s.images, fitz.Rect(left, y, right, bottom))
+        y = top
+        share = iter(shares)
+        for q, body, h in zip(qs, bodies, heights):
+            page.insert_htmlbox(fitz.Rect(left, y, right, y + h + 4), body, css=PLACARD_CSS)
+            y += h
+            if q.images:
+                img_h = next(share)
+                self._images(page, q.images, fitz.Rect(left, y + IMAGE_GAP, right,
+                                                       y + IMAGE_GAP + img_h))
+                y += IMAGE_GAP + img_h
+            y += QUESTION_GAP
+        if station_here:
+            self._images(page, s.images, fitz.Rect(left, y, right, y + next(share)))
+        elif s.images:
+            page = self._continuation(doc, s)
+            self._images(page, s.images, fitz.Rect(left, MARGIN + 40, right, bottom))
+
+    def _shares(self, space: float, blocks: list[list[str]], width: float) -> list[float]:
+        '''Split `space` among the image blocks: equal shares, except that a
+        block needing less than its share at full width gets only what it
+        needs, and the rest goes to the others.'''
+        need = [self._natural_height(b, width) for b in blocks]
+        shares = [0.0] * len(blocks)
+        open_ = set(range(len(blocks)))
+        space = max(space, 0)
+        while open_:
+            each = space / len(open_)
+            small = {i for i in open_ if need[i] <= each}
+            if not small:
+                for i in open_:
+                    shares[i] = each
+                break
+            for i in small:
+                shares[i] = need[i]
+                space -= need[i]
+            open_ -= small
+        return shares
+
+    def _natural_height(self, images: list[str], width: float) -> float:
+        '''How tall the images print at full width, laid out as _images lays them.'''
+        cols = 1 if len(images) == 1 else 2
+        w = (width - 10 * (cols - 1)) / cols
+        heights = [w * self._aspect(rel) for rel in images]
+        rows = [max(heights[i:i + cols]) for i in range(0, len(heights), cols)]
+        return sum(rows) + 10 * (len(rows) - 1)
+
+    def _aspect(self, rel: str) -> float:
+        '''Height over width; a missing image is drawn as a 3:2 box.'''
+        if not self._found(rel):
+            return 2 / 3
+        pix = fitz.Pixmap(str(self.base / rel))
+        return pix.height / pix.width
 
     def _continuation(self, doc, s):
         page = doc.new_page(width=PAGE.width, height=PAGE.height)

@@ -70,6 +70,13 @@ class TestBuild(unittest.TestCase):
         self.assertTrue(doc[19].get_images())         # 20D's image
         self.assertFalse(doc[1].get_images())
 
+    def test_question_image_prints_full_width_under_its_question(self):
+        page = fitz.open(stream=self.b.placards(), filetype='pdf')[19]      # 20D
+        img = page.get_image_rects(page.get_images()[0][0])[0]
+        d_text = page.search_for('D. Name')[0]
+        self.assertGreater(img.width, 400)
+        self.assertGreater(img.y0, d_text.y1)
+
     def test_guide_has_names_setup_and_answers(self):
         guide = ' '.join(self.guide.split())
         for s in self.p.stations:
@@ -107,6 +114,21 @@ class TestProblems(unittest.TestCase):
         self.assertTrue(any('images/nope.png' in w for w in b.warnings))
         self.assertIn('Missing image', pages(b.placards())[0])
         self.assertIn('Missing', ' '.join(pages(b.setup_guide())))
+
+    def test_question_and_station_images_share_the_page(self):
+        body = ('image: images/station1.png\nA. Name A.\n= a\nB. Name B.\n'
+                'image: images/station20d.png\n= b\nC. c\n= c\nD. d\n= d\n')
+        b = practical_build.Builder(one_station(body))
+        doc = fitz.open(stream=b.placards(), filetype='pdf')
+        self.assertEqual(len(doc), 1)
+        self.assertEqual(b.warnings, [])
+        page = doc[0]
+        rects = sorted((page.get_image_rects(x[0])[0] for x in page.get_images()),
+                       key=lambda r: r.y0)
+        self.assertEqual(len(rects), 2)
+        self.assertGreater(rects[0].y0, page.search_for('B. Name')[0].y1)   # under B
+        self.assertLess(rects[0].y1, page.search_for('C. c')[0].y0)
+        self.assertGreater(min(r.height for r in rects), practical_build.MIN_IMAGE_H)
 
     def test_crowded_station_moves_images_to_a_second_page(self):
         long = 'Name the structure at pin A, then describe its function in detail. ' * 3
