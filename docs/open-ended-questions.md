@@ -6,7 +6,7 @@ The grading is yours. The transcription and the suggestion are there to make goi
 
 ## Setting up the run
 
-On the [Scan Exams](scanning-and-grading.md) tab, check **Open-ended questions to grade on-screen?**. Also list any mid-exam written question in **Question numbers to ignore**, since its bubble row would otherwise be graded as a wrong answer. Then run the scan as usual.
+On the [Scan Exams](scanning-and-grading.md) tab, **Grade written answers on screen** is checked for you when the key has written questions. With no key file, check it yourself, and list any mid-exam written question under **More options → Also skip questions**, since its bubble row would otherwise be graded as a wrong answer. Then run the scan as usual. A scan of several versions at once grades bubbles only; scan each version's sheets on their own to grade their written answers.
 
 After the bubble questions are graded, the key image appears. **Drag a box around the answer area for each open-ended question**, in question order. Include only the space where students wrote — not the printed question number, not the label, not the printed line. Each box prompts for a label, which defaults to the next number in your ignore list, so a question numbered 14 on the exam stays question 14 in the results; labels can also be alphanumeric, so `1A` and `1B` work for two blanks in one question. The only way to correct a box is to remove the last one drawn and redraw it. When all the boxes are drawn, **press `g`** and the window closes.
 

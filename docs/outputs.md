@@ -36,7 +36,7 @@ When a mixed stack is graded by version, the outputs are written per version ins
 
 ## app_data/
 
-**`aligned/`** holds every page after skew and scale correction. These are what the **Skip alignment** option reuses, so keeping them makes a second pass at a different fill cutoff nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
+**`aligned/`** holds every page after skew and scale correction. These are what the **Re-read without aligning again** option reuses, so keeping them makes a second pass at a different fill cutoff nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
 
 **`scanJPGs/`** holds the page images extracted from a scanned PDF. The app converts a PDF to images and works on those.
 

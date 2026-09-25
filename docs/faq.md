@@ -20,7 +20,7 @@
 
 ## Scanning
 
-**Answers came back blank, or a `-` shows up in the results.** Check `ALERT.txt` first: it names every student and question affected, and any mark close to the cutoff. If light marks are being missed across many sheets, check **Skip alignment** and re-run with the fill cutoff lowered toward 0.30, which reuses the aligned images and takes seconds.
+**Answers came back blank, or a `-` shows up in the results.** Check `ALERT.txt` first: it names every student and question affected, and any mark close to the cutoff. If light marks are being missed across many sheets, check **Re-read without aligning again** under **More options** and re-run with the fill cutoff lowered toward 0.30, which reuses the aligned images and takes seconds.
 
 **Erasures are being counted as answers.** Raise the fill cutoff toward 0.45.
 

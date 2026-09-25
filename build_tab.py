@@ -350,16 +350,19 @@ class BuildExamUI(ctk.CTkFrame):
     # -- layout ------------------------------------------------------------
 
     def _build_ui(self):
+        # The action sits in a footer outside the scrolling settings, so it
+        # is always in view.
+        footer = ctk.CTkFrame(self, fg_color='transparent')
+        footer.pack(side='bottom', fill='x', pady=(6, 0))
+        self._build_generate_button(footer)
         content = ctk.CTkScrollableFrame(self, fg_color='transparent')
-        content.pack(fill='both', expand=True, pady=(0, 8))
+        content.pack(fill='both', expand=True)
 
         self._build_header_section(content)
         self._build_source_section(content)
         self._build_options_section(content)
         self._build_output_section(content)
         self._build_config_buttons(content)
-        ctk.CTkFrame(content, height=2, fg_color='gray60').pack(fill='x', pady=8)
-        self._build_generate_button(content)
 
         self._on_source_mode_changed()
         self._update_same_questions_visibility()
@@ -517,9 +520,10 @@ class BuildExamUI(ctk.CTkFrame):
         self._reprint_check.grid_remove()
 
     def _build_generate_button(self, parent):
-        ctk.CTkButton(parent, text='Generate Exam', height=36, font=ctk.CTkFont(weight='bold'),
-                       fg_color='#2563eb', hover_color='#1d4ed8',
-                       command=self._on_generate).pack(fill='x', pady=(4, 8))
+        ctk.CTkButton(parent, text='Generate Exam', height=40, width=220,
+                      font=ctk.CTkFont(size=15, weight='bold'),
+                      fg_color='#2563eb', hover_color='#1d4ed8',
+                      command=self._on_generate).pack(side='right', padx=10)
 
     # -- source-mode / conditional-row wiring -------------------------------
 

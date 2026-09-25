@@ -1620,9 +1620,10 @@ class KeyFileEditorDialog:
         # Per-question point values, carried through unedited — this dialog has
         # no points UI, but must not silently drop them from a loaded key file.
         self._point_values: dict = {}
-        # The answer sheet's row runs, carried through the same way: without
-        # them a sheet printed for this exam cannot be read.
-        self._sheet_rows: str = ''
+        # Metadata this dialog does not edit, carried through the same way:
+        # the answer sheet's row runs (without them a sheet printed for this
+        # exam cannot be read) and the version letter.
+        self._kept_meta: dict = {}
 
         if path and Path(path).exists():
             data = load_key_file(path)
@@ -1638,7 +1639,9 @@ class KeyFileEditorDialog:
                         'page': int(qdata.get('page', 1) or 1),
                     }
                 self._point_values = dict(data.get('point_values', {}))
-                self._sheet_rows = data.get('metadata', {}).get('sheet_rows', '')
+                _meta = data.get('metadata', {})
+                self._kept_meta = {k: _meta[k] for k in ('sheet_rows', 'version')
+                                   if _meta.get(k)}
 
         self._build_ui()
 
@@ -2228,7 +2231,7 @@ class KeyFileEditorDialog:
             'metadata': {
                 'num_questions': _total,
                 'questions_to_skip': _skip_str,
-                'sheet_rows': self._sheet_rows,
+                **self._kept_meta,
             },
             'point_values': dict(self._point_values),
         }

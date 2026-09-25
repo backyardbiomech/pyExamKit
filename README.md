@@ -10,15 +10,15 @@ Written by Brandon E. Jackson, Ph.D. Licensed under [GPLv3](LICENSE).
 
 ## What it does
 
-The app opens to one window with four tabs, sharing a single log at the bottom.
+The app opens to one window with four tabs, sharing a single log at the bottom. Each tab's action button sits at the bottom of the tab, above the log.
 
 **Build Exam** turns one or more plain-text question banks into a printable exam — multiple choice, multiple answer, true/false, short answer, multiple dropdown, ordering, and matching — in up to six scrambled versions, with an answer key CSV the scanner grades against. It can also import a Canvas QTI export, so a quiz that already exists in Canvas becomes a paper exam without being retyped.
-
-**Standard Sheet** prints a blank answer sheet for an exam made elsewhere, and produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
 
 **Scan Exams** reads a stack of completed answer sheets, grades them against the key, and writes out a results spreadsheet, a per-question breakdown, a Canvas-ready upload file, and a marked copy of every student's sheet.
 
 **Re-grade** re-runs the open-ended grading against transcriptions already on disk, so a key that turns out to have been too strict can be loosened without rescanning anything.
+
+**Standard Sheet** prints a blank answer sheet for an exam made elsewhere, and produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
 
 ## Documentation
 

@@ -20,7 +20,7 @@ There are no name bubbles. Names come from a [class roster](roster.md) matched t
 
 A question answered in writing (a short-answer `SA` question, or any row you choose in **Make Answer Sheet…**) keeps its number in the grid, but its bubbles are replaced by an arrow pointing to a numbered writing box in the space to the right. The boxes use the columns the exam does not need, so a sheet with written questions holds at most 90 answer rows. It fits 7 boxes, or 14 when the exam has 30 or fewer answer rows.
 
-When the exam is built here, the key records where each box is, so at scan time the handwriting is cropped from the right place without drawing anything. With a sheet from **Make Answer Sheet…**, list the written questions under **Question numbers to ignore** when you scan, and draw each box when the scanner asks.
+When the exam is built here, the key records where each box is, so at scan time the handwriting is cropped from the right place without drawing anything. With a sheet from **Make Answer Sheet…**, list the written questions under **More options → Also skip questions** when you scan, and draw each box when the scanner asks.
 
 When every version uses the same questions, the builder keeps each short-answer question on the same row in every version, so one sheet serves them all. When versions draw different questions, that cannot be arranged, and each version gets its own sheet, since the box has to be where that version's key expects it. Each is marked "Form A" and so on in small print in the bottom margin, where a neighbor will not notice it; hand each version out with its matching sheet.
 

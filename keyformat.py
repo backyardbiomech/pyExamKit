@@ -172,7 +172,7 @@ def load_key_csv(path: str) -> dict | None:
                             metadata['num_questions'] = int(value)
                         except ValueError:
                             pass
-                    elif question in ('questions_to_skip', 'sheet_rows') and value:
+                    elif question in ('questions_to_skip', 'sheet_rows', 'version') and value:
                         metadata[question] = value
                     continue
 
@@ -303,8 +303,9 @@ def save_key_csv(path: str, data: dict) -> None:
         writer.writerow(KEY_CSV_HEADER)
 
         # Metadata rows. sheet_rows is the answer sheet's row runs, present
-        # only when the exam's sheet groups rows by question (sheet_layout).
-        for field in ('num_questions', 'questions_to_skip', 'sheet_rows'):
+        # only when the exam's sheet groups rows by question (sheet_layout);
+        # version is the exam version letter of a key written by Build Exam.
+        for field in ('num_questions', 'questions_to_skip', 'sheet_rows', 'version'):
             if meta.get(field):
                 writer.writerow(['metadata', field, '', '', '', '', '',
                                  meta[field], '', ''])
