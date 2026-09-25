@@ -164,6 +164,14 @@ class TestMultiVersionWritten(unittest.TestCase):
         wb = openpyxl.load_workbook(self.results / 'gradebook.xlsx')
         self.assertEqual(wb.sheetnames, ['Version A', 'Version B', 'By question',
                                          'Item analysis'])
+        for name in ('Version A', 'Version B', 'By question'):
+            ws = wb[name]
+            labels = [ws.cell(row=r, column=1).value for r in range(ws.max_row - 2, ws.max_row + 1)]
+            self.assertEqual(labels, ['Mean', 'Median', 'Discrimination index'], name)
+            # the question text sits under the headers, which it leaves alone
+            self.assertEqual(ws.cell(row=2, column=1).value, 'Question', name)
+            self.assertTrue(str(ws.cell(row=1, column=5).value).startswith(('Q0', 'bank1')), name)
+            self.assertTrue(any(c.value for c in ws[2][4:]), name)
 
     def test_versions_combined_by_bank_question(self):
         graded = [outputs.load(p) for p in outputs.listed(self.results)]
