@@ -114,7 +114,8 @@ class TestPracticalScan(unittest.TestCase):
                             roster_path=str(cls.dir / 'stack' / 'roster.csv'),
                             review_perfect=True)
         cls.out = cls.dir / 'stack' / 'ExamScanner_outputs'
-        cls.results = pd.read_csv(cls.out / 'results.csv', dtype=object).set_index('index')
+        cls.results = pd.read_csv(cls.out / 'app_data' / 'results.csv',
+                                  dtype=object).set_index('index')
 
     @classmethod
     def tearDownClass(cls):
@@ -178,7 +179,7 @@ class TestPracticalScan(unittest.TestCase):
         self.assertIn('= renal pelvis\n= renal pelvis of the kidney\n', self.key.read_text())
 
     def test_outputs(self):
-        for name in ('results_gradebook.xlsx', 'resultsforCanvas.csv', 'marked.pdf'):
+        for name in ('gradebook.xlsx', 'canvas_upload.csv', 'marked.pdf'):
             self.assertTrue((self.out / name).exists(), name)
         import sheet_layout
         last = sheet_layout.practical_pages(len(practical.load(self.key).stations))

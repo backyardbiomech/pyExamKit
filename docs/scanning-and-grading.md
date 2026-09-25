@@ -50,9 +50,9 @@ With it on, partial credit applies. If *n* is the number of correct answers on t
 
 A mixed stack is graded in one pass whenever more than one version's key is loaded, which happens by itself when the build wrote several. On the new answer sheets, students bubble their version in the header. On the older sheets, give the question where students bubbled their version letter under **More options**; the [Build Exam](building-exams.md) tab can add that question for you.
 
-Each student's version bubble is read, and each version group is graded against its own key. Results are written per version: `results_versionA.csv`, `marked_versionA/`, and so on.
+Each student's version bubble is read, and each version group is graded against its own key. All versions go into one gradebook, with a tab per version, and one Canvas file; [Outputs](outputs.md#multiple-versions) has the details.
 
-Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab from its own `results_versionA.csv`, which also rebuilds `results_all_versions_forCanvas.csv`.
+Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab, which rebuilds the gradebook and Canvas file.
 
 A lab practical's forms are not versions: every form is graded against the one key, the practical's source file, in a single pass. See [Lab practicals](lab-practicals.md).
 

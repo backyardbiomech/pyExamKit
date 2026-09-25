@@ -1,19 +1,20 @@
-type,question,page,x1,y1,x2,y2,answer,partial_answers,points
-metadata,num_questions,,,,,,12,,
-metadata,questions_to_skip,,,,,,3,,
-metadata,sheet_rows,,,,,,"3,2,3,3,1",,
-metadata,version,,,,,,A,,
-metadata,answer_boxes,,,,,,printed,,
-bubble,Q001,,,,,,A,,1.0
-bubble,Q002,,,,,,BC,,1.0
-bubble,Q003,,,,,,ignore,,
-bubble,Q004,,,,,,A,,0.5
-bubble,Q005,,,,,,B,,0.5
-bubble,Q006,,,,,,B,,0.34
-bubble,Q007,,,,,,B,,0.33
-bubble,Q008,,,,,,E,,0.33
-bubble,Q009,,,,,,C,,0.34
-bubble,Q010,,,,,,A,,0.33
-bubble,Q011,,,,,,B,,0.33
-bubble,Q012,,,,,,B,,1.0
-open,openQ_3,1,,,,,correct text|corect tect,,1.0
+type,question,page,x1,y1,x2,y2,answer,partial_answers,points,source,choices
+metadata,num_questions,,,,,,12,,,,
+metadata,questions_to_skip,,,,,,3,,,,
+metadata,sheet_rows,,,,,,"3,2,3,3,1",,,,
+metadata,version,,,,,,A,,,,
+metadata,answer_boxes,,,,,,printed,,,,
+metadata,title,,,,,,Migration Fixture,,,,
+bubble,Q001,,,,,,A,,1.0,bank1.txt#1,ABCD
+bubble,Q002,,,,,,BC,,1.0,bank1.txt#2,ABCD
+bubble,Q003,,,,,,ignore,,,,
+bubble,Q004,,,,,,A,,0.5,bank1.txt#6.1,ABC
+bubble,Q005,,,,,,B,,0.5,bank1.txt#6.2,AB
+bubble,Q006,,,,,,B,,0.34,bank1.txt#7.1,DBCEA
+bubble,Q007,,,,,,B,,0.33,bank1.txt#7.2,DBCEA
+bubble,Q008,,,,,,E,,0.33,bank1.txt#7.3,DBCEA
+bubble,Q009,,,,,,C,,0.34,bank1.txt#8.1,BCA
+bubble,Q010,,,,,,A,,0.33,bank1.txt#8.2,BCA
+bubble,Q011,,,,,,B,,0.33,bank1.txt#8.3,BCA
+bubble,Q012,,,,,,B,,1.0,bank1.txt#9,AB
+open,openQ_3,1,,,,,correct text|corect tect,,1.0,bank1.txt#3,

@@ -13,6 +13,7 @@ import sheet_layout
 from build_tab import BuildExamUI, open_sheet_dialog
 from practical_tab import BuildPracticalUI
 import help_links
+import outputs
 
 
 class TextRedirector(io.TextIOBase):
@@ -302,6 +303,14 @@ class pyScanUI(ctk.CTkFrame):
             variable=self.reuseAlignedVar).grid(
             row=7, column=0, columnspan=2, pady=(8, 2), sticky='w')
 
+        # Canvas identifies students by SIS User ID, which at Longwood is the
+        # ID bubbled on the sheet with an L in front
+        ctk.CTkLabel(mf, text="Put in front of each ID in the Canvas file:").grid(
+            row=8, column=0, pady=2, sticky='w')
+        self.idPrefixVar = ctk.StringVar(value=outputs.id_prefix())
+        ctk.CTkEntry(mf, width=60, textvariable=self.idPrefixVar,
+                     placeholder_text="none").grid(row=8, column=1, padx=10, pady=2, sticky='w')
+
         self._refresh_scan_tab()
 
         # ════════════════════════════════════════════════════════
@@ -418,10 +427,10 @@ class pyScanUI(ctk.CTkFrame):
 
         ctk.CTkLabel(regrade_frame,
                      text="Update acceptable answers for fill-in-the-blank questions\n"
-                          "and retroactively adjust grades in an existing results.csv.",
+                          "and adjust the grades of an earlier scan.",
                      justify='left').grid(
             row=0, column=0, columnspan=2, padx=10, pady=(8, 4), sticky='w')
-        ctk.CTkButton(regrade_frame, text="Choose results.csv",
+        ctk.CTkButton(regrade_frame, text="Choose outputs folder…",
                       command=self._browse_regrade_csv).grid(
             row=1, column=0, padx=10, pady=4, sticky='w')
         self.regradeEntry = ctk.CTkEntry(regrade_frame, width=400)
@@ -505,16 +514,45 @@ class pyScanUI(ctk.CTkFrame):
             text="Canvas gradebook export, or a LastName, FirstName, ID CSV", text_color='gray')
 
     def _browse_regrade_csv(self):
-        filename = filedialog.askopenfilename(
-            filetypes=[('CSV files', '*.csv')])
-        if filename:
+        folder = filedialog.askdirectory(title='Choose the ExamScanner_outputs folder')
+        if folder:
             self.regradeEntry.delete(0, 'end')
-            self.regradeEntry.insert(0, filename)
+            self.regradeEntry.insert(0, folder)
+
+    def _regrade_csv(self, chosen: str) -> str | None:
+        """The results file to re-grade in the chosen outputs folder, asking
+        which version when there are several. A results.csv chosen directly,
+        or one at the top of a folder from before app_data/, also works."""
+        p = Path(chosen)
+        if p.is_file():
+            return str(p)
+        csvs = outputs.listed(p)
+        if not csvs and (p / 'results.csv').exists():
+            csvs = [p / 'results.csv']
+        # Only results with written answers have anything to re-grade
+        csvs = [c for c in csvs
+                if (outputs.artifact_dir(c) / f'{c.stem}_openq_answers.json').exists()]
+        if not csvs:
+            self._log('No written answers to re-grade in that folder. Choose the '
+                      'ExamScanner_outputs folder of a scan with written answers.')
+            return None
+        if len(csvs) == 1:
+            return str(csvs[0])
+        versions = {outputs.version_of(c): c for c in csvs}
+        dlg = ctk.CTkInputDialog(title='Re-grade',
+                                 text='Which version? ' + ', '.join(sorted(versions)))
+        answer = (dlg.get_input() or '').strip().upper()
+        if answer not in versions:
+            return None
+        return str(versions[answer])
 
     def _open_regrade_dialog(self):
-        csv_path = self.regradeEntry.get().strip()
+        chosen = self.regradeEntry.get().strip()
+        if not chosen:
+            self._log('Please choose the outputs folder first.')
+            return
+        csv_path = self._regrade_csv(chosen)
         if not csv_path:
-            self._log('Please select a results.csv first.')
             return
         from openQ import RegradeDialog
         RegradeDialog(self.parent, csv_path,
@@ -792,6 +830,8 @@ class pyScanUI(ctk.CTkFrame):
             key_file_path = next(iter(ks.paths.values()))
 
         reuse_aligned = bool(self.reuseAlignedVar.get())
+        if self.idPrefixVar.get().strip() != outputs.id_prefix():
+            outputs.set_id_prefix(self.idPrefixVar.get())
 
         self._log('Starting scan…')
         old_stdout = sys.stdout

@@ -8,3 +8,6 @@ docs/roster.md: headerish
 docs/outputs.md: headerish
 docs/dev/answer-sheet-redesign.md: headerish
 docs/answer-sheets.md: headerish
+docs/dev/outputs-cleanup.md: headerish
+outputs.py: headerish
+tests/test_multi_version_written.py: headerish

@@ -111,7 +111,7 @@ The grading window works as described in [Open-ended questions](open-ended-quest
 
 ## What the results hold
 
-The outputs are the ones described in [Outputs](outputs.md), with a few differences. `results.csv` has a `form` column, and a column for each question, `openQ_1A` through the last station's D. A question not on a student's form is left blank, not zero. Scores and the Canvas upload file come from the questions each student answered.
+The outputs are the ones described in [Outputs](outputs.md), with a few differences. The gradebook has a `form` column, and a column for each question, `openQ_1A` through the last station's D. A question not on a student's form is left blank, not zero. Scores and the Canvas upload file come from the questions each student answered.
 
 Each student's marked pages are saved as `Last_First_ID_p1.jpg`, `_p2.jpg`, and so on, with a green C, orange P, or red X just right of each graded box, clear of the writing, and the form and score (such as "Score 44 / 50") on page 1.
 
