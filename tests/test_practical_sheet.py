@@ -97,5 +97,42 @@ class TestFormSheet(unittest.TestCase):
         self.assertEqual(L.read_form(bubbles.to_gray(img)), 'AC')
 
 
+
+class TestDoubleSided(unittest.TestCase):
+    '''Sheets are printed on both sides, so each starts on fresh paper.'''
+
+    def pages(self, stations, double_sided=True):
+        return len(fitz.open(stream=answer_sheet.build_practical_sheet(
+            stations, 'AC', 'T', None, double_sided=double_sided), filetype='pdf'))
+
+    def test_odd_page_sheets_get_a_blank_back(self):
+        self.assertEqual(self.pages(11), 2)       # one page and its back
+        self.assertEqual(self.pages(25), 2)       # already two
+        self.assertEqual(self.pages(27), 4)       # three and a back
+        self.assertEqual(self.pages(11, double_sided=False), 1)
+
+    def test_blank_back_is_told_from_the_emptiest_page(self):
+        '''A 27-station sheet's third page holds one station, the least ink
+        any printed page has; its fourth is the blank back.'''
+        import random
+        import tempfile
+        from PIL import Image
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'tools'))
+        import make_practical_test_stack as stack
+        import practical_scan
+        doc = fitz.open(stream=answer_sheet.build_practical_sheet(27, 'BD', 'T', None,
+                                                                  double_sided=True),
+                        filetype='pdf')
+        rng = random.Random(3)
+        with tempfile.TemporaryDirectory() as d:
+            for n, want in ((3, False), (4, True)):
+                pix = doc[n - 1].get_pixmap(matrix=fitz.Matrix(200 / 72, 200 / 72))
+                img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
+                for scale in (1.0, 0.8):
+                    path = Path(d) / f'p{n}_{scale}.jpg'
+                    stack.scan(stack.printed(img, scale), rng).save(path, quality=80)
+                    self.assertEqual(practical_scan.is_blank(path), want, (n, scale))
+
+
 if __name__ == '__main__':
     unittest.main()

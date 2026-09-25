@@ -69,7 +69,7 @@ It collects every station's accepted answers from all the keys into one file. Th
 
 The **Build Practical** tab needs a source file, an output folder, and optionally a class size. Choosing the source file shows a one-line summary of what it found (stations, questions, forms) or, if the file cannot be used, why. The output folder defaults to a folder named after the practical beside the source file. **Build Practical** writes:
 
-- **A form sheet for each form**, such as `Practical_3_form_AC.pdf`: the answer sheet for students with that form.
+- **A form sheet for each form**, such as `Practical_3_form_AC.pdf`: the answer sheet for students with that form. A sheet with an odd number of pages ends with a page marked "intentionally blank", so that printed double-sided, every student's sheet starts on a fresh piece of paper.
 - **One combined sheet PDF**, when a class size is given: that many sheets with the forms dealt out in order, ready to print as one job. Leave the class size blank to skip it.
 - **Placards**, one page per station: the station number in large type, all four questions, and the station's images, filling the page. All four letters print, since students at one table answer different letters. When a station's images would print less than 2.5 inches tall under its questions, they move to a second page headed "Station N (continued)" and the log says so.
 - **The setup guide**, for whoever sets up the room: for each station, its name, its setup lines, its images with their file names, and every question with its accepted answers, each with a box to tick. Walk the room with it and check each pin against the answer the key expects.
@@ -85,13 +85,13 @@ uv run python practical_build.py practical3.md --students 48
 
 ## The form sheet
 
-A form sheet has the usual name line and ID bubbles on page 1, and below them a row for each station with two writing boxes, labeled with the station number and the form's two letters. Page 1 holds 11 stations and each later page 15, so a 25-station practical takes two pages; the most a sheet holds is 41 stations.
+A form sheet has the usual name line and ID bubbles on page 1, and below them a row for each station with two writing boxes, labeled with the station number and the form's two letters. Page 1 holds 11 stations and each later page 15, so a 25-station practical takes two pages, one piece of paper printed on both sides. Up to 11 stations fit on the front of one piece of paper, 12 to 26 take both sides of one, and 27 to 41 (the most a sheet holds) take two.
 
-The form is printed on every page as small black squares in the bottom margin, next to the code that tells the scanner which page it is. **The scanner never relies on anything the student writes to know their form**, so a student cannot answer the wrong letters by mistake. "Form AC, page 1 of 2" is printed small on each page for whoever staples and hands out the sheets.
+The form is printed on every page as small black squares in the bottom margin, next to the code that tells the scanner which page it is. **The scanner never relies on anything the student writes to know their form**, so a student cannot answer the wrong letters by mistake. "Form AC, page 1 of 2" is printed small on each page for whoever hands out the sheets.
 
 ## Printing and handing out
 
-Print the combined sheet PDF, and staple each student's pages together, page 1 on top. Printing at a reduced scale to fit a printer's margins is fine; the sheets scan correctly down to at least 80%.
+Print the combined sheet PDF **double-sided, and do not staple it**: the stack has to go through the scanner's document feeder afterward, and a staple stops it. With 26 stations or fewer, each student's sheet is a single piece of paper, so there is nothing to hold together. With more, each student has two pieces; hand them out together, and if you clip them, take the clips off before scanning. Printing at a reduced scale to fit a printer's margins is fine; the sheets scan correctly down to at least 80%.
 
 Hand the stack down each row in order. Because the forms are dealt in the order the source file lists them, neighbors get different forms, and with the default order, a student's neighbors share no question with them.
 
@@ -99,11 +99,11 @@ Print the placards and the setup guide separately. Nothing on a placard gives aw
 
 ## Scanning and grading
 
-Scan the whole stack at once, every form mixed, at 200 dpi or better in color, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first.
+Scan the whole stack at once through the document feeder, **double-sided**, every form mixed, at 200 dpi or better in color, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first, which double-sided scanning of an unshuffled stack gives you. Blank backs are skipped, so there is no need to turn on the scanner's own blank-page removal, and no harm in it.
 
 On the **Scan Exams** tab, choose the practical's source `.md` file as the key. It is the key; there is no CSV. The line under the button confirms it as a lab practical with its stations, forms, and pages per student, and **Grade written answers on screen** is checked for you. Load a [class roster](roster.md) to have names on the results, since the sheet's ID bubbles are all it has to go on.
 
-The scanner groups the pages into students by what is printed on each page, reads each student's form from the squares and their ID from page 1, and then grades the written answers. A page that does not fit is reported in `ALERT.txt` rather than guessed at: a page 2 with no page 1 before it, a page 2 of form BD stapled behind a page 1 of form AC, a missing page (whose answers are left blank), or a sheet whose form squares cannot be read.
+The scanner groups the pages into students by what is printed on each page, reads each student's form from the squares and their ID from page 1, and then grades the written answers. A page that does not fit is reported in `ALERT.txt` rather than guessed at: a page 2 with no page 1 before it, a page 2 of form BD behind a page 1 of form AC, a missing page (whose answers are left blank), or a sheet whose form squares cannot be read.
 
 The grading window works as described in [Open-ended questions](open-ended-questions.md), with two differences. It goes station by station and letter by letter (all of 1A, then 1B, through 25D), and each question is shown only for the students whose form includes it, so "3 of 24" means the third of the 24 students who answered it. The top line gives the question text, and the line below names the student, with a picture of the name they wrote on page 1, so you can recognize a student with a spelling accommodation before grading their answer. That picture is shown only on your screen; only the answer boxes are ever sent for AI transcription.
 

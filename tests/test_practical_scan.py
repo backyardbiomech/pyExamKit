@@ -53,7 +53,7 @@ class TestGroupPages(unittest.TestCase):
     def test_page_from_another_form_is_skipped(self):
         sheets, alerts = group_pages([pr(1, 1), pr(2, 2, 'CD')], 2)
         self.assertIsNone(sheets[0].pages[1])
-        self.assertIn('Check the stapling', alerts[0])
+        self.assertIn('Check the page order', alerts[0])
 
     def test_page_two_first_and_foreign_pages(self):
         sheets, alerts = group_pages([pr(1, 2), pr(2, 0, ''), pr(3, 1), pr(4, 2), pr(5, 2)], 2)
@@ -68,10 +68,14 @@ GRADE_FOR = {'full': 'CC', 'misspelled': 'CC', 'partial': 'CX', 'wrong': 'XX', '
 
 class TestPracticalScan(unittest.TestCase):
     @classmethod
+    def write_source(cls, path: Path):
+        shutil.copy(SOURCE, path)
+
+    @classmethod
     def setUpClass(cls):
         cls.dir = Path(tempfile.mkdtemp(prefix='practical_scan_'))
         cls.key = cls.dir / 'practical.md'
-        shutil.copy(SOURCE, cls.key)                 # grading writes answers back into it
+        cls.write_source(cls.key)                    # grading writes answers back into it
         shutil.copytree(SOURCE.parent / 'images', cls.dir / 'images')
         # Printed at 85%, as the department's office printer does
         scans = stack.make_stack(cls.key, cls.dir / 'stack', n_students=5, seed=11,
@@ -151,6 +155,7 @@ class TestPracticalScan(unittest.TestCase):
         self.assertEqual(sorted(rows['LastName']), sorted(s['last'] for s in self.students))
         alerts = (self.out / 'ALERT.txt').read_text()
         self.assertIn('ROSTER', alerts)               # student 5's ID is one digit off
+        self.assertNotIn('PRACTICAL', alerts)         # every page found its student
 
     def test_results_blank_off_form_and_scored_on_form(self):
         p = practical.load(self.key)
@@ -175,7 +180,28 @@ class TestPracticalScan(unittest.TestCase):
     def test_outputs(self):
         for name in ('results_gradebook.xlsx', 'resultsforCanvas.csv', 'marked.pdf'):
             self.assertTrue((self.out / name).exists(), name)
-        self.assertEqual(len(list((self.out / 'marked').glob('*_p2.jpg'))), 5)
+        import sheet_layout
+        last = sheet_layout.practical_pages(len(practical.load(self.key).stations))
+        self.assertEqual(len(list((self.out / 'marked').glob(f'*_p{last}.jpg'))), 5)
+
+
+
+class TestOnePagePracticalScan(TestPracticalScan):
+    '''
+    Eleven stations fit one page, so each sheet is printed double-sided with
+    a blank back, and the stack alternates a student's page and a blank one.
+    The blank pages are skipped without an alert; every test above still holds.
+    '''
+
+    @classmethod
+    def write_source(cls, path: Path):
+        text = SOURCE.read_text()
+        path.write_text(text[:text.index('# Station 12')])
+
+    def test_stack_has_the_blank_backs(self):
+        import fitz
+        self.assertEqual(practical.load(self.key).stations[-1].number, 11)
+        self.assertEqual(len(fitz.open(self.dir / 'stack' / 'scans.pdf')), 2 * len(self.students))
 
 
 if __name__ == '__main__':

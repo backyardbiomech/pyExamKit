@@ -324,12 +324,16 @@ def _form_code(page, form):
 
 
 def build_practical_sheet(stations: int, form: str, title: str = '',
-                          logo=DEFAULT_LOGO) -> bytes:
+                          logo=DEFAULT_LOGO, double_sided: bool = False) -> bytes:
     '''
     A lab practical form sheet: two writing boxes per station, labeled with
     the form's two letters, on as many pages as the stations need. The form
     is printed as squares on every page, so the scanner never relies on
     anything the student wrote to know which questions a box answers.
+
+    double_sided adds a blank back to a sheet with an odd number of pages,
+    so each student's sheet starts on a fresh piece of paper when printed
+    on both sides. The scanner skips blank pages.
     '''
     form = ''.join(sorted(form.upper()))
     if len(form) != 2 or any(c not in L.FORM_LETTERS for c in form) or form[0] == form[1]:
@@ -346,7 +350,7 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
         _registration(page)
         _layout_code(page, L.PRACTICAL_CODES[n])
         _form_code(page, form)
-        # Small print for whoever hands the sheets out and staples them
+        # Small print for whoever hands the sheets out
         _text(page, 440, 1537, f'Form {form}, page {n} of {pages}', size=7, color=GUIDE)
         if n == 1:
             _header(page, logo, title)
@@ -368,6 +372,10 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
                 _text(page, 76, mid, str(station), size=13, bold=True, align='right')
             _text(page, x0 - 16, mid, form[slot], size=13, bold=True, align='center')
             page.draw_rect(_rect(x0, y0, x1, y1), color=BLACK, width=0.9)
+    if double_sided and pages % 2:
+        page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
+        _text(page, L.PAGE_W / 2, L.PAGE_H / 2, 'This side is intentionally blank.',
+              size=9, color=RING, align='center')
     return doc.tobytes(garbage=4, deflate=True)
 
 

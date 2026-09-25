@@ -404,7 +404,10 @@ def write_form_sheets(p: practical.Practical, outdir: Path, students: int = 0,
     '''
     outdir.mkdir(parents=True, exist_ok=True)
     stem = safe_name(p.title)
-    sheets = {f: answer_sheet.build_practical_sheet(len(p.stations), f, p.title, logo)
+    # Printed double-sided, so a sheet with an odd number of pages gets a
+    # blank back and no student's page 1 lands on another's last page
+    sheets = {f: answer_sheet.build_practical_sheet(len(p.stations), f, p.title, logo,
+                                                    double_sided=True)
               for f in p.forms}
     written = []
     for f, pdf in sheets.items():
