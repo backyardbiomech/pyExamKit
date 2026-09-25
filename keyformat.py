@@ -62,6 +62,14 @@ def load_key_file(path: str) -> dict | None:
     # Dispatch CSV format
     if p.suffix.lower() == '.csv':
         return load_key_csv(path)
+    # A lab practical's markdown source is its own key
+    if p.suffix.lower() in ('.md', '.txt'):
+        import practical
+        try:
+            return practical.to_key_data(practical.load(p))
+        except practical.PracticalError as exc:
+            print(f'[KeyFile] Cannot use {path} as a practical:\n{exc}', flush=True)
+            return None
     try:
         data = json.loads(p.read_text(encoding='utf-8'))
         if not isinstance(data, dict):
@@ -172,8 +180,8 @@ def load_key_csv(path: str) -> dict | None:
                             metadata['num_questions'] = int(value)
                         except ValueError:
                             pass
-                    elif question == 'questions_to_skip' and value:
-                        metadata['questions_to_skip'] = value
+                    elif question in ('questions_to_skip', 'sheet_rows', 'version') and value:
+                        metadata[question] = value
                     continue
 
                 # ── Wide format ──────────────────────────────────────────
@@ -302,13 +310,13 @@ def save_key_csv(path: str, data: dict) -> None:
         writer = csv.writer(fh)
         writer.writerow(KEY_CSV_HEADER)
 
-        # Metadata rows (num_questions, questions_to_skip)
-        if meta.get('num_questions'):
-            writer.writerow(['metadata', 'num_questions', '', '', '', '', '',
-                             meta['num_questions'], '', ''])
-        if meta.get('questions_to_skip'):
-            writer.writerow(['metadata', 'questions_to_skip', '', '', '', '', '',
-                             meta['questions_to_skip'], '', ''])
+        # Metadata rows. sheet_rows is the answer sheet's row runs, present
+        # only when the exam's sheet groups rows by question (sheet_layout);
+        # version is the exam version letter of a key written by Build Exam.
+        for field in ('num_questions', 'questions_to_skip', 'sheet_rows', 'version'):
+            if meta.get(field):
+                writer.writerow(['metadata', field, '', '', '', '', '',
+                                 meta[field], '', ''])
 
         # Bubble answers (sorted by question key)
         for qk in sorted(bubble.keys()):
@@ -331,8 +339,16 @@ def save_key_csv(path: str, data: dict) -> None:
 
 
 def save_key_file(path: str, data: dict) -> None:
-    """Write an exam key file. Dispatches to CSV or JSON based on file extension."""
+    """
+    Write an exam key file. Dispatches to CSV or JSON based on file extension.
+    A lab practical's markdown source only has its answers brought up to
+    date; everything else in it is the instructor's and is left alone.
+    """
     if Path(path).suffix.lower() == '.csv':
         save_key_csv(path, data)
+        return
+    if Path(path).suffix.lower() in ('.md', '.txt'):
+        import practical
+        practical.sync_answers(path, data.get('open_questions', {}))
         return
     Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')

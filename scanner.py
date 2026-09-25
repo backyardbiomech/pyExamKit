@@ -15,6 +15,8 @@ import scan_functions
 import bubbles
 import sheet_layout
 import roster as roster_mod
+import practical
+import practical_scan
 import grade_functions
 from openQ import OpenQs
 from keyformat import load_key_file, save_key_file
@@ -71,12 +73,14 @@ class Scanner(object):
         # ── Multi-version support ──────────────────────────────────────────────
         self.version_question = version_question
         self.version_keys: dict[str, dict] = {}
+        self.version_key_paths: dict[str, str] = {}
         if version_key_paths:
             for _ver, _vpath in version_key_paths.items():
                 if _vpath:
                     _vkd = load_key_file(_vpath)
                     if _vkd:
                         self.version_keys[_ver.upper()] = _vkd
+                        self.version_key_paths[_ver.upper()] = _vpath
                     else:
                         print(f'[Scanner] Warning: could not load key for version {_ver}: {_vpath}',
                               flush=True)
@@ -87,6 +91,15 @@ class Scanner(object):
                 print(f'[Scanner] Warning: failed to load key file "{key_file_path}". '
                       'Falling back to scan-key mode.', flush=True)
                 self.key_file_path = ''
+        # Question grids for sheets printed with rows grouped by question,
+        # by version letter ('' for a single key); see bubbles.read_sheet
+        self._keyed = {}
+        for _ver, _kd in ([('', self._key_data)] if self._key_data else []) + \
+                list(self.version_keys.items()):
+            _runs = (_kd or {}).get('metadata', {}).get('sheet_rows')
+            if _runs:
+                self._keyed[_ver] = sheet_layout.keyed_layout(
+                    sheet_layout.parse_columns(_runs))
         if len(ignores)>0:
             ignores=ignores+','
             self.ignores=list(ast.literal_eval(ignores))
@@ -159,11 +172,15 @@ class Scanner(object):
         with PILImage.open(path) as pil:
             return np.array(pil.convert('RGB'))
 
-    def _read(self, row, aligned):
-        """Read one sheet's bubbles into resdf row `row`."""
-        r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff)
+    def _read(self, row, aligned, layout=None, answers_only=False):
+        """Read one sheet's bubbles into resdf row `row`. answers_only keeps
+        the name and ID already there, which the roster may have replaced."""
+        r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff,
+                               layout=layout, keyed=self._keyed)
         self.reads[row] = r
         for k, v in r.answers.items():
+            if answers_only and not k.startswith('Q'):
+                continue
             self.resdf.loc[row, k] = v
 
     def _alert(self, line):
@@ -224,7 +241,9 @@ class Scanner(object):
         return areas, flags
 
     def run(self):
-        if self.version_keys:
+        if self._key_data and self._key_data.get('metadata', {}).get('practical'):
+            self._run_practical()
+        elif self.version_keys:
             self._run_multi_version()
         elif self.key_file_path and self._key_data:
             self._run_with_key_file()
@@ -352,6 +371,15 @@ class Scanner(object):
                     print(f'[MultiVersion] Student row {row_idx} ({name}) manually '
                           f'assigned to version {chosen}.', flush=True)
                     version_groups.setdefault(chosen, []).append(row_idx)
+                    # A grouped-row sheet was read with a guessed grid; read
+                    # it again with the grid of the version now known.
+                    _r = self.reads.get(row_idx)
+                    _grid = self._keyed.get(chosen)
+                    if (_r is not None and _grid is not None and img_path
+                            and _r.layout.code == _grid.code
+                            and _r.layout.columns != _grid.columns):
+                        self._read(row_idx, self._load_aligned(img_path), layout=_grid,
+                                   answers_only=True)
                 else:
                     print(f'[MultiVersion] Student row {row_idx} ({name}) skipped — '
                           'will NOT appear in any output.', flush=True)
@@ -394,25 +422,45 @@ class Scanner(object):
             sub_df = pd.concat([key_series.to_frame().T, sub_students])
             sub_df.index.name = None
 
-            # Save version-specific results CSV
+            # Every page of this version's students, after a None for the key
+            # row, which is the layout the grader and the marker expect
+            imgs_for_ver = []
+            for orig_row in row_indices:
+                first = (orig_row - 1) * pps  # 0-based into aligned_image_list
+                imgs_for_ver += self.aligned_image_list[first:first + pps]
             ver_csv = str(self.outdir / f'results_version{ver}.csv')
-            sub_df.to_csv(ver_csv, index=True, index_label='index')
 
-            # Grade (bubble-only; openQ=False)
+            # Written answers, graded against this version's key: its boxes
+            # and accepted answers can differ from another version's.
+            openQs = None
+            if self.openQ:
+                print(f'[MultiVersion] Version {ver}: written answers.', flush=True)
+                openQs = self._grade_written([None] + imgs_for_ver, kd,
+                                             self.version_key_paths.get(ver, ''), ver_csv)
+            ver_areas = dict(self.qAreas)
+            q_pages = {}
+            if openQs is not None:
+                for k, v in openQs.openQcoords.items():
+                    ver_areas[k] = ((v[0], v[1]), (v[2], v[3]))
+                q_pages.update(openQs._q_pages)
+                sub_df = self._with_written(sub_df, openQs)
+
+            # Save version-specific results CSV
+            sub_df.to_csv(ver_csv, index=True, index_label='index')
+            if openQs is not None:
+                openQs.save_artifacts(ver_csv, grade_config={
+                    'bubbleVal': self.bubbleVal, 'openVal': self.openVal,
+                    'selectAll': self.markmissing,
+                    'point_values': kd.get('point_values') or None})
+
             _point_values = kd.get('point_values')
             grade_functions.gradeResults(
-                ver_csv, self.markmissing, False,
+                ver_csv, self.markmissing, openQs is not None,
                 self.bubbleVal, self.openVal, self.markeddir, self.strictness,
                 point_values=_point_values)
 
             # Mark sheets if requested
             if self.save_marked:
-                imgs_for_ver = []
-                for orig_row in row_indices:
-                    img_idx = (orig_row - 1) * pps  # 0-based into aligned_image_list
-                    if 0 <= img_idx < len(self.aligned_image_list):
-                        imgs_for_ver.append(self.aligned_image_list[img_idx])
-
                 marked_list = [None] + imgs_for_ver  # None at [0] = synthetic key placeholder
                 ver_markeddir = self.outdir / f'marked_version{ver}'
                 ver_markeddir.mkdir(exist_ok=True)
@@ -421,7 +469,8 @@ class Scanner(object):
                     {str(j + 1): orig for j, orig in enumerate(row_indices)})
                 keyname = grade_functions.markSheets(
                     ver_csv, marked_list, ver_markeddir,
-                    self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                    ver_areas, self.Qdict, self.markmissing, self.corrMark,
+                    pages_per_student=pps, q_pages=q_pages,
                     row_areas=_areas, flags=_flags)
 
                 print(f'Saving marked files for version {ver}')
@@ -430,27 +479,7 @@ class Scanner(object):
                 ver_pdf.output(str(self.outdir / f'marked_version{ver}.pdf'))
 
         # ── Combined forCanvas CSV (all versions, sorted by last name) ────────
-        combined_frames = []
-        for ver in sorted(version_groups):
-            ver_csv = str(self.outdir / f'results_version{ver}.csv')
-            try:
-                vdf = pd.read_csv(ver_csv, dtype=object)
-                vdf.set_index('index', inplace=True)
-                vdf.index = vdf.index.map(str)
-                # drop key row and numb_correct row
-                vdf = vdf.drop(index=[r for r in ('0', 'numb_correct') if r in vdf.index])
-                sub = vdf[['LastName', 'FirstName', 'studentID', 'partialscore']].copy()
-                sub.insert(3, 'version', ver)
-                combined_frames.append(sub)
-            except Exception as _exc:
-                print(f'[MultiVersion] Could not read {ver_csv} for combined output: {_exc}',
-                      flush=True)
-        if combined_frames:
-            combined = pd.concat(combined_frames, ignore_index=True)
-            combined = combined.sort_values(by=['LastName', 'FirstName', 'studentID'])
-            combined_path = str(self.outdir / 'results_all_versions_forCanvas.csv')
-            combined.to_csv(combined_path, index=False)
-            print(f'Combined output saved → {combined_path}')
+        grade_functions.write_combined_versions(self.outdir, sorted(version_groups))
 
         print('All steps complete!')
 
@@ -608,6 +637,174 @@ class Scanner(object):
             self.outpdf.output(str(self.outdir / 'marked.pdf'))
         print('All steps complete!')
 
+    def _grade_written(self, image_list, key_data, key_path, csv_path, **where):
+        """Grade the written answers of the students in image_list ([None]
+        then each student's pages) against one key. Returns the grader, or
+        None when the key has no written questions. `where` passes OpenQs its
+        locate and student_info hooks, for sheets whose boxes vary by student."""
+        if not key_data.get('open_questions'):
+            return None
+        openQs = OpenQs(
+            image_list,
+            parent=self.parent,
+            ai_ocr=self.ai_ocr,
+            api_key=self.api_key,
+            ai_context=self.ai_context,
+            preloaded_file=self.preloaded_file,
+            review_perfect=self.review_perfect,
+            key_file_data=key_data,
+            key_file_path=key_path,
+            pages_per_student=self.pages_per_student,
+            ignores=self.ignores,
+            strictness=self.strictness,
+            output_csv_path=csv_path,
+            **where,
+        )
+        # Re-save the key with any answers the grader accepted during review
+        if key_path:
+            try:
+                _kd = load_key_file(key_path) or {}
+                if not _kd:
+                    print('[Scanner] Key file re-read returned empty — skipping '
+                          'answer update to avoid overwriting existing data.',
+                          flush=True)
+                    raise ValueError('empty key file re-read')
+                for _qk, _oq in _kd.get('open_questions', {}).items():
+                    if openQs.acceptable_answers.get(_qk):
+                        _oq['full'] = list(openQs.acceptable_answers[_qk])
+                    if openQs.partial_credit_answers.get(_qk):
+                        _oq['partial'] = list(openQs.partial_credit_answers[_qk])
+                save_key_file(key_path, _kd)
+                print(f'[Scanner] Key file updated with graded answers → {key_path}', flush=True)
+            except Exception as _exc:
+                print(f'[Scanner] Could not update key file: {_exc}', flush=True)
+        return openQs
+
+    @staticmethod
+    def _with_written(df, openQs):
+        """df with the written grades joined on, each followed by its
+        transcription (CC: stratum basale)."""
+        res = openQs.openQres.copy()
+        res.index = [type(df.index[0])(i) for i in res.index] if len(df.index) else res.index
+        df = pd.concat([df, res], axis=1)
+        for qk, trans_dict in openQs._transcriptions.items():
+            if qk not in df.columns:
+                continue
+            for img_idx, trans_val in trans_dict.items():
+                row = type(df.index[0])(img_idx)
+                if img_idx == 0 or row not in df.index:
+                    continue
+                text = trans_val[0] if trans_val else ''
+                grade = str(df.loc[row, qk])
+                if text and grade in ('CC', 'CX', 'XX'):
+                    df.loc[row, qk] = f'{grade}: {text}'
+        return df
+
+    def _run_practical(self):
+        """
+        Grade a lab practical: every form in one stack, against the one key
+        the practical's source file is. See practical_scan.py.
+        """
+        p = practical.load(self.key_file_path)
+        n_pages = sheet_layout.practical_pages(len(p.stations))
+        self.pages_per_student = n_pages
+
+        # 1. Align every page and read what it is; read the ID on each page 1
+        reads, id_reads = [], {}
+        for i, path in enumerate(self.image_list):
+            aligned_path = str(self.aligneddir / f'aligned_{i + 1:03d}.jpg')
+            try:
+                if self.reuse_aligned:
+                    print(f'Re-reading {i + 1}')
+                    aligned = self._load_aligned(path)
+                    aligned_path = path
+                else:
+                    print(f'Processing scan {i + 1}')
+                    aligned = Image(path, self.scan_settings).aligned
+                    scan_functions.saveimg(i + 1, aligned, self.aligneddir)
+            except ValueError as exc:
+                print(f'[Practical] Scan {i + 1}: {exc}', flush=True)
+                reads.append(practical_scan.PageRead(i + 1, 0, '', None))
+                continue
+            gray = bubbles.to_gray(aligned)
+            lay = sheet_layout.detect_layout(gray)
+            page = lay.practical_page
+            form = sheet_layout.read_form(gray) if page else ''
+            reads.append(practical_scan.PageRead(i + 1, page, form, aligned_path))
+            if page == 1:
+                id_reads[i + 1] = bubbles.read_sheet(aligned, 0, self.ignores, self.cutoff,
+                                                     layout=lay)
+        sheets, alerts = practical_scan.group_pages(reads, n_pages)
+        for a in alerts:
+            self._alert(a)
+        if not sheets:
+            print('[Practical] No practical form sheets were found in the scans.', flush=True)
+            return
+        print(f'[Practical] {len(sheets)} students, forms: '
+              + ', '.join(f'{f} {sum(s.form == f for s in sheets)}'
+                          for f in sorted({s.form for s in sheets})), flush=True)
+
+        # 2. One row per student, with their form; row 0 is the key
+        self.resdf = pd.DataFrame('', index=range(len(sheets) + 1),
+                                  columns=['LastName', 'FirstName', 'studentID', 'form'])
+        self.resdf.loc[0] = ['KEY', '', '', 'ignore']
+        self.reads = {}
+        for row, sheet in enumerate(sheets, 1):
+            r = id_reads[sheet.first_scan]
+            self.reads[row] = r
+            for col in ('LastName', 'FirstName', 'studentID'):
+                self.resdf.loc[row, col] = r.answers[col]
+            self.resdf.loc[row, 'form'] = sheet.form
+        self._apply_roster()
+        self._write_read_alerts()
+        for row, sheet in enumerate(sheets, 1):
+            problems = sheet.notes + [practical_scan.form_problem(sheet.form, p)]
+            for note in filter(None, problems):
+                self._alert(f'PRACTICAL: scan {sheet.first_scan} '
+                            f'({self._who(row)}): {note}.')
+
+        # 3. Written answers, station by station, each across the students who have it
+        labels = [self._who(row) + f'  ·  form {s.form}' for row, s in enumerate(sheets, 1)]
+        image_list = [None] + [r.path if r else None for s in sheets for r in s.pages]
+        csv_path = str(self.outdir / 'results.csv')
+        openQs = self._grade_written(
+            image_list, self._key_data, self.key_file_path, csv_path,
+            locate=practical_scan.make_locate(sheets, len(p.stations)),
+            student_info=practical_scan.make_student_info(sheets, labels))
+        self.resdf = self._with_written(self.resdf, openQs)
+
+        # 4. Results, points, Canvas file
+        self.resCsv = csv_path
+        self.resdf.to_csv(self.resCsv, index=True, index_label='index')
+        point_values = self._key_data.get('point_values')
+        openQs.save_artifacts(self.resCsv, grade_config={
+            'bubbleVal': self.bubbleVal, 'openVal': self.openVal,
+            'selectAll': self.markmissing, 'point_values': point_values,
+            'key_file': str(Path(self.key_file_path).resolve())})
+        grade_functions.gradeResults(self.resCsv, self.markmissing, True, self.bubbleVal,
+                                     self.openVal, self.markeddir, self.strictness,
+                                     point_values=point_values)
+
+        # 5. Marked sheets
+        if self.save_marked:
+            graded = pd.read_csv(self.resCsv, dtype=object).set_index('index')
+            practical_scan.mark_sheets(graded, sheets, p, self.markeddir,
+                                       grade_functions._get_font(40),
+                                       grade_functions._get_font(28))
+            print('Saving marked files')
+            self.outpdf = FPDF('P', 'pt', 'Letter')
+            scan_functions.savePdf(self.markeddir, self.outpdf, None)
+            self.outpdf.output(str(self.outdir / 'marked.pdf'))
+        print('All steps complete!')
+
+    def _who(self, row) -> str:
+        '''A student as the grader and ALERT.txt name them: roster name, else the ID.'''
+        last, first, sid = (str(self.resdf.loc[row, c])
+                            for c in ('LastName', 'FirstName', 'studentID'))
+        if last not in ('', '-', 'nan'):
+            return f'{last}, {first}'.strip(', ')
+        return f'ID {sid}'
+
     def _run_with_key_file(self):
         """Scan all images as students; populate key row 0 from the JSON key file."""
         # 1. Populate resdf row 0 from bubble_answers in the key file
@@ -660,77 +857,33 @@ class Scanner(object):
         # 4. Open-ended grading — pass [None] + students so index 0 = synthetic key row
         openQs = None
         if self.openQ:
-            padded_list = [None] + self.aligned_image_list
-            openQs = OpenQs(
-                padded_list,
-                parent=self.parent,
-                ai_ocr=self.ai_ocr,
-                api_key=self.api_key,
-                ai_context=self.ai_context,
-                preloaded_file=self.preloaded_file,
-                review_perfect=self.review_perfect,
-                key_file_data=self._key_data,
-                key_file_path=self.key_file_path,
-                pages_per_student=self.pages_per_student,
-                ignores=self.ignores,
-                strictness=self.strictness,
-                output_csv_path=str(self.outdir / 'results.csv'),
-            )
+            openQs = self._grade_written([None] + self.aligned_image_list, self._key_data,
+                                         self.key_file_path, str(self.outdir / 'results.csv'))
+        if openQs is not None:
             for k, v in openQs.openQcoords.items():
                 self.qAreas[k] = ((v[0], v[1]), (v[2], v[3]))
-            self.resdf = pd.concat([self.resdf, openQs.openQres], axis=1)
-            # Re-save key file with any answers the grader typed in during review
-            if self.key_file_path:
-                try:
-                    _kd = load_key_file(self.key_file_path) or {}
-                    if not _kd:
-                        print('[Scanner] Key file re-read returned empty — skipping '
-                              'answer update to avoid overwriting existing data.',
-                              flush=True)
-                        raise ValueError('empty key file re-read')
-                    for _qk, _oq in _kd.get('open_questions', {}).items():
-                        if openQs.acceptable_answers.get(_qk):
-                            _oq['full'] = list(openQs.acceptable_answers[_qk])
-                        if openQs.partial_credit_answers.get(_qk):
-                            _oq['partial'] = list(openQs.partial_credit_answers[_qk])
-                    save_key_file(self.key_file_path, _kd)
-                    print(f'[Scanner] Key file updated with graded answers → {self.key_file_path}', flush=True)
-                except Exception as _exc:
-                    print(f'[Scanner] Could not update key file: {_exc}', flush=True)
-
-        # 5. Embed OCR transcriptions
-        if self.openQ and openQs is not None:
-            for qk, trans_dict in openQs._transcriptions.items():
-                if qk not in self.resdf.columns:
-                    continue
-                for img_idx, trans_val in trans_dict.items():
-                    if img_idx == 0 or img_idx not in self.resdf.index:
-                        continue
-                    text = trans_val[0] if trans_val else ''
-                    if not text:
-                        continue
-                    grade = str(self.resdf.loc[img_idx, qk])
-                    if grade in ('CC', 'CX', 'XX'):
-                        self.resdf.loc[img_idx, qk] = f'{grade}: {text}'
+            # 5. Join the written grades, with their transcriptions
+            self.resdf = self._with_written(self.resdf, openQs)
 
         # 6. Write CSV
         self.resCsv = str(self.outdir / 'results.csv')
         self.resdf.to_csv(self.resCsv, index=True, index_label='index')
 
         # 7. Save artifacts
-        if self.openQ and openQs is not None:
+        if openQs is not None:
             openQs.save_artifacts(
                 self.resCsv,
                 grade_config={
                     'bubbleVal': self.bubbleVal,
                     'openVal': self.openVal,
                     'selectAll': self.markmissing,
+                    'point_values': (self._key_data or {}).get('point_values') or None,
                 })
 
         # 8. Grade
         _point_values = self._key_data.get('point_values') if self._key_data else None
         grade_functions.gradeResults(
-            self.resCsv, self.markmissing, self.openQ,
+            self.resCsv, self.markmissing, openQs is not None,
             self.bubbleVal, self.openVal, self.markeddir, self.strictness,
             point_values=_point_values)
 

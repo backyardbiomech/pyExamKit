@@ -79,7 +79,7 @@ All phases are built and the cutoffs are set from the stack above.
 These were outstanding when the work shipped to `main` at `7afb96a`.
 
 - **No release yet.** The packaged apps are built only when a `v*` tag is pushed (the last is `v3.2.7`), so faculty on a downloaded app have none of this until the next tag.
-- **The GUI has not been seen running.** Tk would not start in the environment the work was done in, so the Scan Exams roster field and cutoff slider, and the Build Exam **Make Answer Sheet…** dialog, are syntax-checked only. Open the app and use each once.
+- **The GUI has not been seen running.** Tk would not start in the environment the work was done in, so the Scan Exams roster field and cutoff slider, and the **Make Answer Sheet…** dialog (since moved to the Standard Sheet tab; see [grouped-answer-rows.md](grouped-answer-rows.md)), are syntax-checked only. Open the app and use each once.
 - **ID reading on a light sheet is unmeasured.** `bubble_stats.py` writes no ID data by design. Scan 23 of the tuning stack, whose ID the old reader missed, is the case to check by scanning it through the app, if the PDF predates the instructor's hand-darkening of its bubbles.
 - **Canvas roster column.** `docs/roster.md` assumes Canvas's "SIS User ID" holds Longwood L numbers. Confirm on one real export.
 - **Mismatched forms are not detected.** When versions draw different questions, each gets its own sheet ("Form A" in the margin), and nothing checks that a student used the matching one. Encoding the form in the layout code squares and comparing it with the bubbled version would catch it.

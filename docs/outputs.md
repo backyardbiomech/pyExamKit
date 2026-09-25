@@ -34,9 +34,11 @@ The M only appears when select-all-that-apply grading is on, and then it appears
 
 When a mixed stack is graded by version, the outputs are written per version instead: `results_versionA.csv`, `marked_versionA/`, `marked_versionA.pdf`, and so on for each version present in the stack.
 
+A lab practical's outputs differ a little: a `form` column, blanks for questions not on a student's form, and marked pages per student. [Lab practicals](lab-practicals.md#what-the-results-hold) has the details.
+
 ## app_data/
 
-**`aligned/`** holds every page after skew and scale correction. These are what the **Skip alignment** option reuses, so keeping them makes a second pass at a different fill cutoff nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
+**`aligned/`** holds every page after skew and scale correction. These are what the **Re-read without aligning again** option reuses, so keeping them makes a second pass at a different fill cutoff nearly instant. They are also unmarked copies of every sheet, which is worth keeping if you want to delete the original scans.
 
 **`scanJPGs/`** holds the page images extracted from a scanned PDF. The app converts a PDF to images and works on those.
 
@@ -46,4 +48,4 @@ Delete `app_data/` and the results stay valid, but re-grading open-ended questio
 
 ---
 
-Previous: [Open-ended questions](open-ended-questions.md) · Next: [FAQ and troubleshooting](faq.md)
+Previous: [Open-ended questions](open-ended-questions.md) · Next: [Lab practicals](lab-practicals.md)

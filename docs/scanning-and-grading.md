@@ -8,31 +8,37 @@ Scan at **200 dpi or better, in color**. Put every scan in a folder containing n
 
 You can scan the whole stack to a single PDF, or to a folder of JPGs. **JPGs are the safer choice for a large stack**, because a page that scanned badly can be rescanned and dropped into the folder, while a PDF has to be remade.
 
-If you are not loading a key file, **the key sheet goes first in the stack**. With a key file loaded, the stack is students only.
+If you are not loading a key file, **the key sheet goes first in the stack**. With a key file loaded, the stack is students only. A sheet built with an exam that groups rows by question needs its key file; without one the scan stops and says so.
 
 ## Setting up the run
 
-**Load Key File…** picks the key CSV — either one the [Build Exam](building-exams.md) tab wrote or one from the [Build Key](building-keys.md) tab. Loading it fills in the question count and the skip list from the key's own metadata, so those fields agree with the key by construction. **Create / Edit…** opens the same file for editing.
+The tab asks for three things, in order, and keeps the rest under **More options**. **Scan and Grade**, at the bottom of the tab, starts the run; the line beside it says what is about to be graded.
 
-**Choose PDF of scans or JPG of key** points at the scans. Select the PDF, or select the first JPG with the rest in the same folder.
+**1. Answer key.** **Choose key files…** picks the key CSV that the [Build Exam](building-exams.md) tab wrote. Choose any one version's key, and the other versions' keys from the same build are found beside it, so a multi-version stack needs no further setup. You can also choose several key files at once, for keys that were not written together; each must say which version it is for, in its metadata or in a name ending `_vA_key.csv` and so on. The line under the button says what was loaded: how many versions, how many questions and written answers, and whether the points came from the key. The question count, the written rows to skip, the points, and the pages per student all come from the key, so there is nothing to type. **Edit…** opens the key for editing. A lab practical's key is its source `.md` file; choose that ([Lab practicals](lab-practicals.md#scanning-and-grading)).
 
-**Number of questions to grade** is the last question number to read. **Question numbers to ignore** is a comma-separated list of rows to skip — the rows you covered over on the sheet, or the ones holding a written answer. A row that is ignored is neither graded nor counted.
+With no key file, the first page of the stack is read as the key (see above). Give the **number of questions** in the box that appears, and the **points per bubble question** and **per written question**. Those point boxes also appear for a key that has no points of its own, such as one built on the [Standard Sheet](building-keys.md) tab.
 
-**Pages per student** matters for a multi-page exam, where each student's sheets have to be grouped together.
+**2. Scanned sheets.** **Choose scans…** points at the scans. Select the PDF, or select the first JPG with the rest in the same folder.
 
-**Points per bubble question** and **points per open-ended question** set the default value of each. A per-question `points` value in the key file overrides both, so a key built from an exam carries its own weighting.
+**3. Class roster** is optional. With a roster loaded, each sheet's bubbled ID is looked up and the names in the results come from the roster rather than from the sheet. The new answer sheets have no name bubbles, so without a roster their results carry IDs only. [Class rosters](roster.md) explains what file to use and how to get it out of Canvas.
 
-**Load Class Roster…** is optional. With a roster loaded, each sheet's bubbled ID is looked up and the names in the results come from the roster rather than from the sheet. The new answer sheets have no name bubbles, so without a roster their results carry IDs only. [Class rosters](roster.md) explains what file to use and how to get it out of Canvas.
+**Written answers** appears when the key has written questions, or when there is no key file; see [Written answers](#written-answers) below.
 
-**Fill cutoff** decides how dark a mark has to be to count as filled, measured against that student's own marks rather than a fixed darkness (see [How a bubble becomes an answer](#how-a-bubble-becomes-an-answer)). The default of 0.35 means a bubble counts when it is at least about a third as dark as the student's typical mark; on a stack of 69 real pencil sheets, every value from 0.30 to 0.45 read identically, so it rarely needs changing. Lower it toward 0.30 if light marks are being missed; raise it toward 0.45 if erasures are being counted. Marks that could go either way are listed in `ALERT.txt` either way. The **Skip alignment** checkbox makes a second try cheap: it reuses the aligned images from the previous run, so a pass at a different cutoff takes seconds instead of reprocessing every page.
+### More options
 
-**Save marked answer sheets** writes the annotated copies; turn it off to save time when you only need the numbers. **Mark correct answers on graded sheets** adds the green marks as well as the red ones.
+**Save marked answer sheets**, **show the correct answers on marked sheets**, and **partial credit on select-all-that-apply questions** are on by default. Turn off the first to save time when you only need the numbers; the second adds green marks for the right answers beside the red ones; the third is described [below](#select-all-that-apply).
 
-Then click **Run Scan**.
+**Fill cutoff** decides how dark a mark has to be to count as filled, measured against that student's own marks rather than a fixed darkness (see [How a bubble becomes an answer](#how-a-bubble-becomes-an-answer)). The default of 0.35 means a bubble counts when it is at least about a third as dark as the student's typical mark; on a stack of 69 real pencil sheets, every value from 0.30 to 0.45 read identically, so it rarely needs changing. Lower it toward 0.30 if light marks are being missed; raise it toward 0.45 if erasures are being counted. Marks that could go either way are listed in `ALERT.txt` either way. **Re-read without aligning again** makes a second try cheap: it reuses the aligned images from the previous run, so a pass at a different cutoff takes seconds instead of reprocessing every page.
+
+**Also skip questions** takes a comma-separated list of rows to leave ungraded on top of the key's written ones: a question you have decided to throw out, or rows you covered over on the sheet. A row that is skipped is neither graded nor counted. With no key file, this is the whole list of rows to skip.
+
+**Pages per student** matters for a multi-page exam, where each student's sheets have to be grouped together. It is filled in from the key when the key's written answers are on a later page.
+
+The **version question number** is only for older sheets without version bubbles in the header, graded with several versions' keys; give the question where students bubbled their version letter.
 
 ## Select all that apply
 
-Checking **Select-all-that-apply questions?** changes how *every* question is graded, not just the multi-answer ones, and it turns on the "missing answer" mark described in [Outputs](outputs.md).
+**Partial credit on select-all-that-apply questions**, on by default, changes how *every* question is graded, not just the multi-answer ones, and it turns on the "missing answer" mark described in [Outputs](outputs.md).
 
 With it off, a question is right or wrong: an answer that exactly matches the key earns the question's points and anything else earns zero.
 
@@ -42,17 +48,21 @@ With it on, partial credit applies. If *n* is the number of correct answers on t
 
 ## Multiple versions
 
-Check **Multiple exam versions?** to grade a mixed stack in one pass, and give a key file for each version in use. On the new answer sheets, leave **version question number** blank: students bubble their version in the header. On the older sheets, give the question where students bubble their version letter, which the [Build Exam](building-exams.md) tab can add for you. Leave a version's key blank if that version was not printed.
+A mixed stack is graded in one pass whenever more than one version's key is loaded, which happens by itself when the build wrote several. On the new answer sheets, students bubble their version in the header. On the older sheets, give the question where students bubbled their version letter under **More options**; the [Build Exam](building-exams.md) tab can add that question for you.
 
 Each student's version bubble is read, and each version group is graded against its own key. Results are written per version: `results_versionA.csv`, `marked_versionA/`, and so on.
+
+Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab from its own `results_versionA.csv`, which also rebuilds `results_all_versions_forCanvas.csv`.
+
+A lab practical's forms are not versions: every form is graded against the one key, the practical's source file, in a single pass. See [Lab practicals](lab-practicals.md).
 
 When a student's version bubble cannot be read — left blank, or two letters filled — a dialog shows that student's sheet and asks you to assign a version by hand, or to skip the student. Skipped students are named in the log and appear in no version's results, so they have to be dealt with separately.
 
 ## Written answers
 
-If any question is answered in writing rather than in bubbles, check **Open-ended questions to grade on-screen?** and see [Open-ended questions](open-ended-questions.md), which covers the whole of that workflow.
+When the key has written questions, **Grade written answers on screen** is checked for you, and its options (AI transcription and partial credit strictness) sit beneath it. [Open-ended questions](open-ended-questions.md) covers the whole of that workflow.
 
-Remember to also list any mid-exam written question in **Question numbers to ignore**, or its untouched bubble row is graded as a wrong answer.
+With no key file, check it yourself, and list every written question under **Also skip questions**, or its untouched bubble row is graded as a wrong answer.
 
 ## How a bubble becomes an answer
 

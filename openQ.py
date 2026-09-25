@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import tkinter as tk
 import tkinter.messagebox
+import tkinter.simpledialog
 from pathlib import Path
 from PIL import Image as PILImage, ImageDraw as PILImageDraw
 
-from ocr import attempt_ocr, suggest_grade
+from ocr import attempt_ocr, explain_suggestion, suggest_grade
 import ai_ocr as _ai_ocr_mod
 from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
                        _openq_sort_key)
@@ -138,6 +139,19 @@ def load_acceptable_answers_file(path: str) -> tuple:
     return full_result, partial_result
 
 
+def looks_blank(crop: np.ndarray) -> bool:
+    '''
+    True when an answer box holds essentially no writing. Ink is anything
+    clearly darker than the box's own paper, so light pencil counts and scan
+    speckle does not; a few dozen dark pixels are allowed for dust.
+    '''
+    if crop.size == 0:
+        return True
+    gray = crop.mean(axis=2) if crop.ndim == 3 else crop
+    paper = float(np.percentile(gray, 90))
+    return int((gray < paper - 60).sum()) < 40
+
+
 def _pil_to_tkphoto(pil_img, master=None):
     """Convert a PIL Image to tk.PhotoImage via PNG bytes (no _imagingtk needed)."""
     buf = io.BytesIO()
@@ -223,7 +237,20 @@ class OpenQs(object):
                  ai_context='', preloaded_file: str = '', review_perfect: bool = True,
                  key_file_data: dict | None = None, key_file_path: str = '',
                  pages_per_student: int = 1, ignores=None, strictness: float = 0.0,
-                 output_csv_path: str = ''):
+                 output_csv_path: str = '', locate=None, student_info=None):
+        '''
+        locate, when given, says where each student's answer to each question
+        is: locate(question_key, student_index) returns (image_path, (x1, y1,
+        x2, y2)), or None when that student has no such question (a lab
+        practical form without that letter). Without it, every student
+        answers every question at the key's coordinates.
+        student_info(student_index) returns (label, name_crop or None), shown
+        in the grading window so the grader knows whose answer it is.
+        '''
+        self._locate = locate
+        self._student_info = student_info
+        self._q_text: dict[str, str] = {}
+        self._progress = None
         self._ignores: list[int] = sorted(ignores) if ignores else []
         self.openQcoords = {}
         self.openQkeyimgs = {}
@@ -258,11 +285,17 @@ class OpenQs(object):
             # Populate page mapping from key file data
             for qk, qdata in open_qs.items():
                 self._q_pages[qk] = int(qdata.get('page', 1) or 1)
-            # Pre-load coords for questions that have them
+            # Pre-load coords for questions that have them. With locate, the
+            # coordinates are per student, so every question is present
+            # without any.
             for qk, qdata in open_qs.items():
                 raw_coords = qdata.get('coords')
                 if raw_coords and len(raw_coords) == 4:
                     self.openQcoords[qk] = tuple(int(c) for c in raw_coords)
+                elif locate is not None:
+                    self.openQcoords[qk] = None
+                if qdata.get('text'):
+                    self._q_text[qk] = str(qdata['text'])
             # Pre-load answers and key text from key file
             for qk, qdata in open_qs.items():
                 full_list = [str(a).strip() for a in qdata.get('full', []) if str(a).strip()]
@@ -386,20 +419,17 @@ class OpenQs(object):
                 for qk, qv in self.openQcoords.items():
                     crops, ids = [], []
                     # Include key image as id '0' when available (not in key-file mode)
-                    if image_list[0] is not None:
+                    if image_list[0] is not None and qv is not None:
                         key_arr = np.array(PILImage.open(image_list[0]).convert('RGB'))
                         crops.append(key_arr[qv[1]:qv[3], qv[0]:qv[2]])
                         ids.append('0')
-                    _page = self._q_pages.get(qk, 1)
                     for s_idx in range(_n_students):
-                        actual_pos = 1 + s_idx * _pps + (_page - 1)
-                        if actual_pos >= len(image_list):
+                        where = self._where(qk, s_idx, image_list)
+                        if where is None or where[0] is None:
                             continue
-                        img_file = image_list[actual_pos]
-                        if img_file is None:
-                            continue
+                        img_file, box = where
                         arr = np.array(PILImage.open(img_file).convert('RGB'))
-                        crops.append(arr[qv[1]:qv[3], qv[0]:qv[2]])
+                        crops.append(arr[box[1]:box[3], box[0]:box[2]])
                         ids.append(str(s_idx + 1))  # 1-indexed student id = resdf row
                     batch = _ai_ocr_mod.recognize_batch(
                         crops, ids,
@@ -489,50 +519,71 @@ class OpenQs(object):
                     self._delete_progress_cache()
         # ─────────────────────────────────────────────────────────────────
 
-        qi = _start_qi
-        _resume_first_q = (_start_qi > 0 or _start_s_idx > 0)
-        while qi < len(openqs):
-            if qi < 0:
-                qi = 0
-            k = openqs[qi]
-            v = self.openQcoords[k]
-            _page = self._q_pages.get(k, 1)
-            # On the first question of a resume, start from the saved student index
-            if _resume_first_q and qi == _start_qi:
-                s_idx = _start_s_idx
-            else:
-                s_idx = 0
-            _resume_first_q = False
-            went_back_q = False
-            while s_idx < _n_students:
-                if s_idx < 0:
-                    s_idx = 0
-                actual_pos = 1 + s_idx * _pps + (_page - 1)
-                img_path = image_list[actual_pos] if actual_pos < len(image_list) else None
-                grade = self._gradeOneAnswer(img_path, k, v, img_idx=s_idx + 1)
-                if grade == 'back':
-                    s_idx -= 1
-                    if s_idx < 0:
-                        # Back past start of this question → go to previous question
-                        qi -= 1
-                        went_back_q = True
-                        break
-                    continue
-                self.openQres.loc[s_idx + 1, k] = grade
-                # Save progress after each answer so a crash can be recovered
-                _next_s = s_idx + 1
-                _next_qi = qi
-                if _next_s >= _n_students:
-                    _next_qi = qi + 1
-                    _next_s = 0
-                self._save_progress_cache(qi=_next_qi, s_idx=_next_s, openqs=openqs,
-                                          questions=_current_questions)
-                s_idx += 1
-            if went_back_q:
-                continue   # restart outer loop at new qi
-            qi += 1
+        self._grade_all(openqs, image_list, _n_students, _start_qi, _start_s_idx,
+                        _current_questions)
         # Grading complete — remove the progress cache
         self._delete_progress_cache()
+
+    def _grade_all(self, openqs, image_list, n_students, start_qi=0, start_pos=0,
+                   questions=None) -> None:
+        '''
+        Grade every answer: each question across the students who have it,
+        one question after another. Positions saved for resuming are places
+        in a question's list of students, which is the student index when
+        every student has every question.
+
+        Back returns to the last answer the grader actually reviewed, and
+        shows it even if it would now be accepted without review; answers
+        accepted automatically are skipped over in both directions, since
+        the grader never saw them. After re-grading it, grading runs forward
+        again from there.
+        '''
+        who = {qi: [s for s in range(n_students)
+                    if self._where(k, s, image_list) is not None]
+               for qi, k in enumerate(openqs)}
+        items = [(qi, s) for qi in range(len(openqs)) for s in who[qi]]
+        p = next((i for i, (qi, s) in enumerate(items)
+                  if (qi, who[qi].index(s)) >= (start_qi, start_pos)), len(items))
+        reviewed: list[int] = []      # places in items the grader saw, oldest first
+        forced = None
+        while p < len(items):
+            qi, s_idx = items[p]
+            k = openqs[qi]
+            img_path, v = self._where(k, s_idx, image_list)
+            pos = who[qi].index(s_idx)
+            self._progress = (pos + 1, len(who[qi]))
+            grade = self._gradeOneAnswer(img_path, k, v, img_idx=s_idx + 1,
+                                         force_show=(p == forced))
+            if grade == 'back':
+                # Nothing reviewed yet: show this one again
+                p = forced = reviewed.pop() if reviewed else p
+                continue
+            forced = None
+            if getattr(self, '_last_shown', True):
+                reviewed.append(p)
+            self.openQres.loc[s_idx + 1, k] = grade
+            # Save progress after each answer so a crash can be recovered
+            nxt = p + 1
+            if nxt < len(items):
+                nqi, ns = items[nxt]
+                self._save_progress_cache(qi=nqi, s_idx=who[nqi].index(ns), openqs=openqs,
+                                          questions=questions)
+            else:
+                self._save_progress_cache(qi=len(openqs), s_idx=0, openqs=openqs,
+                                          questions=questions)
+            p = nxt
+
+    def _where(self, k: str, s_idx: int, image_list) -> 'tuple | None':
+        '''
+        (image path, crop box) of student s_idx's answer to question k, or
+        None when that student has no such question. The path is None when
+        the page is missing from the scans.
+        '''
+        if self._locate is not None:
+            return self._locate(k, s_idx)
+        page = self._q_pages.get(k, 1)
+        pos = 1 + s_idx * self._pages_per_student + (page - 1)
+        return (image_list[pos] if pos < len(image_list) else None), self.openQcoords[k]
 
     # ------------------------------------------------------------------
     # Progress-cache helpers (resume after crash / AI-token reuse)
@@ -832,14 +883,17 @@ class OpenQs(object):
             else:
                 self.openQkeytext[qk] = ''
 
-    def _gradeOneAnswer(self, filename, k, v, img_idx=None):
+    def _gradeOneAnswer(self, filename, k, v, img_idx=None, force_show=False):
         '''
         Show the key crop (top) and student answer crop (bottom).
         If OCR is confident enough, shows a suggestion the grader can accept with Enter.
         Otherwise grader simply presses C / P / X.
         The key OCR text is editable so the grader can correct it once if needed.
-        Returns one of 'CC', 'CX', 'XX', or 'back'.
+        Returns one of 'CC', 'CX', 'XX', or 'back', and sets _last_shown to
+        whether the window was shown; force_show shows it even for an answer
+        that would be accepted without review.
         '''
+        self._last_shown = False
         if filename is None:
             print(f'[OpenQ] No image available for student {img_idx} — grading as XX.',
                   flush=True)
@@ -877,315 +931,285 @@ class OpenQs(object):
             self._transcriptions.setdefault(k, {})[img_idx] = (student_text, ocr_conf)
         _key_list = self.acceptable_answers.get(k) or ([key_text] if key_text else [])
         _partial_list = self.partial_credit_answers.get(k, [])
-        suggestion = suggest_grade(student_text, _key_list, ocr_conf,
-                                   partial_texts=_partial_list,
-                                   partial_threshold=self._strictness if self._strictness > 0 else None)
+        # A box with no ink is wrong whatever the reading; one with ink but
+        # no reading is left to the grader.
+        blank = not student_text and looks_blank(student_crop)
+
+        def _suggest(full, part):
+            if blank:
+                return 'XX'
+            return suggest_grade(student_text, full, ocr_conf, partial_texts=part,
+                                 partial_threshold=self._strictness if self._strictness > 0
+                                 else None)
+        suggestion = _suggest(_key_list, _partial_list)
 
         # Auto-grade perfect matches without showing the window
-        if not self._review_perfect and suggestion == 'CC':
+        if not force_show and not self._review_perfect and suggestion == 'CC':
             return 'CC'
         # Auto-grade CX suggestions (explicit partial-answer match or spelling-threshold match)
-        if suggestion == 'CX' and (_partial_list or self._strictness > 0):
+        if not force_show and suggestion == 'CX' and (_partial_list or self._strictness > 0):
             return 'CX'
+        self._last_shown = True
 
-        # Build display image — stack key crop (if available) above student crop
+        # ── The window ─────────────────────────────────────────────────────
+        # Student on the left, key on the right, each shown once and
+        # labeled; the AI reading sits under the handwriting it came from;
+        # color marks only the suggested grade.
         key_crop = self.openQkeyimgs.get(k)
-        if key_crop is not None:
-            w = max(key_crop.shape[1], student_crop.shape[1])
-
-            def pad_to_width(arr, target_w):
-                if arr.shape[1] == target_w:
-                    return arr
-                pad = np.full((arr.shape[0], target_w - arr.shape[1], 3), 255, dtype=np.uint8)
-                return np.hstack([arr, pad])
-
-            separator = np.full((4, w, 3), 100, dtype=np.uint8)
-            stacked = np.vstack([
-                pad_to_width(key_crop, w),
-                separator,
-                pad_to_width(student_crop, w),
-            ])
-            pil_stacked = PILImage.fromarray(stacked)
-        else:
-            # Key-file mode: no key scan image — show student crop alone
-            pil_stacked = PILImage.fromarray(student_crop)
-
-        max_w = 700
-        if pil_stacked.width > max_w:
-            scale = max_w / pil_stacked.width
-            pil_stacked = pil_stacked.resize(
-                (int(pil_stacked.width * scale), int(pil_stacked.height * scale)),
-                PILImage.LANCZOS,
-            )
-
+        _label = k[len('openQ_'):] if k.startswith('openQ_') else k
         result = {'grade': None}
+        MUTED, FAINT = '#555555', '#888888'
+        GRADE_STYLE = {'CC': ('#15803d', '#dcfce7'), 'CX': ('#b45309', '#fef3c7'),
+                       'XX': ('#b91c1c', '#fee2e2')}
 
         win = tk.Toplevel(self._root)
-        win.title(f'Grading {k}  —  C: correct   P: partial   X: wrong   B: go back')
+        win.title(f'Grading {_label}' + (f' ({self._progress[0]} of {self._progress[1]})'
+                                         if self._progress else ''))
         win.resizable(False, False)
         # Pin every grading window to the same screen position so they don't cascade.
-        # On the first call _grading_win_geometry is unset; we let the window land
-        # wherever the WM puts it, then record that position for all future calls.
-        if hasattr(self, '_grading_win_geometry') and self._grading_win_geometry:
+        if getattr(self, '_grading_win_geometry', None):
             win.geometry(self._grading_win_geometry)
         _win_bg = win.cget('bg')
 
-        if key_crop is not None:
-            header_text = 'KEY (top) ↕ Student (bottom)'
+        def small(parent, text, fg=MUTED, **kw):
+            return tk.Label(parent, text=text, font=('Arial', 11), fg=fg, anchor='w',
+                            justify='left', **kw)
+
+        def photo(arr, max_w, parent, min_w=0):
+            pil = PILImage.fromarray(arr)
+            scale = min(max_w / pil.width, max(1.0, min_w / pil.width))
+            if scale != 1:
+                pil = pil.resize((max(1, int(pil.width * scale)), max(1, int(pil.height * scale))),
+                                 PILImage.LANCZOS)
+            return _pil_to_tkphoto(pil, master=parent)
+
+        # Question and progress
+        head = tk.Frame(win)
+        head.pack(fill='x', padx=12, pady=(10, 4))
+        tk.Label(head, text=_label, font=('Arial', 17, 'bold')).pack(side='left')
+        if self._q_text.get(k):
+            tk.Label(head, text=self._q_text[k], font=('Arial', 14), wraplength=620,
+                     justify='left').pack(side='left', padx=(10, 0))
+        if self._progress:
+            small(head, f'Student {self._progress[0]} of {self._progress[1]}').pack(side='right')
+        tk.Frame(win, height=1, bg='#cccccc').pack(fill='x', padx=12)
+
+        # Whose answer this is
+        if self._student_info is not None and img_idx is not None:
+            who_label, name_crop = self._student_info(img_idx - 1)
+            who = tk.Frame(win)
+            who.pack(fill='x', padx=12, pady=(8, 0))
+            tk.Label(who, text=who_label, font=('Arial', 13, 'bold')).pack(side='left')
+            if name_crop is not None:
+                name_img = photo(name_crop, 300, who)
+                name_lbl = tk.Label(who, image=name_img, relief='solid', bd=1)
+                name_lbl.pack(side='left', padx=(12, 0))
+                name_lbl.tk_img = name_img
+
+        body = tk.Frame(win)
+        body.pack(fill='x', padx=12, pady=(10, 0))
+
+        # ── Left: what the student wrote ───────────────────────────────────
+        left = tk.Frame(body)
+        left.grid(row=0, column=0, sticky='nw')
+        small(left, 'Student wrote').pack(anchor='w')
+        crop_frame = tk.Frame(left, bg='#2563eb', padx=2, pady=2)
+        crop_frame.pack(anchor='w', pady=(2, 0))
+        s_img = photo(student_crop, 560, crop_frame, min_w=480)
+        s_lbl = tk.Label(crop_frame, image=s_img, bd=0)
+        s_lbl.pack()
+        s_lbl.tk_img = s_img
+        if student_text:
+            reading = f'{ocr_source} reading:  {student_text}'
+        elif blank:
+            reading = 'Blank box'
         else:
-            header_text = 'Student answer (answers imported from key file)'
-        tk.Label(win, text=header_text,
-                 font=('Arial', 12, 'bold')).pack(anchor='w', padx=8, pady=(6, 0))
-        tk_img = _pil_to_tkphoto(pil_stacked, master=win)
-        img_lbl = tk.Label(win, image=tk_img)
-        img_lbl.pack(padx=8, pady=4)
-        img_lbl.tk_img = tk_img
+            reading = 'No reading of the handwriting'
+        small(left, reading, fg=FAINT).pack(anchor='w', pady=(3, 0))
+        add_row = tk.Frame(left)
+        add_row.pack(anchor='w', pady=(8, 0))
+        status_var = tk.StringVar(value='')
 
-        # In key-file mode, show a read-only panel of the key answers
-        if key_crop is None:
-            _full = self.acceptable_answers.get(k, [])
-            _part = self.partial_credit_answers.get(k, [])
-            _full_str = '  |  '.join(_full) if _full else '(none)'
-            _part_str = '  |  '.join(_part) if _part else '(none)'
-            key_info_frame = tk.Frame(win, bg='#e8f4e8', relief='groove', bd=1)
-            key_info_frame.pack(fill='x', padx=8, pady=(0, 4))
-            tk.Label(key_info_frame, text=f'✓ Full credit: {_full_str}',
-                     font=('Arial', 11), bg='#e8f4e8', fg='#166534',
-                     anchor='w', justify='left', wraplength=680).pack(
-                fill='x', padx=8, pady=(4, 2))
-            tk.Label(key_info_frame, text=f'~ Partial credit: {_part_str}',
-                     font=('Arial', 11), bg='#e8f4e8', fg='#92400e',
-                     anchor='w', justify='left', wraplength=680).pack(
-                fill='x', padx=8, pady=(2, 4))
+        # ── Right: what the key accepts ────────────────────────────────────
+        right = tk.Frame(body)
+        right.grid(row=0, column=1, sticky='nw', padx=(16, 0))
+        small(right, 'Key accepts').pack(anchor='w')
+        key_box = tk.Frame(right, highlightthickness=1, highlightbackground='#888888',
+                           padx=8, pady=6)
+        key_box.pack(anchor='w', fill='x', pady=(2, 0))
+        if key_crop is not None:
+            small(key_box, 'Key sheet').pack(anchor='w')
+            k_img = photo(key_crop, 300, key_box)
+            k_lbl = tk.Label(key_box, image=k_img, relief='solid', bd=1)
+            k_lbl.pack(anchor='w', pady=(0, 6))
+            k_lbl.tk_img = k_img
+        lists = {}
+        for kind, title in (('CC', 'Full credit'), ('CX', 'Partial credit')):
+            small(key_box, title).pack(anchor='w')
+            lb = tk.Listbox(key_box, width=30, font=('Arial', 13), selectmode=tk.SINGLE,
+                            exportselection=False, activestyle='none', relief='flat',
+                            highlightthickness=0)
+            lb.pack(anchor='w', fill='x', pady=(0, 6))
+            lists[kind] = lb
+        custom = tk.Frame(key_box)
+        custom.pack(anchor='w', fill='x', pady=(2, 0))
+        custom_var = tk.StringVar()
+        custom_entry = tk.Entry(custom, textvariable=custom_var, width=18, font=('Arial', 12))
+        custom_entry.pack(side='left')
+        small(right, 'Double-click an answer to edit it. Removing one never lowers\n'
+                     'a grade already given.', fg=FAINT).pack(anchor='w', pady=(4, 0))
 
-        # ── Editable key text (so grader can correct a mis-read key once) ──
-        key_frame = tk.Frame(win)
-        key_frame.pack(fill='x', padx=8, pady=(0, 2))
-        tk.Label(key_frame, text='Key answer:', font=('Arial', 11)).pack(side='left')
-        key_var = tk.StringVar(value=key_text)
-        key_entry = tk.Entry(key_frame, textvariable=key_var, width=36, font=('Arial', 12))
-        key_entry.pack(side='left', padx=6)
+        def answers(kind):
+            return (self.acceptable_answers if kind == 'CC'
+                    else self.partial_credit_answers).setdefault(k, [])
 
-        # ── Suggestion label (updates as grader edits the key text) ─────────────────
-        sg_bg_map  = {'CC': '#16a34a', 'CX': '#b45309', 'XX': '#dc2626'}
-        sg_word_map = {'CC': '✓  CORRECT — press Enter',
-                       'CX': '~  PARTIAL — press Enter',
-                       'XX': '✗  WRONG — press Enter'}
-        sg_label = tk.Label(win, font=('Arial', 14, 'bold'), padx=12, pady=6)
-        sg_label.pack(fill='x', padx=8, pady=(4, 2))
+        def refresh_lists():
+            for kind, lb in lists.items():
+                lb.delete(0, tk.END)
+                items = answers(kind)
+                for a in items:
+                    lb.insert(tk.END, a)
+                if not items:
+                    lb.insert(tk.END, '(none)')
+                    lb.itemconfig(0, fg=FAINT)
+                lb.configure(height=max(1, min(len(items), 6)))
 
-        current_suggestion = {'val': suggestion}
+        def changed(msg=''):
+            # The first full-credit answer is the one a key-sheet scan read
+            full = answers('CC')
+            self.openQkeytext[k] = full[0] if full else ''
+            refresh_lists()
+            update_suggestion()
+            status_var.set(msg)
+            self._write_answers_to_key_file()
 
-        def _update_suggestion(*_):
-            edited_key = key_var.get().strip()
-            # Keep acceptable_answers[k][0] in sync with the editable key field
-            if edited_key and self.acceptable_answers.get(k):
-                self.acceptable_answers[k][0] = edited_key
-            elif edited_key:
-                self.acceptable_answers[k] = [edited_key]
-            _key_list = self.acceptable_answers.get(k) or ([edited_key] if edited_key else [])
-            _pt_list = self.partial_credit_answers.get(k, [])
-            sug = suggest_grade(student_text, _key_list, ocr_conf, partial_texts=_pt_list,
-                               partial_threshold=self._strictness if self._strictness > 0 else None)
-            current_suggestion['val'] = sug
-            if sug:
-                sg_label.config(
-                    text=f'{ocr_source}: "{student_text}"  →  {sg_word_map[sug]}',
-                    bg=sg_bg_map[sug], fg='white')
-            else:
-                if student_text:
-                    lbl = f'{ocr_source}: "{student_text}"  —  not confident enough to suggest'
-                else:
-                    lbl = 'No text detected — grade manually'
-                sg_label.config(text=lbl, bg=_win_bg, fg='gray40')
-
-        key_var.trace_add('write', _update_suggestion)
-        _update_suggestion()
-
-        # ── Acceptable answers panel ───────────────────────────────────────────────
-        aa_frame = tk.Frame(win)
-        aa_frame.pack(fill='x', padx=8, pady=(0, 4))
-        tk.Label(aa_frame, text='Acceptable answers:', font=('Arial', 11)).pack(
-            side='left', anchor='n', pady=2)
-
-        aa_list_frame = tk.Frame(aa_frame)
-        aa_list_frame.pack(side='left', padx=6)
-        aa_listbox = tk.Listbox(aa_list_frame, height=3, width=30, font=('Arial', 11),
-                                selectmode=tk.SINGLE, exportselection=False,
-                                takefocus=False)
-        aa_scrollbar = tk.Scrollbar(aa_list_frame, orient='vertical',
-                                    command=aa_listbox.yview)
-        aa_listbox.configure(yscrollcommand=aa_scrollbar.set)
-        aa_listbox.pack(side='left')
-        aa_scrollbar.pack(side='left', fill='y')
-
-        aa_btn_frame = tk.Frame(aa_frame)
-        aa_btn_frame.pack(side='left', padx=4, anchor='n')
-
-        regrade_status_var = tk.StringVar(value='')
-        regrade_status_lbl = tk.Label(aa_btn_frame, textvariable=regrade_status_var,
-                                      font=('Arial', 10), fg='#16a34a',
-                                      wraplength=160, justify='left')
-
-        def _refresh_aa_listbox():
-            aa_listbox.delete(0, tk.END)
-            for i, ans in enumerate(self.acceptable_answers.get(k, [])):
-                prefix = '(primary) ' if i == 0 else ''
-                aa_listbox.insert(tk.END, prefix + ans)
-
-        def _add_student_answer():
-            if not student_text or student_text == '[?]':
+        def add(kind, text):
+            text = (text or '').strip()
+            if not text:
                 return
+            n = self._add_acceptable_and_regrade(k, text, img_idx, grade=kind)
+            where = 'full credit' if kind == 'CC' else 'partial credit'
+            changed(f'Added “{text}” as {where}.'
+                    + (f' {n} earlier student{"s" if n != 1 else ""} upgraded.' if n else ''))
+
+        def add_student(kind):
             edited = tkinter.simpledialog.askstring(
-                'Add Correct Answer',
-                'Edit answer before adding:',
-                initialvalue=student_text,
-                parent=win,
-            )
-            if edited is None:
+                'Add to key', 'Add this to the key as '
+                + ('full credit' if kind == 'CC' else 'partial credit') + ':',
+                initialvalue=student_text or '', parent=win)
+            add(kind, edited)
+
+        def add_custom(kind):
+            add(kind, custom_var.get())
+            custom_var.set('')
+
+        def selected():
+            for kind, lb in lists.items():
+                sel = lb.curselection()
+                if sel and sel[0] < len(answers(kind)):
+                    return kind, sel[0]
+            return None
+
+        def edit_selected(_e=None):
+            pick = selected()
+            if not pick:
                 return
-            edited = edited.strip()
-            if not edited:
+            kind, i = pick
+            old = answers(kind)[i]
+            new = tkinter.simpledialog.askstring('Edit key answer', 'Key answer:',
+                                                 initialvalue=old, parent=win)
+            if new is None or not new.strip() or new.strip() == old:
                 return
-            count = self._add_acceptable_and_regrade(k, edited, img_idx)
-            _refresh_aa_listbox()
-            if count > 0:
-                regrade_status_var.set(f'Added. {count} previous student(s) upgraded.')
-            else:
-                regrade_status_var.set('Added (no previous upgrades).')
-            _update_suggestion()
-            self._write_answers_to_key_file()
+            answers(kind)[i] = new.strip()
+            n = self._upgrade_earlier(k, img_idx)
+            changed(f'Changed “{old}” to “{new.strip()}”.'
+                    + (f' {n} earlier student{"s" if n != 1 else ""} upgraded.' if n else ''))
 
-        def _remove_selected_aa():
-            sel = aa_listbox.curselection()
-            if not sel:
-                return
-            idx_sel = sel[0]
-            del self.acceptable_answers[k][idx_sel]
-            # If the primary was removed, sync the key entry field to the new primary
-            if idx_sel == 0:
-                key_var.set(self.acceptable_answers[k][0] if self.acceptable_answers.get(k) else '')
-            _refresh_aa_listbox()
-            regrade_status_var.set('')
-            _update_suggestion()
-            self._write_answers_to_key_file()
+        def remove_selected(_e=None):
+            pick = selected()
+            if pick:
+                kind, i = pick
+                old = answers(kind).pop(i)
+                changed(f'Removed “{old}”.')
 
-        add_btn_state = 'normal' if (student_text and student_text != '[?]') else 'disabled'
-        tk.Button(aa_btn_frame, text='Add student answer', font=('Arial', 10),
-                  state=add_btn_state,
-                  command=_add_student_answer).pack(anchor='w', pady=(0, 2))
-        tk.Button(aa_btn_frame, text='Remove selected', font=('Arial', 10),
-                  command=_remove_selected_aa).pack(anchor='w', pady=(0, 2))
-        regrade_status_lbl.pack(anchor='w')
-        _refresh_aa_listbox()
+        for kind, lb in lists.items():
+            lb.bind('<Double-Button-1>', edit_selected)
+            lb.bind('<BackSpace>', remove_selected)
+            lb.bind('<Delete>', remove_selected)
+            # One selection across both lists
+            lb.bind('<<ListboxSelect>>', lambda e, me=kind: [
+                other.selection_clear(0, tk.END) for kk, other in lists.items() if kk != me])
 
-        # ── Partial credit answers panel ──────────────────────────────────────────
-        pa_frame = tk.Frame(win)
-        pa_frame.pack(fill='x', padx=8, pady=(0, 4))
-        tk.Label(pa_frame, text='Partial credit\nanswers:', font=('Arial', 11)).pack(
-            side='left', anchor='n', pady=2)
+        tk.Button(add_row, text='Add to key as full credit',
+                  command=lambda: add_student('CC')).pack(side='left')
+        tk.Button(add_row, text='Add to key as partial credit',
+                  command=lambda: add_student('CX')).pack(side='left', padx=(6, 0))
+        small(left, '', fg='#15803d', textvariable=status_var, wraplength=560).pack(
+            anchor='w', pady=(4, 0))
+        tk.Button(custom, text='Add as full', command=lambda: add_custom('CC')).pack(
+            side='left', padx=(6, 0))
+        tk.Button(custom, text='Add as partial', command=lambda: add_custom('CX')).pack(
+            side='left', padx=(4, 0))
+        tk.Button(key_box, text='Remove selected', command=remove_selected).pack(
+            anchor='w', pady=(6, 0))
 
-        pa_list_frame = tk.Frame(pa_frame)
-        pa_list_frame.pack(side='left', padx=6)
-        pa_listbox = tk.Listbox(pa_list_frame, height=3, width=30, font=('Arial', 11),
-                                selectmode=tk.SINGLE, exportselection=False,
-                                takefocus=False)
-        pa_scrollbar = tk.Scrollbar(pa_list_frame, orient='vertical',
-                                    command=pa_listbox.yview)
-        pa_listbox.configure(yscrollcommand=pa_scrollbar.set)
-        pa_listbox.pack(side='left')
-        pa_scrollbar.pack(side='left', fill='y')
+        # ── The grade ──────────────────────────────────────────────────────
+        tk.Frame(win, height=1, bg='#cccccc').pack(fill='x', padx=12, pady=(12, 0))
+        grade_row = tk.Frame(win)
+        grade_row.pack(fill='x', padx=12, pady=(10, 0))
+        rings = {}
+        for g, text in (('CC', 'Correct   C'), ('CX', 'Partial   P'), ('XX', 'Wrong   X'),
+                        ('back', 'Back   B')):
+            # A colored frame around a button is the one highlight macOS draws
+            ring = tk.Frame(grade_row, bg=_win_bg, padx=3, pady=3)
+            ring.pack(side='left', expand=True, fill='x', padx=3)
+            tk.Button(ring, text=text, font=('Arial', 13), width=12,
+                      command=lambda g=g: set_grade(g)).pack(fill='x')
+            rings[g] = ring
+        suggestion_lbl = tk.Label(win, font=('Arial', 12), anchor='w', justify='left',
+                                  wraplength=900)
+        suggestion_lbl.pack(fill='x', padx=15, pady=(4, 12))
+        current = {'val': suggestion}
 
-        pa_btn_frame = tk.Frame(pa_frame)
-        pa_btn_frame.pack(side='left', padx=4, anchor='n')
-
-        def _refresh_pa_listbox():
-            pa_listbox.delete(0, tk.END)
-            for ans in self.partial_credit_answers.get(k, []):
-                pa_listbox.insert(tk.END, ans)
-
-        def _add_student_as_partial():
-            if not student_text or student_text == '[?]':
-                return
-            edited = tkinter.simpledialog.askstring(
-                'Add Partial Credit Answer',
-                'Edit answer before adding:',
-                initialvalue=student_text,
-                parent=win,
-            )
-            if edited is None:
-                return
-            edited = edited.strip()
-            if not edited:
-                return
-            count = self._add_acceptable_and_regrade(k, edited, img_idx, grade='CX')
-            _refresh_pa_listbox()
-            if count > 0:
-                regrade_status_var.set(f'Added partial. {count} previous student(s) upgraded.')
-            else:
-                regrade_status_var.set('Added as partial (no previous upgrades).')
-            _update_suggestion()
-            self._write_answers_to_key_file()
-
-        def _remove_selected_pa():
-            sel = pa_listbox.curselection()
-            if not sel:
-                return
-            del self.partial_credit_answers[k][sel[0]]
-            _refresh_pa_listbox()
-            regrade_status_var.set('')
-            _update_suggestion()
-            self._write_answers_to_key_file()
-
-        tk.Button(pa_btn_frame, text='Add as partial credit', font=('Arial', 10),
-                  state=add_btn_state,
-                  command=_add_student_as_partial).pack(anchor='w', pady=(0, 2))
-        tk.Button(pa_btn_frame, text='Remove selected', font=('Arial', 10),
-                  command=_remove_selected_pa).pack(anchor='w', pady=(0, 2))
-        _refresh_pa_listbox()
-
-        btn_frame = tk.Frame(win)
-        btn_frame.pack(fill='x', padx=8, pady=(4, 8))
+        def update_suggestion():
+            full, part = answers('CC'), answers('CX')
+            thr = self._strictness if self._strictness > 0 else None
+            sug = _suggest(full, part)
+            current['val'] = sug
+            for g, ring in rings.items():
+                ring.configure(bg=GRADE_STYLE[g][0] if g == sug else _win_bg)
+            suggestion_lbl.configure(
+                text=explain_suggestion(student_text, full, part, sug, thr, blank=blank),
+                fg=GRADE_STYLE[sug][0] if sug in GRADE_STYLE else MUTED)
 
         def set_grade(g):
-            # Persist any key text correction for subsequent students
-            self.openQkeytext[k] = key_var.get()
             result['grade'] = g
             # Capture position before destroying — picks up any move the user made.
             self._grading_win_geometry = f'+{win.winfo_x()}+{win.winfo_y()}'
             win.destroy()
 
-        tk.Button(btn_frame, text='Correct  [C]', bg='#90EE90', width=14,
-                  command=lambda: set_grade('CC')).pack(side='left', padx=4)
-        tk.Button(btn_frame, text='Partial  [P]', bg='#FFD700', width=14,
-                  command=lambda: set_grade('CX')).pack(side='left', padx=4)
-        tk.Button(btn_frame, text='Wrong    [X]', bg='#FFB6C1', width=14,
-                  command=lambda: set_grade('XX')).pack(side='left', padx=4)
-        tk.Button(btn_frame, text='← Back  [B]', width=14,
-                  command=lambda: set_grade('back')).pack(side='left', padx=4)
+        def typing():
+            return isinstance(win.focus_get(), tk.Entry)
 
-        for key_char, grade in [('c', 'CC'), ('C', 'CC'),
-                                 ('p', 'CX'), ('P', 'CX'),
-                                 ('x', 'XX'), ('X', 'XX'),
-                                 ('b', 'back'), ('B', 'back')]:
-            def _make_handler(g):
-                def handler(e):
-                    if win.focus_get() is key_entry:
-                        return
+        for key_char, grade in [('c', 'CC'), ('p', 'CX'), ('x', 'XX'), ('b', 'back')]:
+            def handler(e, g=grade):
+                if not typing():
                     set_grade(g)
-                return handler
-            win.bind(key_char, _make_handler(grade))
+            win.bind(key_char, handler)
+            win.bind(key_char.upper(), handler)
 
-        def _on_return(e):
-            if win.focus_get() is key_entry:
-                win.focus_set()  # move focus out of entry so Enter on next press grades
+        def on_return(e):
+            if typing():
+                win.focus_set()   # leave the field; the next Enter grades
                 return
-            if current_suggestion['val']:
-                set_grade(current_suggestion['val'])
-            elif not student_text:
-                set_grade('XX')
-        win.bind('<Return>', _on_return)
+            # With no suggestion (writing the AI could not read), Enter does
+            # nothing, so an unread answer is never marked wrong by reflex.
+            if current['val']:
+                set_grade(current['val'])
+        win.bind('<Return>', on_return)
 
+        refresh_lists()
+        update_suggestion()
         win.focus_force()
         self._root.wait_window(win)
         return result['grade'] if result['grade'] is not None else 'XX'
@@ -1238,7 +1262,14 @@ class OpenQs(object):
         if new_text.lower() in existing_lower:
             return 0
         target_dict.setdefault(qk, []).append(new_text)
+        return self._upgrade_earlier(qk, current_idx)
 
+    def _upgrade_earlier(self, qk: str, current_idx: int) -> int:
+        """
+        Re-grade the students graded before current_idx on qk against the
+        key's answers as they now stand, only ever upgrading (XX→CX, XX→CC,
+        CX→CC). Returns the number of grades upgraded.
+        """
         grade_rank = {'CC': 3, 'CX': 2, 'XX': 1, '': 0}
         upgraded = 0
         transcriptions_for_q = self._transcriptions.get(qk, {})
@@ -1566,8 +1597,12 @@ class RegradeDialog:
                     bubble_val = float(cfg.get('bubbleVal', 1))
                     open_val   = float(cfg.get('openVal', 2))
                     select_all = bool(cfg.get('selectAll', False))
+                    # The key's own points, when the scan had them; older
+                    # configs fall back to the defaults above
+                    point_values = cfg.get('point_values') or None
                 else:
                     bubble_val, open_val, select_all = 1.0, 2.0, False
+                    point_values = None
                 df_check = pd.read_csv(self._csv_path)
                 has_open = any(c.startswith('openQ_') for c in df_check.columns)
                 grade_functions.gradeResults(
@@ -1577,9 +1612,25 @@ class RegradeDialog:
                     bubbleVal=bubble_val,
                     openVal=open_val,
                     markeddir=Path(self._csv_path).parent / 'marked',
+                    point_values=point_values,
                 )
+                if Path(self._csv_path).name.startswith('results_version'):
+                    grade_functions.write_combined_versions(Path(self._csv_path).parent)
             except Exception as exc:
                 print(f'[Regrade] gradeResults error: {exc}', flush=True)
+            # A lab practical's source file is its key: keep its answers current
+            try:
+                key_file = cfg.get('key_file') if config_path.exists() else None
+                if key_file and Path(key_file).exists():
+                    kd = load_key_file(key_file)
+                    for qk, oq in (kd or {}).get('open_questions', {}).items():
+                        oq['full'] = list(self._acceptable_answers.get(qk, oq['full']))
+                        oq['partial'] = list(self._partial_credit_answers.get(qk, oq['partial']))
+                    if kd:
+                        save_key_file(key_file, kd)
+                        print(f'[Regrade] Answers saved to {key_file}', flush=True)
+            except Exception as exc:
+                print(f'[Regrade] Could not update the key file: {exc}', flush=True)
 
             status_var.set(
                 f'Done. {n} grade(s) upgraded and scores recalculated.')
@@ -1620,6 +1671,10 @@ class KeyFileEditorDialog:
         # Per-question point values, carried through unedited — this dialog has
         # no points UI, but must not silently drop them from a loaded key file.
         self._point_values: dict = {}
+        # Metadata this dialog does not edit, carried through the same way:
+        # the answer sheet's row runs (without them a sheet printed for this
+        # exam cannot be read) and the version letter.
+        self._kept_meta: dict = {}
 
         if path and Path(path).exists():
             data = load_key_file(path)
@@ -1635,6 +1690,9 @@ class KeyFileEditorDialog:
                         'page': int(qdata.get('page', 1) or 1),
                     }
                 self._point_values = dict(data.get('point_values', {}))
+                _meta = data.get('metadata', {})
+                self._kept_meta = {k: _meta[k] for k in ('sheet_rows', 'version')
+                                   if _meta.get(k)}
 
         self._build_ui()
 
@@ -2224,6 +2282,7 @@ class KeyFileEditorDialog:
             'metadata': {
                 'num_questions': _total,
                 'questions_to_skip': _skip_str,
+                **self._kept_meta,
             },
             'point_values': dict(self._point_values),
         }
@@ -2797,7 +2856,7 @@ class KeyBuilderDialog:
         if self._use_ai and not self._api_key:
             self._status_var.set(
                 'AI OCR requested but no API key configured \u2014 '
-                'falling back to local OCR. Use "Configure API Key\u2026" on the Build Key tab.')
+                'falling back to local OCR. Use "Configure API Key\u2026" on the Standard Sheet tab.')
             self._win.update()
 
         self._status_var.set('Running OCR \u2014 please wait\u2026')

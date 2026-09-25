@@ -181,6 +181,39 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     gradesdf.to_csv(_stem + 'forCanvas.csv')
     print('Done grading')
 
+def write_combined_versions(outdir, versions=None) -> None:
+    """Write results_all_versions_forCanvas.csv from the results_versionX.csv
+    files in outdir: one row per student, with their version, sorted by name.
+    Run after a multi-version scan, which names the versions it graded, and
+    again after re-grading any version, which keeps the versions the combined
+    file already lists, so a file left from an earlier scan is not swept in."""
+    combined_path = Path(outdir) / 'results_all_versions_forCanvas.csv'
+    if versions is None and combined_path.exists():
+        versions = set(pd.read_csv(combined_path, dtype=object)['version'].dropna())
+    frames = []
+    for ver_csv in sorted(Path(outdir).glob('results_version*.csv')):
+        m = re.fullmatch(r'results_version([A-F])\.csv', ver_csv.name)
+        if not m or (versions is not None and m[1] not in versions):
+            continue
+        try:
+            vdf = pd.read_csv(ver_csv, dtype=object)
+            vdf.set_index('index', inplace=True)
+            vdf.index = vdf.index.map(str)
+            # drop key row and numb_correct row
+            vdf = vdf.drop(index=[r for r in ('0', 'numb_correct') if r in vdf.index])
+            sub = vdf[['LastName', 'FirstName', 'studentID', 'partialscore']].copy()
+            sub.insert(3, 'version', m[1])
+            frames.append(sub)
+        except Exception as _exc:
+            print(f'[MultiVersion] Could not read {ver_csv} for combined output: {_exc}',
+                  flush=True)
+    if frames:
+        combined = pd.concat(frames, ignore_index=True)
+        combined = combined.sort_values(by=['LastName', 'FirstName', 'studentID'])
+        combined.to_csv(combined_path, index=False)
+        print(f'Combined output saved → {combined_path}')
+
+
 def save_gradebook_xlsx(xlsx_path: str, df, ptsdf, open_q_answers: dict | None = None) -> None:
     """
     Write an xlsx gradebook with live SUM formulas.
@@ -273,7 +306,9 @@ def save_gradebook_xlsx(xlsx_path: str, df, ptsdf, open_q_answers: dict | None =
             str(df.loc[row_str, 'studentID']),
         ]
         for qi, qc in enumerate(q_cols):
-            ans = str(df.loc[row_str, qc])
+            ans = df.loc[row_str, qc]
+            # blank, as for a practical question not on this student's form
+            ans = '' if pd.isna(ans) else str(ans)
             try:
                 pts = float(ptsdf.loc[row_str, qc])
             except (ValueError, TypeError, KeyError):

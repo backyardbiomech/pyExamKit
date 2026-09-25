@@ -77,3 +77,41 @@ def suggest_grade(student_text: str, key_texts,
                 best = 'CX'
                 break
     return best
+
+
+def explain_suggestion(student_text: str, full: list, partial: list,
+                       suggestion: str | None, partial_threshold: float | None = None,
+                       blank: bool = False) -> str:
+    """
+    One plain sentence for the grading window: what is suggested and why,
+    naming the key answer the reading came closest to. blank is a box with
+    no writing in it.
+    """
+    if blank:
+        return 'Suggested: wrong. The box is blank. Enter accepts.'
+    if not student_text:
+        return 'No reading of the handwriting. Grade it by eye with C, P, or X.'
+    reading = student_text.strip().lower()
+    scored = [(_levenshtein_ratio(a.strip().lower(), reading), a, 'full') for a in full if a]
+    scored += [(_levenshtein_ratio(a.strip().lower(), reading), a, 'partial')
+               for a in partial if a]
+    if not scored:
+        return 'The key has no answers for this question yet. Grade it by eye.'
+    ratio, answer, kind = max(scored)
+    alike = f'{round(ratio * 100)}% alike'
+    if suggestion == 'CC':
+        best = max(s for s in scored if s[2] == 'full')
+        return (f'Suggested: correct. It matches “{best[1]}” ({round(best[0] * 100)}% alike). '
+                f'Enter accepts.')
+    if suggestion == 'CX':
+        pmatch = [s for s in scored if s[2] == 'partial' and s[0] >= 0.70]
+        if pmatch:
+            best = max(pmatch)
+            return (f'Suggested: partial. It matches the partial-credit answer “{best[1]}” '
+                    f'({round(best[0] * 100)}% alike). Enter accepts.')
+        best = max(s for s in scored if s[2] == 'full')
+        return (f'Suggested: partial. It is {round(best[0] * 100)}% like “{best[1]}”, '
+                f'within the partial-credit strictness. Enter accepts.')
+    if suggestion == 'XX':
+        return f'Suggested: wrong. The closest key answer is “{answer}” ({alike}). Enter accepts.'
+    return f'No suggestion. The closest key answer is “{answer}” ({alike}). Grade it by eye.'

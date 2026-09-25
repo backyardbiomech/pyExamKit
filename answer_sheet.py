@@ -8,6 +8,11 @@ writing box in the columns the exam does not use. The box positions are
 returned so the exam key can carry them as crop regions, which saves drawing
 them by hand at scan time.
 
+A sheet built for an exam with ordering, matching, or dropdown questions
+takes its row runs from the exam (sheet_layout.keyed_layout), so each such
+question's rows sit together between gaps; the layout code tells the
+scanner to take the rows from the key.
+
     uv run python answer_sheet.py -n 60 --written 14,15 -o sheet.pdf
 '''
 import argparse
@@ -194,9 +199,9 @@ def _version(page, version_letter):
         _text(page, 300, 1537, f'Form {version_letter}', size=7, color=GUIDE)
 
 
-def _layout_code(page):
+def _layout_code(page, code):
     cells = L.LAYOUT_CODE_CELLS
-    bits = [1] + [(L.V2.code >> i) & 1 for i in range(len(cells) - 1)]
+    bits = [1] + [(code >> i) & 1 for i in range(len(cells) - 1)]
     h = L.LAYOUT_CODE_SIZE / 2
     for (cx, cy), on in zip(cells, bits):
         if on:
@@ -238,11 +243,23 @@ def _place_boxes(written: list[int], first_free_col: int) -> dict[int, tuple]:
 
 
 def build_sheet(questions: int = 150, written=(), title: str = '', version_letter: str = '',
-                logo=DEFAULT_LOGO) -> SheetResult:
+                logo=DEFAULT_LOGO, columns: list[list[int]] | None = None) -> SheetResult:
     '''
     Draw a sheet with `questions` answer rows. Question numbers in `written`
-    get writing boxes instead of bubbles. Returns the PDF and the box crops.
+    get writing boxes instead of bubbles. `columns` gives the row runs of a
+    sheet grouped by question (sheet_layout.keyed_layout); without it the
+    rows fall in the standard groups of five. Returns the PDF and the box
+    crops.
     '''
+    if columns:
+        layout = L.keyed_layout(columns)
+        if layout.max_questions != questions:
+            raise SheetError(f'The row runs hold {layout.max_questions} rows, '
+                             f'not {questions}.')
+        used_cols = len(columns)
+    else:
+        layout = L.V2
+        used_cols = math.ceil(questions / 30)
     if not 1 <= questions <= L.V2.max_questions:
         raise SheetError(f'An answer sheet holds 1 to {L.V2.max_questions} questions.')
     written = sorted(set(int(q) for q in written))
@@ -254,7 +271,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
     doc = fitz.open()
     page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
     _registration(page)
-    _layout_code(page)
+    _layout_code(page, layout.code)
     _header(page, logo, title)
     _guide(page)
     _id_block(page)
@@ -266,7 +283,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
               'Rows with an arrow are answered in writing, in the numbered box.',
               size=8, color=GUIDE)
 
-    for k, row in L.V2.question_rows(questions).items():
+    for k, row in layout.question_rows(questions).items():
         q = int(k[1:])
         _, ax, ay = row[0]
         _text(page, ax - 17, ay + 4, str(q), size=9, bold=True, align='right')
@@ -275,7 +292,6 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
         else:
             _grid_row(page, row)
 
-    used_cols = math.ceil(questions / 30)
     boxes = _place_boxes(written, used_cols)
     for q, (x0, y0, x1, y1) in boxes.items():
         _text(page, x0, y0 - 6, f'{q}.', size=10, bold=True)
@@ -289,6 +305,70 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
     # Crops sit just inside each box, so the printed border is not transcribed.
     crops = {q: (x0 + 4, y0 + 4, x1 - 4, y1 - 4) for q, (x0, y0, x1, y1) in boxes.items()}
     return SheetResult(doc.tobytes(garbage=4, deflate=True), crops)
+
+
+# ── Lab practical form sheets ──────────────────────────────────────────────
+
+PRACTICAL_NOTE = [
+    'Answer only the letters printed on this sheet, at every station.',
+    'Only what is written inside each box will be graded,',
+    'and everything written inside a box will be graded.',
+]
+
+
+def _form_code(page, form):
+    h = L.LAYOUT_CODE_SIZE / 2
+    for (cx, cy), letter in zip(L.FORM_CELLS, L.FORM_LETTERS):
+        if letter in form:
+            page.draw_rect(_rect(cx - h, cy - h, cx + h, cy + h), color=None, fill=BLACK)
+
+
+def build_practical_sheet(stations: int, form: str, title: str = '',
+                          logo=DEFAULT_LOGO) -> bytes:
+    '''
+    A lab practical form sheet: two writing boxes per station, labeled with
+    the form's two letters, on as many pages as the stations need. The form
+    is printed as squares on every page, so the scanner never relies on
+    anything the student wrote to know which questions a box answers.
+    '''
+    form = ''.join(sorted(form.upper()))
+    if len(form) != 2 or any(c not in L.FORM_LETTERS for c in form) or form[0] == form[1]:
+        raise SheetError(f'A form is two different letters from A to D, not "{form}".')
+    try:
+        pages = L.practical_pages(stations)
+        boxes = L.practical_boxes(stations)
+    except L.RunsError as exc:
+        raise SheetError(str(exc)) from None
+
+    doc = fitz.open()
+    for n in range(1, pages + 1):
+        page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
+        _registration(page)
+        _layout_code(page, L.PRACTICAL_CODES[n])
+        _form_code(page, form)
+        # Small print for whoever hands the sheets out and staples them
+        _text(page, 440, 1537, f'Form {form}, page {n} of {pages}', size=7, color=GUIDE)
+        if n == 1:
+            _header(page, logo, title)
+            _id_block(page)
+            y = 190
+            for i, line in enumerate(PRACTICAL_NOTE):
+                _text(page, 60, y, line, size=11, bold=i > 0)
+                y += 26 if i else 40
+        else:
+            _text(page, 60, 54, 'Name', size=8, color=GUIDE)
+            page.draw_line(_p(60, 96), _p(600, 96), color=BLACK, width=0.8)
+        top = L.P_FIRST_TOP[n]
+        _text(page, 60, top - 16, 'Station', size=10, bold=True)
+        for (station, slot), (bp, (x0, y0, x1, y1)) in boxes.items():
+            if bp != n:
+                continue
+            mid = (y0 + y1) / 2 + 6
+            if slot == 0:
+                _text(page, 76, mid, str(station), size=13, bold=True, align='right')
+            _text(page, x0 - 16, mid, form[slot], size=13, bold=True, align='center')
+            page.draw_rect(_rect(x0, y0, x1, y1), color=BLACK, width=0.9)
+    return doc.tobytes(garbage=4, deflate=True)
 
 
 def main():

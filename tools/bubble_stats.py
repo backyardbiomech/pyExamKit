@@ -9,6 +9,9 @@ or name grids, since their pattern of dark bubbles spells out the ID or
 name, and it writes no images, so the output can be shared.
 
     uv run python tools/bubble_stats.py scans.pdf --questions 50 -o stats.csv
+
+Sheets printed with rows grouped by question need the exam's key file
+(--key), which says where their rows are.
 '''
 import argparse
 import csv
@@ -22,6 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bubbles  # noqa: E402
 import init_functions  # noqa: E402
+import sheet_layout  # noqa: E402
+from keyformat import load_key_file  # noqa: E402
 from image import Image  # noqa: E402
 from settings import Settings  # noqa: E402
 
@@ -31,9 +36,15 @@ def main():
     ap.add_argument('scans', help='PDF of scanned sheets, or the first JPG in a folder of them')
     ap.add_argument('--questions', type=int, required=True, help='number of questions on the exam')
     ap.add_argument('--ignore', default='', help='comma-separated question numbers to skip')
+    ap.add_argument('--key', help="the exam's key file, for sheets with grouped rows")
     ap.add_argument('-o', '--out', default='bubble_stats.csv')
     args = ap.parse_args()
     ignores = [int(x) for x in args.ignore.split(',') if x.strip()]
+    keyed = {}
+    runs = ((load_key_file(args.key) or {}).get('metadata', {}).get('sheet_rows')
+            if args.key else None)
+    if runs:
+        keyed[''] = sheet_layout.keyed_layout(sheet_layout.parse_columns(runs))
 
     with tempfile.TemporaryDirectory() as tmp:
         pages = init_functions.filenames(args.scans, scan_jpgs_dir=Path(tmp))
@@ -44,7 +55,7 @@ def main():
             except ValueError as exc:
                 print(f'scan {n}: skipped ({exc})')
                 continue
-            r = bubbles.read_sheet(aligned, args.questions, ignores)
+            r = bubbles.read_sheet(aligned, args.questions, ignores, keyed=keyed)
             gray = bubbles.to_gray(aligned)
             paper = max(float(np.percentile(gray, 95)), 1.0)
             q_rows = r.layout.question_rows(args.questions)

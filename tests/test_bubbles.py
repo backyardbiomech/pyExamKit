@@ -152,5 +152,81 @@ class TestV2Layout(unittest.TestCase):
             answer_sheet.build_sheet(questions=150, written=[3])
 
 
+def render(pdf: bytes) -> np.ndarray:
+    page = fitz.open(stream=pdf, filetype='pdf')[0]
+    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), colorspace=fitz.csRGB)
+    return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3).copy()
+
+
+def paint_version(img, layout, letter, gray=120):
+    for lab, cx, cy in layout.version['V']:
+        if lab == letter:
+            yy, xx = np.mgrid[:img.shape[0], :img.shape[1]]
+            img[(xx - cx) ** 2 + (yy - cy) ** 2 <= 81] = gray
+
+
+class TestKeyedLayout(unittest.TestCase):
+    """A sheet whose gaps follow the exam, read with the rows its key gives."""
+
+    COLUMNS = [[2, 4, 5, 6, 3], [5, 1, 3]]      # 29 rows
+
+    def test_standard_runs_reproduce_v2(self):
+        std = sheet_layout.keyed_layout(sheet_layout.standard_columns(150))
+        self.assertEqual(std.questions, sheet_layout.V2.questions)
+
+    def test_packing_keeps_runs_whole_and_fits_the_column(self):
+        runs = [4, 6, 5, 5, 3, 2, 5, 6, 5, 5, 1]
+        cols = sheet_layout.pack_runs(runs)
+        self.assertEqual([n for c in cols for n in c], runs)
+        self.assertTrue(all(sheet_layout.column_fits(c) for c in cols))
+        # The last row of a full column sits no lower than on the standard sheet
+        lay = sheet_layout.keyed_layout(cols)
+        lowest = max(y for row in lay.questions.values() for _, _, y in row)
+        self.assertLessEqual(lowest, max(y for row in sheet_layout.V2.questions.values()
+                                         for _, _, y in row))
+
+    def test_packing_refuses_what_the_page_cannot_hold(self):
+        with self.assertRaises(sheet_layout.RunsError):
+            sheet_layout.pack_runs([2] * 80)
+        with self.assertRaises(sheet_layout.RunsError):
+            sheet_layout.pack_runs([33])
+
+    def test_key_form_round_trips(self):
+        text = sheet_layout.format_columns(self.COLUMNS)
+        self.assertEqual(text, '2,4,5,6,3/5,1,3')
+        self.assertEqual(sheet_layout.parse_columns(text), self.COLUMNS)
+        for bad in ('', '5,x', '0,5', '/'.join(['5'] * 6)):
+            with self.assertRaises(sheet_layout.RunsError, msg=bad):
+                sheet_layout.parse_columns(bad)
+
+    def test_grouped_sheet_round_trip(self):
+        import answer_sheet
+        img = render(answer_sheet.build_sheet(29, columns=self.COLUMNS).pdf)
+        self.assertIs(sheet_layout.detect_layout(bubbles.to_gray(img)), sheet_layout.V2_KEYED)
+        grid = sheet_layout.keyed_layout(self.COLUMNS)
+        answers = (ANSWERS + ANSWERS)[:29]
+        for i, a in enumerate(answers, 1):
+            paint(img, grid, f'Q{i:03d}', a, 120)
+        with self.assertRaises(bubbles.KeyedSheetError):
+            bubbles.read_sheet(img, 29)
+        r = bubbles.read_sheet(img, 29, keyed={'': grid})
+        self.assertEqual(''.join(r.answers[f'Q{i:03d}'] for i in range(1, 30)), answers)
+        self.assertEqual(r.layout.columns, self.COLUMNS)
+
+    def test_version_bubble_picks_the_grid(self):
+        import answer_sheet
+        cols_b = [[5, 3, 5, 5, 5, 5], [1]]
+        grid_a = sheet_layout.keyed_layout(self.COLUMNS)
+        grid_b = sheet_layout.keyed_layout(cols_b)
+        img = render(answer_sheet.build_sheet(29, columns=cols_b).pdf)
+        answers = (ANSWERS + ANSWERS)[:29]
+        for i, a in enumerate(answers, 1):
+            paint(img, grid_b, f'Q{i:03d}', a, 120)
+        paint_version(img, grid_b, 'B')
+        r = bubbles.read_sheet(img, 29, keyed={'A': grid_a, 'B': grid_b})
+        self.assertEqual(r.version, 'B')
+        self.assertEqual(''.join(r.answers[f'Q{i:03d}'] for i in range(1, 30)), answers)
+
+
 if __name__ == '__main__':
     unittest.main()

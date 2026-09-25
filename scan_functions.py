@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import fnmatch
 import os
@@ -42,6 +43,41 @@ def imgReg(img, regPts, scan_settings):
     return img_aligned.astype(np.uint8)
 
 
+# The registration circles as they come out of the resize to canonical width:
+# 42 px across at full size. Printers with wide margins shrink the page (85%
+# is common), a copier can scan a little large, and blur or heavy toner
+# fattens a mark, so the size window is wide; roundness, solidity, matching
+# sizes, and the three circles' arrangement are what pick them out.
+REG_AREA = np.pi * 21 ** 2
+REG_AREA_RANGE = (0.45, 1.6)        # fraction of REG_AREA: about 67% to 125% scale
+REG_MIN_SOLIDITY = 0.65             # blob area / bounding box; a disk is 0.785
+
+
+def _order_reg(pts):
+    """Sort three (x, y) points as [bottom-right, bottom-left, top-right]."""
+    pts = list(pts)
+    br = max(pts, key=lambda t: t[0] + t[1])
+    pts.remove(br)
+    bl = min(pts, key=lambda p: p[0])
+    pts.remove(bl)
+    return [br, bl, pts[0]]
+
+
+def _arrangement_error(pts, expected) -> float:
+    """
+    How far three ordered points are from the expected right triangle of
+    circles, whatever the scale: side-length ratios and the right angle.
+    """
+    br, bl, tr = (np.asarray(p, float) for p in pts)
+    ebr, ebl, etr = expected
+    base, rise = np.linalg.norm(bl - br), np.linalg.norm(tr - br)
+    if base == 0 or rise == 0:
+        return np.inf
+    want = np.linalg.norm(ebl - ebr) / np.linalg.norm(etr - ebr)
+    cos = abs(np.dot(bl - br, tr - br)) / (base * rise)
+    return abs(base / rise - want) / want + cos
+
+
 def getRegPts(img, scan_settings):
     '''
     Find the three registration points in a (resized, not yet aligned) image.
@@ -54,43 +90,41 @@ def getRegPts(img, scan_settings):
     # THRESH_BINARY_INV equivalent: dark dots become foreground
     mask = (blurred < scan_settings.volthresh).astype(np.uint8) * 255
 
-    # Label connected components and sort by area descending
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
         mask, connectivity=8)
-    regions = sorted(range(1, num_labels),
-                      key=lambda i: stats[i, cv2.CC_STAT_AREA], reverse=True)
-
-    pts = []
-    for i in regions:
+    lo, hi = (REG_AREA * f for f in REG_AREA_RANGE)
+    cands = []
+    for i in range(1, num_labels):
         x, y, w, h, area = stats[i]
-        if h == 0:
+        if h == 0 or not lo <= area <= hi or not 0.833 <= w / h <= 1.2:
             continue
-        ar = w / h
-        if ar > 1.2 or ar < 0.833:
+        if area / (w * h) < REG_MIN_SOLIDITY:
             continue
-        if (area > int(scan_settings.sz[1] * 1.2) or
-                area < int(scan_settings.sz[1] * 0.8)):
-            continue
-        cx, cy = centroids[i]
-        pts.append((cx, cy))
-        if len(pts) == 3:
-            break
+        cands.append((float(area), tuple(centroids[i])))
+    cands = sorted(cands, reverse=True)[:8]
 
-    if len(pts) < 3:
+    if len(cands) < 3:
         raise ValueError(
-            f'getRegPts: only {len(pts)} registration dot(s) found. '
+            f'getRegPts: only {len(cands)} registration dot(s) found. '
             'Ensure the scan is well-lit and all three corner dots are visible.'
         )
 
-    # Sort: bottom-right (max x+y), bottom-left (min x), top-right (remaining)
-    bridx = np.argmax([t[0] + t[1] for t in pts])
-    br = pts[bridx]
-    del pts[bridx]
-    bl = min(pts, key=lambda p: p[0])
-    pts.remove(bl)
-    tr = pts[0]
-    pts = [br, bl, tr]
-    return np.array(pts, dtype=np.float32)
+    # The best triple: similar sizes, laid out like the printed circles
+    expected = np.asarray(scan_settings.keyRegPts, float)
+    best, best_err = None, np.inf
+    for trio in itertools.combinations(cands, 3):
+        areas = [a for a, _ in trio]
+        spread = (max(areas) - min(areas)) / max(areas)
+        pts = _order_reg([c for _, c in trio])
+        err = _arrangement_error(pts, expected) + spread
+        if err < best_err:
+            best, best_err = pts, err
+    if best_err > 0.3:
+        raise ValueError(
+            'getRegPts: no three dots are laid out like the registration circles. '
+            'Ensure the scan is well-lit and all three corner dots are visible.'
+        )
+    return np.array(best, dtype=np.float32)
 
 
 def saveimg(i, scanimg, aligneddir):
