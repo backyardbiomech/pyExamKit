@@ -10,6 +10,7 @@ import bubbles
 import scan_keys
 import sheet_layout
 from build_tab import BuildExamUI, open_sheet_dialog
+from practical_tab import BuildPracticalUI
 
 
 class TextRedirector(io.TextIOBase):
@@ -55,10 +56,12 @@ class pyScanUI(ctk.CTkFrame):
         tabs.pack(fill='both', expand=True)
 
         build_tab  = tabs.add("Build Exam")
+        practical_tab = tabs.add("Build Practical")
         scan_tab   = tabs.add("Scan Exams")
         regrade_tab = tabs.add("Re-grade")
         key_tab    = tabs.add("Standard Sheet")
         BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
+        BuildPracticalUI(practical_tab, log_fn=self._log).pack(fill='both', expand=True)
 
         # ════════════════════════════════════════════════════════
         # TAB 1 — Scan Exams
