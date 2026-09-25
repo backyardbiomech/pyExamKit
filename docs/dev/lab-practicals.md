@@ -131,3 +131,39 @@ Steps 1, 2, and 4 are built, with steps 5 and 6 folded into step 4 where they we
 - **Step 4**: `Scanner._run_practical` and `practical_scan.py`. Pages are grouped into students by their printed page code and form, so a missing or foreign page raises an alert without shifting later students. `OpenQs` takes `locate` and `student_info` hooks: each question is graded across only the students whose form has it, station by station, and the window shows the roster name, the handwritten name line, the question text, and the position within the question (3 of 24). Results carry a `form` column and leave off-form questions blank; scores, the gradebook, and the Canvas file come from the existing `gradeResults`. Marked sheets carry C, P, or X in each graded box and the form and score on page 1. Answers added while grading, or later on the Re-grade tab, are written back into the `.md`. The Scan Exams key chooser accepts a `.md`.
 - **Grading window redesign** (after the first look at it): the student's answer and the key's answers side by side, each shown once and labeled; the AI reading demoted to a gray line under the handwriting; color only on the suggested grade button, with a sentence saying why (`ocr.explain_suggestion`). The student's answer or a typed answer can be added to the key as full or partial credit, and double-clicking a key answer edits it; each re-checks earlier students (`OpenQs._upgrade_earlier`). Driven in Tk here and checked widget by widget, but not seen, since screen capture is blocked in this environment.
 - **Tested** on synthetic stacks only (`tests/test_practical_scan.py`, five students printed at 85%), with the grading window replaced by a stand-in, because Tk does not start in the environment this was built in. **The real grading window with the new name and question lines has not been seen.** Nor has **Edit…** on a practical key; it should load and save answers, but its box-drawing tools mean nothing for a practical.
+- **After Brandon ran it** (2026-09-25): a blank box is suggested wrong (`openQ.looks_blank`, checked on all 600 synthetic answers), and Enter does nothing on a written box with no reading. Back returns to the last answer the grader reviewed, skipping auto-accepted ones and crossing question boundaries (`OpenQs._grade_all`, `tests/test_grading_back.py`).
+
+## Handoff: what remains (2026-09-25)
+
+All work is on the `lab-practicals` branch, committed, with 250 tests passing (`uv run python -m unittest discover -s tests`). It is not merged to `main` and no release tag has been pushed, so faculty on a downloaded app have none of it.
+
+### Step 3: the printed materials
+
+`practical_build.py` already writes each form's sheet and a combined dealing-order PDF. Still to write, from a `practical.Practical`:
+
+1. **Placards**, one per station: the station number large, all four questions (A to D) in large type, and the station's `image:` files, plus each question's own images beside it. No station name or setup lines: the name can give answers away. The APexams placards (`~/repos/APexams/src/utils/exam_exports.py`, `create_questions_document` and neighbors, reportlab) used a 22 pt station title and 20 pt questions, two stations per half sheet; Brandon called those styles roughly right. Default to one station per page unless he says otherwise, and ask him before settling it.
+2. **The setup guide**, for the instructor and TAs: per station, its name (the heading text after "Station N:"), the `setup:` lines, the images to print, and every question with its accepted answers, so whoever places a pin can check it against the key. A checkbox column for walking the room.
+3. **The instructor key**: every station, all four letters, full and partial answers, for reading without the app.
+4. **A Build Practical option in the app.** The Build Exam tab is `build_tab.BuildExamUI` (customtkinter); a practical needs only a source file, an output folder, a class size for the combined sheet PDF, and a Build button. It could be a mode on that tab or its own tab; ask Brandon. It should log the parser's warnings (`Practical.warnings`) and stop on `PracticalError` with its message.
+
+Decide the output format before starting: the exam itself is HTML printed from a browser (`renderer.py`, `templates/exam.html`), chosen for equation typesetting ([pdf-output-plan.md](pdf-output-plan.md)); placards and a setup guide need no equations but do need large images and one station per page, which a direct PDF (PyMuPDF, as `answer_sheet.py` draws) gives without a browser's print settings. Put the choice and its reason here.
+
+The fixture `tests/fixtures/practical/practical_test.md` has station images (`images/station1.png`, and `images/station20d.png` on question 20D) and a 2-point question (24A) to exercise all of this.
+
+### Step 7: documentation and a real scan
+
+1. **User guide** `docs/lab-practicals.md`, linked from the README's documentation list: writing the source file (the format section above is the reference), building, printing (85% scaling is fine), handing out the combined PDF, scanning, grading, and what the results hold. `docs/scanning-and-grading.md` and `docs/building-keys.md` should point to it where they describe keys and multi-version stacks. Brandon's rules apply: no hard-wrapped paragraphs, prose over bullets, American spelling, no weekday names.
+2. **A real print and scan**, when Brandon has a printer and scanner: a few forms filled by hand (one ID in light pencil, one answer running to a box edge), scanned as one stack, then graded in the app. Nothing has touched real paper yet.
+
+### Open items
+
+- **Seen only by Brandon, once**: the grading window. It has been driven widget by widget here but never seen after the redesign, blank-box, and Back changes; screen capture is blocked in this environment.
+- **Edit… on a practical key** (Scan Exams, next to the key) opens `KeyFileEditorDialog` on the `.md`. It should load and save answers through `keyformat`, but its box-drawing controls mean nothing for a practical and it has never been run. Either hide those controls for a `.md` or disable Edit… for one.
+- **Marks on long answers**: `practical_scan.mark_sheets` puts C, P, or X inside the right end of each box, over writing that fills the box.
+- **Merging and release**: merge `lab-practicals` to `main`, then push a `v*` tag so the packaged apps are built.
+
+### Working here
+
+- **Tk** needs its library path under this repo's uv Python: `TCL_LIBRARY=~/.local/share/uv/python/cpython-3.11.11-macos-aarch64-none/lib/tcl8.6` and `TK_LIBRARY=.../lib/tk8.6`. Screenshots (`screencapture`) are refused, so check windows by walking their widgets and invoking their buttons.
+- **The synthetic stack**: `uv run python tools/make_practical_test_stack.py tests/fixtures/practical/practical_test.md` writes 12 invented students (two per form, printed at 85%) to `tests/fixtures/practical/generated/`, which git ignores, with `answers.csv` recording what each wrote and why. The end-to-end test (`tests/test_practical_scan.py`) builds a 5-student stack and replaces the grading window with a stand-in that grades from that record.
+- **Student data**: every name and ID in fixtures and generated stacks is invented. Real scans stay out of the repo; `tests/scannedSheets.pdf` is used only to compare registration points, never displayed.
