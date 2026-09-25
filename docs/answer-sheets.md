@@ -36,6 +36,8 @@ When every version uses the same questions, the builder keeps each grouped quest
 
 The scanner locates everything on the page by geometry. It finds the **three large black circles** in the corners, uses them to correct for skew and scale, and then reads bubbles at fixed positions relative to them. The **small black squares** at the bottom left tell it which sheet design it is reading, including whether its rows are grouped by question, in which case the positions come from the key. Students must not write on the circles or the squares.
 
+**Printing at reduced size is fine.** A printer with wide margins has to shrink the sheet to fit the circles on the page, often to 85%. The scanner corrects for it, and finds the circles on sheets printed anywhere from about 70% to 120% of full size; it tells them from other dark marks by their shape, their matching size, and their arrangement in three corners.
+
 So the rule for modifying a printed sheet is: **you may cover things up, but you may not move anything, and you cannot add bubbles where none exist.** Anything else on the page is fair game, as long as the marks do not touch the circles, the squares, or the bubbles for questions that are actually being graded.
 
 ## Older sheets
