@@ -22,6 +22,37 @@ The app opens to one window with five tabs, sharing a single log at the bottom. 
 
 **Standard Sheet** prints a blank answer sheet for an exam made elsewhere, and produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
 
+## Where to start
+
+Which tab you start on depends on what you already have. Every path ends on **Scan Exams**.
+
+```mermaid
+flowchart TD
+    start{Is it a lab<br/>practical?} -- Yes --> P[Build Practical tab]
+    start -- No --> src{Where are<br/>the questions?}
+    src -- In a question bank<br/>text file --> B[Build Exam tab]
+    src -- In a Canvas quiz --> Q[Build Exam tab:<br/>Import QTI…] --> B
+    src -- Somewhere else;<br/>I only need to grade --> S[Standard Sheet tab:<br/>Make Answer Sheet…]
+    S --> key{Grade this exam<br/>more than once?}
+    key -- Yes --> K[Standard Sheet tab:<br/>Build Key from Exam Scan…]
+    key -- No --> F[Fill in a sheet as the key;<br/>scan it first in the stack]
+    P --> scan[Scan Exams tab]
+    B --> scan
+    K --> scan
+    F --> scan
+    scan -. key too strict<br/>on written answers .-> R[Re-grade tab]
+```
+
+**A lab practical.** Write the practical as one source file ([Lab practicals](docs/lab-practicals.md)) and build it on the **Build Practical** tab, which writes the form sheets, placards, setup guide, and instructor key. On **Scan Exams**, choose the source file itself as the key. A practical graded before, with a key CSV for each form, can be converted to a source file with the tool that guide describes.
+
+**An exam in a question bank.** Write or collect the questions in the [question bank format](docs/question-bank-format.md) and build on the **Build Exam** tab, which writes the exam, its answer sheet, and a key CSV for each version ([Building an exam](docs/building-exams.md)). On **Scan Exams**, choose that key.
+
+**An exam in Canvas.** Export the quiz from Canvas as QTI, and on the **Build Exam** tab click **Import QTI…** to turn it into a question bank ([Importing a Canvas quiz](docs/importing-canvas-quizzes.md)). From there it is the path above.
+
+**An exam made somewhere else**, when you only need the grading. Print a blank sheet from **Make Answer Sheet…** on the **Standard Sheet** tab ([Answer sheets](docs/answer-sheets.md)). If you will grade the exam again, fill in a sheet as the key, scan it, and turn it into a key file with **Build Key from Exam Scan…** on the same tab ([Building a key](docs/building-keys.md)). For a one-time grading, skip the key file: put your filled-in key sheet first in the stack and scan without one.
+
+**After grading**, if the key turns out to have been too strict on written answers, the **Re-grade** tab loosens it and re-grades without rescanning ([Open-ended questions](docs/open-ended-questions.md#re-grading-afterward)).
+
 ## Documentation
 
 1. [Installation](docs/installation.md) — download a packaged app, or run from source
