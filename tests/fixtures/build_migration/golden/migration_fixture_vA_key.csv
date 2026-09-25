@@ -1,20 +1,20 @@
-type,question,page,x1,y1,x2,y2,answer,partial_answers,points,source,choices
-metadata,num_questions,,,,,,12,,,,
-metadata,questions_to_skip,,,,,,3,,,,
-metadata,sheet_rows,,,,,,"3,2,3,3,1",,,,
-metadata,version,,,,,,A,,,,
-metadata,answer_boxes,,,,,,printed,,,,
-metadata,title,,,,,,Migration Fixture,,,,
-bubble,Q001,,,,,,A,,1.0,bank1.txt#1,ABCD
-bubble,Q002,,,,,,BC,,1.0,bank1.txt#2,ABCD
-bubble,Q003,,,,,,ignore,,,,
-bubble,Q004,,,,,,A,,0.5,bank1.txt#6.1,ABC
-bubble,Q005,,,,,,B,,0.5,bank1.txt#6.2,AB
-bubble,Q006,,,,,,B,,0.34,bank1.txt#7.1,DBCEA
-bubble,Q007,,,,,,B,,0.33,bank1.txt#7.2,DBCEA
-bubble,Q008,,,,,,E,,0.33,bank1.txt#7.3,DBCEA
-bubble,Q009,,,,,,C,,0.34,bank1.txt#8.1,BCA
-bubble,Q010,,,,,,A,,0.33,bank1.txt#8.2,BCA
-bubble,Q011,,,,,,B,,0.33,bank1.txt#8.3,BCA
-bubble,Q012,,,,,,B,,1.0,bank1.txt#9,AB
-open,openQ_3,1,,,,,correct text|corect tect,,1.0,bank1.txt#3,
+type,question,page,x1,y1,x2,y2,answer,partial_answers,points,source,choices,text
+metadata,num_questions,,,,,,12,,,,,
+metadata,questions_to_skip,,,,,,3,,,,,
+metadata,sheet_rows,,,,,,"3,2,3,3,1",,,,,
+metadata,version,,,,,,A,,,,,
+metadata,answer_boxes,,,,,,printed,,,,,
+metadata,title,,,,,,Migration Fixture,,,,,
+bubble,Q001,,,,,,A,,1.0,bank1.txt#1,ABCD,this is the question text
+bubble,Q002,,,,,,BC,,1.0,bank1.txt#2,ABCD,this is question 2 text
+bubble,Q003,,,,,,ignore,,,,,
+bubble,Q004,,,,,,A,,0.5,bank1.txt#6.1,ABC,This is a multiple dropdown question. Here is the first [drop1] and here is another [drop2]. [drop1]
+bubble,Q005,,,,,,B,,0.5,bank1.txt#6.2,AB,This is a multiple dropdown question. Here is the first [drop1] and here is another [drop2]. [drop2]
+bubble,Q006,,,,,,B,,0.34,bank1.txt#7.1,DBCEA,"This is a matching question. It will show in canvas as a list of things on the left, each with its own dropdown menu on the right. All the dropdowns contain the same options. Multiple ""left"" items can have the same correct answer. Note the formatting below. left1, left2, etc just track the list items that will appear on the left, right1, right2, etc track the options that will show in the dropdowns, and the correct answer for each left item is indicated by putting the right label inside brackets. Notice no spaces in labels or between brackets and labels, and all labels are followed by a colon, then the text to be matched. Canvas awards partial credit based on the number of left side items. [first left option]"
+bubble,Q007,,,,,,B,,0.33,bank1.txt#7.2,DBCEA,"This is a matching question. It will show in canvas as a list of things on the left, each with its own dropdown menu on the right. All the dropdowns contain the same options. Multiple ""left"" items can have the same correct answer. Note the formatting below. left1, left2, etc just track the list items that will appear on the left, right1, right2, etc track the options that will show in the dropdowns, and the correct answer for each left item is indicated by putting the right label inside brackets. Notice no spaces in labels or between brackets and labels, and all labels are followed by a colon, then the text to be matched. Canvas awards partial credit based on the number of left side items. [second left option]"
+bubble,Q008,,,,,,E,,0.33,bank1.txt#7.3,DBCEA,"This is a matching question. It will show in canvas as a list of things on the left, each with its own dropdown menu on the right. All the dropdowns contain the same options. Multiple ""left"" items can have the same correct answer. Note the formatting below. left1, left2, etc just track the list items that will appear on the left, right1, right2, etc track the options that will show in the dropdowns, and the correct answer for each left item is indicated by putting the right label inside brackets. Notice no spaces in labels or between brackets and labels, and all labels are followed by a colon, then the text to be matched. Canvas awards partial credit based on the number of left side items. [third left option]"
+bubble,Q009,,,,,,C,,0.34,bank1.txt#8.1,BCA,"This is an ordering question for new quizzes. It will show as a ""top label"", like ""most superficial"", a bottom label like ""deepest"", and a series of drag and drop options. They are simply put with numbers and order here. [position 1: epidermis]"
+bubble,Q010,,,,,,A,,0.33,bank1.txt#8.2,BCA,"This is an ordering question for new quizzes. It will show as a ""top label"", like ""most superficial"", a bottom label like ""deepest"", and a series of drag and drop options. They are simply put with numbers and order here. [position 2: dermis]"
+bubble,Q011,,,,,,B,,0.33,bank1.txt#8.3,BCA,"This is an ordering question for new quizzes. It will show as a ""top label"", like ""most superficial"", a bottom label like ""deepest"", and a series of drag and drop options. They are simply put with numbers and order here. [position 3: hypodermis]"
+bubble,Q012,,,,,,B,,1.0,bank1.txt#9,AB,This is a true/false question in new quizzes.
+open,openQ_3,1,,,,,correct text|corect tect,,1.0,bank1.txt#3,,Fill in the answer in this blank ________.

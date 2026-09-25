@@ -21,6 +21,7 @@ import sheet_layout
 from exam_builder import row_runs
 from models import ExamVersion, Question
 from keyformat import save_key_file
+from renderer import _strip_html
 
 
 def _distribute_points(total: float, n: int) -> list[float]:
@@ -39,7 +40,8 @@ def _distribute_points(total: float, n: int) -> list[float]:
 def build_key_data(version: ExamVersion, default_points: float = 1.0,
                    open_coords: dict | None = None) -> dict:
     """Translate an ExamVersion into the generic dict keyformat.py expects:
-    bubble_answers, open_questions, metadata, point_values, sources, choices.
+    bubble_answers, open_questions, metadata, point_values, sources, choices,
+    texts.
 
     SA questions produce an 'ignore' bubble placeholder (so gradeResults/
     markSheets skip that slot) plus an open question carrying the answers.
@@ -54,13 +56,17 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
 
     sources and choices record each row's bank question and the bank position
     of each shown choice (see docs/dev/outputs-cleanup.md), so a stack graded
-    against several versions can be analyzed question by question.
+    against several versions can be analyzed question by question. texts
+    records each row's question as plain text, with the dropdown, item, or
+    left it grades when the question takes several rows, so the gradebook
+    can say what each column asked.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
     point_values: dict = {}
     sources: dict = {}
     choices: dict = {}
+    texts: dict = {}
     questions_to_skip: list[int] = []
 
     def note_source(q_label: str, q: Question, part: int | None = None,
@@ -83,6 +89,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                 bubble_answers[q_label] = _dropdown_answer(dropdown)
                 point_values[q_label] = pts
                 note_source(q_label, q, part, dropdown.answers)
+                texts[q_label] = _row_text(q, dropdown.name)
                 counter += 1
 
         elif q.q_type == 'OR':
@@ -102,6 +109,8 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                     sources[q_label] = f'{q.source_id}.{i + 1}'
                     choices[q_label] = ''.join(chr(ord('A') + item.rank - 1)
                                                for item in q.order_items)
+                ranked = sorted(q.order_items, key=lambda item: item.rank)
+                texts[q_label] = _row_text(q, f'position {i + 1}: {ranked[i].text}')
                 counter += 1
 
         elif q.q_type == 'MT':
@@ -119,6 +128,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                 # Lefts can be shuffled, so the part is the left's bank position
                 note_source(q_label, q, left.src + 1 if left.src >= 0 else i + 1,
                             q.match_rights)
+                texts[q_label] = _row_text(q, left.text)
                 counter += 1
 
         elif q.q_type == 'SA':
@@ -138,6 +148,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
             }
             point_values[open_key] = pts
             note_source(open_key, q)
+            texts[open_key] = _row_text(q)
             counter += 1
 
         else:
@@ -146,6 +157,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
             bubble_answers[q_label] = _mc_answer(q)
             point_values[q_label] = pts
             note_source(q_label, q, shown=q.answers)
+            texts[q_label] = _row_text(q)
             counter += 1
 
     total_questions = counter - 1
@@ -171,6 +183,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
         'point_values': point_values,
         'sources': sources,
         'choices': choices,
+        'texts': texts,
     }
 
 
@@ -236,6 +249,15 @@ def _dropdown_answer(dropdown) -> str:
         if ans.is_correct:
             return chr(ord('A') + i)
     return ''
+
+
+def _row_text(q: Question, part: str = '') -> str:
+    """A key row's question as one line of plain text, with the part the row
+    grades in brackets."""
+    text = ' '.join(_strip_html(q.text).split())
+    if part:
+        text += f' [{" ".join(_strip_html(part).split())}]'
+    return text
 
 
 def _effective_points(q: Question, default: float) -> float:

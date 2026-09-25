@@ -120,6 +120,7 @@ class Graded:
     title: str = ''
     sources: dict = field(default_factory=dict)
     choices: dict = field(default_factory=dict)
+    texts: dict = field(default_factory=dict)            # {question column: question text}
     open_answers: dict = field(default_factory=dict)   # {openQ_N: [accepted answers]}
 
     @property
@@ -192,7 +193,7 @@ def load(csv_path) -> Graded:
     return Graded(version=version_of(csv_path), df=df, pts=pts,
                   possible=rec.get('possible', {}), title=rec.get('title', ''),
                   sources=rec.get('sources', {}), choices=rec.get('choices', {}),
-                  open_answers=open_answers)
+                  texts=rec.get('texts', {}), open_answers=open_answers)
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────
@@ -252,12 +253,19 @@ def write_gradebook(path, graded: list[Graded]) -> None:
     import openpyxl
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
+    stats = wb.create_sheet('Exam stats')
+    ranges = []
     for g in graded:
         name = f'Version {g.version}' if g.version else 'Gradebook'
-        _gradebook_sheet(wb.create_sheet(name), g)
+        ranges.append(_gradebook_sheet(wb.create_sheet(name), g))
+    ranges = [r for r in ranges if r]
     items = item_table(graded)
+    combined = None
     if len(graded) > 1 and items.by_source:
-        _by_question_sheet(wb.create_sheet('By question'), graded, items)
+        combined = _by_question_sheet(wb.create_sheet('By question'), graded, items)
+    if len(ranges) == 1:
+        combined = ranges[0]
+    _stats_sheet(stats, ranges, combined, next((g.title for g in graded if g.title), ''))
     _item_sheet(wb.create_sheet('Item analysis'), items)
     wb.save(path)
 
@@ -283,7 +291,56 @@ def _header(ws, values, height=36):
     ws.row_dimensions[ws.max_row].height = height
 
 
-def _gradebook_sheet(ws, g: Graded) -> None:
+def _text_row(ws, first_col: int, texts: list[str]) -> None:
+    """A row of question text, each spanning its question's answer and
+    points columns (texts[i] over columns first_col + 2i and the next)."""
+    from openpyxl.styles import Alignment
+    ws.append(['Question'])
+    r = ws.max_row
+    for i, text in enumerate(texts):
+        col = first_col + 2 * i
+        cell = ws.cell(row=r, column=col)
+        cell.value = text or None
+        cell.alignment = Alignment(wrap_text=True, vertical='top')
+        ws.merge_cells(start_row=r, start_column=col, end_row=r, end_column=col + 1)
+    ws.row_dimensions[r].height = 90
+
+
+# Canvas's discrimination index compares the top and bottom 27% of the class
+# by total score (docs/outputs.md).
+DI_GROUP = 0.27
+
+
+def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int) -> None:
+    """Mean, median, and discrimination index under each points column, as
+    formulas over student rows first..last, so they follow edited points the
+    way the totals do. pts_cols is [(column number, points possible)]."""
+    from openpyxl.utils import get_column_letter
+    st = _styles()
+    tot = get_column_letter(total_col)
+    t_rng = f'${tot}${first}:${tot}${last}'
+    rows = {}
+    for label in ('Mean', 'Median', 'Discrimination index'):
+        ws.append([label])
+        rows[label] = ws.max_row
+        for cell in ws[ws.max_row]:
+            cell.font, cell.fill = st['hdr_font'], st['key_fill']
+    for col, possible in pts_cols + [(total_col, None)]:
+        c = get_column_letter(col)
+        rng = f'{c}{first}:{c}{last}'
+        ws.cell(row=rows['Mean'], column=col).value = f'=IFERROR(ROUND(AVERAGE({rng}),2),"")'
+        ws.cell(row=rows['Median'], column=col).value = f'=IFERROR(ROUND(MEDIAN({rng}),2),"")'
+        if possible:
+            # Mean fraction of the points earned by students at or above the
+            # 73rd percentile of totals, less that of students at or below
+            # the 27th; ties at a cutoff join the group
+            upper = f'AVERAGEIFS({rng},{t_rng},">="&PERCENTILE({t_rng},{1 - DI_GROUP}))'
+            lower = f'AVERAGEIFS({rng},{t_rng},"<="&PERCENTILE({t_rng},{DI_GROUP}))'
+            ws.cell(row=rows['Discrimination index'], column=col).value = (
+                f'=IFERROR(ROUND(({upper}-{lower})/{possible},2),"")')
+
+
+def _gradebook_sheet(ws, g: Graded):
     """Row 1 headers, row 2 the key (yellow), then a row per student: each
     question's answer and points, and a Total that is a live SUM of the
     points, so correcting a points cell after a regrade updates the total."""
@@ -304,6 +361,9 @@ def _gradebook_sheet(ws, g: Graded) -> None:
         header += [label, f'{qc} Pts']
     header.append('Total')
     _header(ws, header)
+    has_text = any(g.texts.get(qc) for qc in qs)
+    if has_text:
+        _text_row(ws, n_id + 1, [g.texts.get(qc, '') for qc in qs])
 
     key_row = ['KEY'] + [''] * (n_id - 1)
     for qc in qs:
@@ -313,27 +373,196 @@ def _gradebook_sheet(ws, g: Graded) -> None:
         key_row += ['' if key == 'nan' else key, g.possible.get(qc, '')]
     key_row.append(g.points_possible())
     ws.append(key_row)
-    for cell in ws[2]:
+    for cell in ws[ws.max_row]:
         cell.font, cell.fill = st['hdr_font'], st['key_fill']
 
+    first = ws.max_row + 1
     for r in g.students:
         row = [('' if pd.isna(g.df.loc[r, c]) else str(g.df.loc[r, c])) for c in ids]
         for qc in qs:
             ans = g.df.loc[r, qc]
-            row += ['' if pd.isna(ans) else str(ans), g.earned(r, qc)]
+            # Blank, not 0, for a question not on this student's form, so
+            # the question's mean and median leave the student out
+            row += ['' if pd.isna(ans) else str(ans),
+                    g.earned(r, qc) if g.asked(r, qc) else None]
         ws.append(row)
         refs = ','.join(f'{get_column_letter(n_id + 2 + 2 * i)}{ws.max_row}'
                         for i in range(len(qs)))
         ws.cell(row=ws.max_row, column=n_id + 1 + 2 * len(qs)).value = (
             f'=SUM({refs})' if refs else 0)
+    if g.students:
+        _summary_rows(ws, first, ws.max_row,
+                      [(n_id + 2 + 2 * i, g.possible.get(qc, 0)) for i, qc in enumerate(qs)],
+                      n_id + 1 + 2 * len(qs))
 
-    ws.freeze_panes = ws.cell(row=3, column=n_id + 1)
+    ws.freeze_panes = ws.cell(row=first, column=n_id + 1)
     for i, w in enumerate([16, 14, 12, 8][:n_id], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     for i in range(len(qs)):
         ws.column_dimensions[get_column_letter(n_id + 1 + 2 * i)].width = 18
         ws.column_dimensions[get_column_letter(n_id + 2 + 2 * i)].width = 8
     ws.column_dimensions[get_column_letter(n_id + 1 + 2 * len(qs))].width = 10
+    if not g.students:
+        return None
+    # Where the totals are, for the Exam stats tab
+    return TotalRange(g.version, ws.title, get_column_letter(n_id + 1 + 2 * len(qs)),
+                      first, first + len(g.students) - 1, g.points_possible(),
+                      [get_column_letter(n_id + 2 + 2 * i) for i, qc in enumerate(qs)
+                       if g.possible.get(qc, 0) > 0])
+
+
+# ── Exam stats ───────────────────────────────────────────────────────────────
+
+@dataclass
+class TotalRange:
+    version: str
+    sheet: str
+    col: str
+    first: int
+    last: int
+    possible: float
+    items: list = field(default_factory=list)    # each graded question's points column
+
+    def col_ref(self, col: str) -> str:
+        return f"'{self.sheet}'!${col}${self.first}:${col}${self.last}"
+
+    @property
+    def ref(self) -> str:
+        return self.col_ref(self.col)
+
+    def alpha(self) -> str | None:
+        """Cronbach's alpha as a formula: k/(k-1) x (1 - the items' summed
+        variances over the totals' variance). On all-or-nothing questions it
+        is KR-20."""
+        k = len(self.items)
+        if k < 2:
+            return None
+        items = ','.join(f'VARP({self.col_ref(c)})' for c in self.items)
+        return f'=IFERROR(ROUND({k}/{k - 1}*(1-SUM({items})/VARP({self.ref})),2),"")'
+
+
+# Letter-grade bands by percent of the points possible, lowest first: each
+# runs from its lower bound up to, not including, the next. F is split to
+# tell a near miss from a long way off.
+BANDS = [('Low F', None, 50, 'below 50%'), ('Close F', 50, 60, '50–59%')]
+for _letter, _base in (('D', 60), ('C', 70), ('B', 80)):
+    BANDS += [(f'{_letter}−', _base, _base + 3, f'{_base}–{_base + 2}%'),
+              (_letter, _base + 3, _base + 7, f'{_base + 3}–{_base + 6}%'),
+              (f'{_letter}+', _base + 7, _base + 10, f'{_base + 7}–{_base + 9}%')]
+BANDS += [('A−', 90, 93, '90–92%'), ('A', 93, None, '93–100%')]
+del _letter, _base
+BAR_COLOR = '2A78D6'
+
+
+def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
+                 title: str) -> None:
+    """Summary statistics of the totals, for the class and for each version,
+    and how many students earn each letter grade. Every number is a formula
+    over the gradebook tabs, so it follows corrected points. combined is
+    the whole class question by question (By question, or the one version),
+    which the class's reliability needs; None leaves it blank."""
+    from openpyxl.chart import BarChart, Reference
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+    st = _styles()
+    ws.append([title or 'Exam stats'])
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.append([])
+    if not ranges:
+        ws.append(['No graded students.'])
+        return
+
+    # Scores: one column for the class, and one per version when there are several
+    cols = [('All students', ranges)]
+    if len(ranges) > 1:
+        cols += [(f'Version {r.version}', [r]) for r in ranges]
+    _header(ws, ['Scores'] + [c for c, _ in cols], height=20)
+    same_possible = len({r.possible for r in ranges}) == 1
+
+    def union(rs):
+        return ','.join(r.ref for r in rs)
+
+    stats = [('Students', 'COUNT({})', False), ('Mean', 'ROUND(AVERAGE({}),2)', True),
+             ('Median', 'ROUND(MEDIAN({}),2)', True),
+             ('Standard deviation', 'ROUND(STDEV({}),2)', False),
+             ('Highest', 'MAX({})', True), ('Lowest', 'MIN({})', True)]
+    ws.append(['Points possible'] + [_num(rs[0].possible) if same_possible or len(rs) == 1
+                                     else 'varies' for _, rs in cols])
+    pct_rows = []
+    for label, f, as_pct in stats:
+        ws.append([label] + [f'=IFERROR({f.format(union(rs))},"")' for _, rs in cols])
+        if label == 'Standard deviation':
+            alphas = [(combined.alpha() if combined else None) if len(rs) > 1 or i == 0
+                      else rs[0].alpha() for i, (_, rs) in enumerate(cols)]
+            ws.append(["Reliability (Cronbach's alpha)"] + alphas)
+        if as_pct:
+            row = [f'{label} (% of possible)']
+            for i, (_, rs) in enumerate(cols):
+                if same_possible or len(rs) == 1:
+                    ref = f'{get_column_letter(2 + i)}{ws.max_row}'
+                    row.append(f'=IFERROR({ref}/{rs[0].possible},"")')
+                else:
+                    row.append(None)
+            ws.append(row)
+            pct_rows.append(ws.max_row)
+    for r in pct_rows:
+        for cell in ws[r][1:]:
+            cell.number_format = '0.0%'
+
+    # Distribution across the whole class, each student against their own
+    # version's points possible
+    ws.append([])
+    ws.append([])
+    _header(ws, ['Grade', 'Percent of possible', 'Students', '% of class'], height=20)
+    first = ws.max_row + 1
+    n_ref = f'$C${first + len(BANDS)}'
+    for grade, lo, hi, label in BANDS:
+        terms = []
+        for r in ranges:
+            conds = []
+            if lo is not None:
+                conds.append(f'{r.ref},">="&{lo / 100}*{r.possible}')
+            if hi is not None:
+                conds.append(f'{r.ref},"<"&{hi / 100}*{r.possible}')
+            terms.append(f'COUNTIFS({",".join(conds)})')
+        ws.append([grade, label, '=' + '+'.join(terms), f'=IFERROR(C{ws.max_row + 1}/{n_ref},"")'])
+        ws.cell(row=ws.max_row, column=4).number_format = '0%'
+    last = ws.max_row
+    ws.append(['Total', '', f'=SUM(C{first}:C{last})', f'=SUM(D{first}:D{last})'])
+    ws.cell(row=ws.max_row, column=4).number_format = '0%'
+    for cell in ws[ws.max_row]:
+        cell.font = st['hdr_font']
+    ws.append(['Each band runs from its lower bound up to, not including, the next: '
+               '82.9% is a B−.'])
+    ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color='52514E')
+
+    # One series, so no legend: the title names it
+    chart = BarChart()
+    chart.type = 'col'
+    chart.title = 'Students by grade'
+    chart.y_axis.title = 'Students'
+    chart.legend = None
+    chart.gapWidth = 30
+    chart.add_data(Reference(ws, min_col=3, min_row=first, max_row=last), titles_from_data=False)
+    chart.set_categories(Reference(ws, min_col=1, min_row=first, max_row=last))
+    chart.series[0].graphicalProperties = GraphicalProperties(solidFill=BAR_COLOR)
+    chart.series[0].graphicalProperties.line.noFill = True
+    chart.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill='E0E0DD'))
+    chart.y_axis.number_format = '0'
+    chart.x_axis.delete = False
+    chart.y_axis.delete = False
+    chart.height, chart.width = 8, 16
+    ws.add_chart(chart, f'{get_column_letter(max(len(cols), 3) + 3)}3')
+
+    ws.column_dimensions['A'].width = 30
+    for i in range(len(cols)):
+        ws.column_dimensions[get_column_letter(2 + i)].width = 14
+
+
+def _num(x: float):
+    return int(x) if float(x).is_integer() else round(x, 2)
 
 
 # ── Item analysis ────────────────────────────────────────────────────────────
@@ -345,6 +574,7 @@ class Item:
     key: str                         # in bank letters
     points: float
     written: bool
+    text: str = ''
     # (student uid, fraction of points earned, points earned, answer in bank letters)
     responses: list = field(default_factory=list)
 
@@ -390,6 +620,7 @@ def item_table(graded: list[Graded]) -> ItemTable:
             if it is None:
                 it = items[ident] = Item(
                     label=ident, where=[], points=pts, written=written,
+                    text=g.texts.get(col, ''),
                     key='written' if written else g.bank_letters(col, key))
             it.where.append(where)
             for r in g.students:
@@ -436,38 +667,40 @@ FLAG_BELOW = 0.2
 
 
 def _item_sheet(ws, t: ItemTable) -> None:
+    from openpyxl.styles import Alignment
     from openpyxl.utils import get_column_letter
     st = _styles()
     letters = sorted({k for it in t.items if not it.written
                       for k in item_stats(it, t.totals)['counts'] if k != 'Blank'})
     grades = ['CC', 'CX', 'XX']
-    header = ['Question', 'On sheet', 'Key', 'Points', 'Students', 'Mean score',
+    header = ['Question', 'Text', 'On sheet', 'Key', 'Points', 'Students', 'Mean score',
               'Discrimination', 'Look at'] + letters + ['Blank'] + grades
     _header(ws, header)
     for it in t.items:
         s = item_stats(it, t.totals)
         r = s['r']
         flag = '' if r is None or r >= FLAG_BELOW else ('negative' if r < 0 else 'low')
-        row = [it.label, ', '.join(it.where), it.key, it.points, s['n'],
+        row = [it.label, it.text, ', '.join(it.where), it.key, it.points, s['n'],
                None if s['mean'] is None else round(s['mean'], 3),
                None if r is None else round(r, 3), flag]
         row += [s['counts'].get(k, 0) if not it.written else '' for k in letters]
         row.append(s['counts'].get('Blank', 0) if not it.written else '')
         row += [s['counts'].get(g, 0) if it.written else '' for g in grades]
         ws.append(row)
+        ws.cell(row=ws.max_row, column=2).alignment = Alignment(wrap_text=True, vertical='top')
         if flag:
-            for c in ws[ws.max_row][:8]:
+            for c in ws[ws.max_row][:9]:
                 c.fill = st['flag_fill']
         # Bold the key's letters among the choice counts
         for i, k in enumerate(letters):
             if k in it.key:
-                ws.cell(row=ws.max_row, column=9 + i).font = st['hdr_font']
+                ws.cell(row=ws.max_row, column=10 + i).font = st['hdr_font']
     ws.freeze_panes = 'B2'
-    for i, w in enumerate([18, 14, 8, 8, 9, 10, 14, 9], 1):
+    for i, w in enumerate([18, 50, 14, 8, 8, 9, 10, 14, 9], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
-def _by_question_sheet(ws, graded: list[Graded], t: ItemTable) -> None:
+def _by_question_sheet(ws, graded: list[Graded], t: ItemTable) -> TotalRange | None:
     """Every student in one table, a column pair per bank question, answers
     in the bank's lettering: the raw material for any further analysis."""
     from openpyxl.utils import get_column_letter
@@ -476,6 +709,9 @@ def _by_question_sheet(ws, graded: list[Graded], t: ItemTable) -> None:
         header += [f'{it.label}\n(Key: {it.key})', f'{it.label} Pts']
     header.append('Total')
     _header(ws, header)
+    if any(it.text for it in t.items):
+        _text_row(ws, 5, [it.text for it in t.items])
+    first = ws.max_row + 1
     cells = {}
     for i, it in enumerate(t.items):
         for uid, _, earned, ans in it.responses:
@@ -489,11 +725,23 @@ def _by_question_sheet(ws, graded: list[Graded], t: ItemTable) -> None:
             for i in range(len(t.items)):
                 ans, earned = cells.get((uid, i), ('', None))
                 row += [ans, earned]
-            row.append(round(t.totals[uid], 2))
             rows.append(row)
     for row in sorted(rows, key=lambda r: (r[0].lower(), r[1].lower(), r[2])):
         ws.append(row)
-    ws.freeze_panes = 'E2'
+        refs = ','.join(f'{get_column_letter(6 + 2 * i)}{ws.max_row}'
+                        for i in range(len(t.items)))
+        ws.cell(row=ws.max_row, column=5 + 2 * len(t.items)).value = (
+            f'=SUM({refs})' if refs else 0)
+    if rows:
+        _summary_rows(ws, first, ws.max_row,
+                      [(6 + 2 * i, it.points) for i, it in enumerate(t.items)],
+                      5 + 2 * len(t.items))
+    ws.freeze_panes = ws.cell(row=first, column=5)
     for i in range(len(t.items)):
         ws.column_dimensions[get_column_letter(5 + 2 * i)].width = 14
         ws.column_dimensions[get_column_letter(6 + 2 * i)].width = 7
+    if not rows:
+        return None
+    return TotalRange('', ws.title, get_column_letter(5 + 2 * len(t.items)), first,
+                      first + len(rows) - 1, max(g.points_possible() for g in graded),
+                      [get_column_letter(6 + 2 * i) for i in range(len(t.items))])
