@@ -519,58 +519,59 @@ class OpenQs(object):
                     self._delete_progress_cache()
         # ─────────────────────────────────────────────────────────────────
 
-        # Each question is graded across the students who have it, one after
-        # another; the saved position is a place in that list, which is the
-        # student index when every student has every question.
-        qi = _start_qi
-        _resume_first_q = (_start_qi > 0 or _start_s_idx > 0)
-        _from_end = False
-        while qi < len(openqs):
-            if qi < 0:
-                qi = 0
-            k = openqs[qi]
-            who = [s for s in range(_n_students)
-                   if self._where(k, s, image_list) is not None]
-            if _resume_first_q and qi == _start_qi:
-                pos = _start_s_idx
-            elif _from_end:
-                pos = len(who) - 1       # stepped back from the next question
-            else:
-                pos = 0
-            _resume_first_q = _from_end = False
-            went_back_q = False
-            while pos < len(who):
-                if pos < 0:
-                    pos = 0
-                s_idx = who[pos]
-                img_path, v = self._where(k, s_idx, image_list)
-                self._progress = (pos + 1, len(who))
-                grade = self._gradeOneAnswer(img_path, k, v, img_idx=s_idx + 1)
-                if grade == 'back':
-                    pos -= 1
-                    if pos < 0:
-                        # Back past start of this question → previous question's last answer
-                        if qi > 0:
-                            qi -= 1
-                            _from_end = True
-                        went_back_q = True
-                        break
-                    continue
-                self.openQres.loc[s_idx + 1, k] = grade
-                # Save progress after each answer so a crash can be recovered
-                _next_s = pos + 1
-                _next_qi = qi
-                if _next_s >= len(who):
-                    _next_qi = qi + 1
-                    _next_s = 0
-                self._save_progress_cache(qi=_next_qi, s_idx=_next_s, openqs=openqs,
-                                          questions=_current_questions)
-                pos += 1
-            if went_back_q:
-                continue   # restart outer loop at new qi
-            qi += 1
+        self._grade_all(openqs, image_list, _n_students, _start_qi, _start_s_idx,
+                        _current_questions)
         # Grading complete — remove the progress cache
         self._delete_progress_cache()
+
+    def _grade_all(self, openqs, image_list, n_students, start_qi=0, start_pos=0,
+                   questions=None) -> None:
+        '''
+        Grade every answer: each question across the students who have it,
+        one question after another. Positions saved for resuming are places
+        in a question's list of students, which is the student index when
+        every student has every question.
+
+        Back returns to the last answer the grader actually reviewed, and
+        shows it even if it would now be accepted without review; answers
+        accepted automatically are skipped over in both directions, since
+        the grader never saw them. After re-grading it, grading runs forward
+        again from there.
+        '''
+        who = {qi: [s for s in range(n_students)
+                    if self._where(k, s, image_list) is not None]
+               for qi, k in enumerate(openqs)}
+        items = [(qi, s) for qi in range(len(openqs)) for s in who[qi]]
+        p = next((i for i, (qi, s) in enumerate(items)
+                  if (qi, who[qi].index(s)) >= (start_qi, start_pos)), len(items))
+        reviewed: list[int] = []      # places in items the grader saw, oldest first
+        forced = None
+        while p < len(items):
+            qi, s_idx = items[p]
+            k = openqs[qi]
+            img_path, v = self._where(k, s_idx, image_list)
+            pos = who[qi].index(s_idx)
+            self._progress = (pos + 1, len(who[qi]))
+            grade = self._gradeOneAnswer(img_path, k, v, img_idx=s_idx + 1,
+                                         force_show=(p == forced))
+            if grade == 'back':
+                # Nothing reviewed yet: show this one again
+                p = forced = reviewed.pop() if reviewed else p
+                continue
+            forced = None
+            if getattr(self, '_last_shown', True):
+                reviewed.append(p)
+            self.openQres.loc[s_idx + 1, k] = grade
+            # Save progress after each answer so a crash can be recovered
+            nxt = p + 1
+            if nxt < len(items):
+                nqi, ns = items[nxt]
+                self._save_progress_cache(qi=nqi, s_idx=who[nqi].index(ns), openqs=openqs,
+                                          questions=questions)
+            else:
+                self._save_progress_cache(qi=len(openqs), s_idx=0, openqs=openqs,
+                                          questions=questions)
+            p = nxt
 
     def _where(self, k: str, s_idx: int, image_list) -> 'tuple | None':
         '''
@@ -882,14 +883,17 @@ class OpenQs(object):
             else:
                 self.openQkeytext[qk] = ''
 
-    def _gradeOneAnswer(self, filename, k, v, img_idx=None):
+    def _gradeOneAnswer(self, filename, k, v, img_idx=None, force_show=False):
         '''
         Show the key crop (top) and student answer crop (bottom).
         If OCR is confident enough, shows a suggestion the grader can accept with Enter.
         Otherwise grader simply presses C / P / X.
         The key OCR text is editable so the grader can correct it once if needed.
-        Returns one of 'CC', 'CX', 'XX', or 'back'.
+        Returns one of 'CC', 'CX', 'XX', or 'back', and sets _last_shown to
+        whether the window was shown; force_show shows it even for an answer
+        that would be accepted without review.
         '''
+        self._last_shown = False
         if filename is None:
             print(f'[OpenQ] No image available for student {img_idx} — grading as XX.',
                   flush=True)
@@ -940,11 +944,12 @@ class OpenQs(object):
         suggestion = _suggest(_key_list, _partial_list)
 
         # Auto-grade perfect matches without showing the window
-        if not self._review_perfect and suggestion == 'CC':
+        if not force_show and not self._review_perfect and suggestion == 'CC':
             return 'CC'
         # Auto-grade CX suggestions (explicit partial-answer match or spelling-threshold match)
-        if suggestion == 'CX' and (_partial_list or self._strictness > 0):
+        if not force_show and suggestion == 'CX' and (_partial_list or self._strictness > 0):
             return 'CX'
+        self._last_shown = True
 
         # ── The window ─────────────────────────────────────────────────────
         # Student on the left, key on the right, each shown once and

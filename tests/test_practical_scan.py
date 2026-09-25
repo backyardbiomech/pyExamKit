@@ -83,7 +83,7 @@ class TestPracticalScan(unittest.TestCase):
                            for r in csv.DictReader(fh)}
         cls.shown = []
 
-        def fake_window(self, filename, k, v, img_idx=None):
+        def fake_window(self, filename, k, v, img_idx=None, force_show=False):
             label, name_crop = self._student_info(img_idx - 1)
             crop = np.array(PILImage.open(filename).convert('L'))[v[1]:v[3], v[0]:v[2]]
             q = k[len('openQ_'):]
