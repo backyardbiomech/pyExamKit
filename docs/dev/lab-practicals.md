@@ -59,7 +59,7 @@ From the source file, a new **Build Practical** mode writes one folder:
 3. **The setup guide**, for the instructor and TAs: per station, the setup lines, the images to print, and each question with its accepted answers, so whoever places a pin can confirm it is on the structure the key names. A checkbox column makes it usable as a walk-through list on the day.
 4. **An instructor key** PDF, all four letters per station, for reading answers without the app.
 
-Placards and the setup guide use the exam renderer's HTML path, as the exam does. The form sheets are drawn by `answer_sheet.py` from `sheet_layout.py`, so printing and scanning share one geometry.
+Everything is drawn straight to PDF with PyMuPDF (see Output format below). The form sheets are drawn by `answer_sheet.py` from `sheet_layout.py`, so printing and scanning share one geometry.
 
 ## The form sheet
 
@@ -116,6 +116,18 @@ Bubble exams, the question bank format, v2 and v2-keyed sheets, and multi-versio
 6. Results and Canvas output, Re-grade tab against the practical key.
 7. User documentation (`docs/lab-practicals.md`) and a test stack: a filled set of sheets, two per form, scanned.
 
+## Output format (2026-09-25)
+
+Placards, the setup guide, and the instructor key are written as PDFs by `practical_build.py`, not as HTML printed from a browser. The exam uses HTML for equation typesetting ([pdf-output-plan.md](pdf-output-plan.md)); none of these documents has equations, and they need one station per page and full-size images, which a browser's print dialog (scaling, margins, headers) can undo. A direct PDF also matches the form sheets, which are already PyMuPDF.
+
+Text is set with PyMuPDF's `Story` (HTML and CSS). Two limits of its HTML engine shaped the code. It sizes table columns by their content and ignores `width`, so one long answer squeezed the question column; the guide and key therefore draw their own rows, each cell a `Story` at a fixed fraction of the page width, with rules added afterward. And `Page.insert_htmlbox` costs about 20 ms per call against 0.4 ms for drawing a `Story` on a `DocumentWriter`, which took the setup guide from 8 s to under 1 s. The CSS engine also reads only a cell's first class.
+
+**Placards** (decided with Brandon): one station per letter-size portrait page. "Station N" at 60 pt, the questions at 20 pt, a question's own images to its right (up to 2.5 in tall), and the station's images filling the rest of the page, two columns when there are several. No station name or setup lines. When the images would get less than 2.5 in, they move to a second page headed "Station N (continued)" and the build warns. A missing image prints as a dashed red box naming the file, and the build warns.
+
+**Setup guide and instructor key** are separate PDFs (decided with Brandon). The guide gives each station a heading with a box to tick, its name, setup lines, and images at 2.4 in wide with their file names, then a row per question: a box to tick, the letter, the question (with its images), full credit, and partial credit. The key is the same table at 9 pt with a points column that shows only overridden points, and no images. A station starts on a new page when it would not fit the rest of the current one; rows never split. Pages carry "title: setup guide · page N of M".
+
+**The Build Practical tab** (`practical_tab.py`, decided with Brandon) is its own tab after Build Exam: source file, output folder (defaulting to `<title>_practical` beside the source), and class size (blank skips the combined sheet PDF). Choosing a source shows a one-line summary or the parser's errors; building logs the parser's warnings, the builder's warnings, and every file written to the shared log.
+
 ## Registration at reduced print scale (2026-09-25)
 
 The department's office printer shrinks answer sheets to as low as 85% to fit the registration circles inside its margins. `scan_functions.getRegPts` accepted a circle only between 0.8 and 1.2 times the full-size area as it measures it (about 1224 px of 1385). At 85% a circle measures about 1000 before blur, near the floor, and a blurred circle scanned 1.5% large measured 1470, over the ceiling; the synthetic stack found the second. Checking the old finder also showed that on a slightly blurred v2 sheet it took the Longwood logo's emblem for a circle, because it kept the first three blobs by size rather than by shape and position.
@@ -124,10 +136,11 @@ The finder now accepts 0.45 to 1.6 times the full-size area (about 67% to 125% p
 
 ## Status
 
-Steps 1, 2, and 4 are built, with steps 5 and 6 folded into step 4 where they were small. Step 3 (placards, setup guide, instructor key, and the Build Practical UI) is next, then step 7.
+Steps 1 to 4 are built, with steps 5 and 6 folded into step 4 where they were small. Step 7 is next.
 
 - **Step 1**: `practical.py` (parser, validation, `to_key_data`, `sync_answers`), `keyformat` loading and saving a practical `.md`, `tools/practical_from_keys.py`.
 - **Step 2**: practical geometry and `read_form` in `sheet_layout`, `answer_sheet.build_practical_sheet`, and `practical_build.py` writing each form's sheet and a combined dealing-order PDF. `tools/make_practical_test_stack.py` fills sheets in software and degrades them like a copier scan, printed at 85% by default. No sheet has been printed or scanned on real hardware.
+- **Step 3**: `practical_build.Builder` (placards, setup guide, instructor key) and `practical_build.build`, which writes the whole folder; `practical_tab.BuildPracticalUI`; `tests/test_practical_build.py`. The tab was driven in Tk and the full app starts with it, but no one has looked at it on screen, and nothing has been printed.
 - **Step 4**: `Scanner._run_practical` and `practical_scan.py`. Pages are grouped into students by their printed page code and form, so a missing or foreign page raises an alert without shifting later students. `OpenQs` takes `locate` and `student_info` hooks: each question is graded across only the students whose form has it, station by station, and the window shows the roster name, the handwritten name line, the question text, and the position within the question (3 of 24). Results carry a `form` column and leave off-form questions blank; scores, the gradebook, and the Canvas file come from the existing `gradeResults`. Marked sheets carry C, P, or X in each graded box and the form and score on page 1. Answers added while grading, or later on the Re-grade tab, are written back into the `.md`. The Scan Exams key chooser accepts a `.md`.
 - **Grading window redesign** (after the first look at it): the student's answer and the key's answers side by side, each shown once and labeled; the AI reading demoted to a gray line under the handwriting; color only on the suggested grade button, with a sentence saying why (`ocr.explain_suggestion`). The student's answer or a typed answer can be added to the key as full or partial credit, and double-clicking a key answer edits it; each re-checks earlier students (`OpenQs._upgrade_earlier`). Driven in Tk here and checked widget by widget, but not seen, since screen capture is blocked in this environment.
 - **Tested** on synthetic stacks only (`tests/test_practical_scan.py`, five students printed at 85%), with the grading window replaced by a stand-in, because Tk does not start in the environment this was built in. **The real grading window with the new name and question lines has not been seen.** Nor has **Edit…** on a practical key; it should load and save answers, but its box-drawing tools mean nothing for a practical.
@@ -135,20 +148,11 @@ Steps 1, 2, and 4 are built, with steps 5 and 6 folded into step 4 where they we
 
 ## Handoff: what remains (2026-09-25)
 
-All work is on the `lab-practicals` branch, committed, with 250 tests passing (`uv run python -m unittest discover -s tests`). It is not merged to `main` and no release tag has been pushed, so faculty on a downloaded app have none of it.
+All work is on the `lab-practicals` branch, committed, with 262 tests passing (`uv run python -m unittest discover -s tests`). It is not merged to `main` and no release tag has been pushed, so faculty on a downloaded app have none of it.
 
-### Step 3: the printed materials
+### Step 3: done
 
-`practical_build.py` already writes each form's sheet and a combined dealing-order PDF. Still to write, from a `practical.Practical`:
-
-1. **Placards**, one per station: the station number large, all four questions (A to D) in large type, and the station's `image:` files, plus each question's own images beside it. No station name or setup lines: the name can give answers away. The APexams placards (`~/repos/APexams/src/utils/exam_exports.py`, `create_questions_document` and neighbors, reportlab) used a 22 pt station title and 20 pt questions, two stations per half sheet; Brandon called those styles roughly right. Default to one station per page unless he says otherwise, and ask him before settling it.
-2. **The setup guide**, for the instructor and TAs: per station, its name (the heading text after "Station N:"), the `setup:` lines, the images to print, and every question with its accepted answers, so whoever places a pin can check it against the key. A checkbox column for walking the room.
-3. **The instructor key**: every station, all four letters, full and partial answers, for reading without the app.
-4. **A Build Practical option in the app.** The Build Exam tab is `build_tab.BuildExamUI` (customtkinter); a practical needs only a source file, an output folder, a class size for the combined sheet PDF, and a Build button. It could be a mode on that tab or its own tab; ask Brandon. It should log the parser's warnings (`Practical.warnings`) and stop on `PracticalError` with its message.
-
-Decide the output format before starting: the exam itself is HTML printed from a browser (`renderer.py`, `templates/exam.html`), chosen for equation typesetting ([pdf-output-plan.md](pdf-output-plan.md)); placards and a setup guide need no equations but do need large images and one station per page, which a direct PDF (PyMuPDF, as `answer_sheet.py` draws) gives without a browser's print settings. Put the choice and its reason here.
-
-The fixture `tests/fixtures/practical/practical_test.md` has station images (`images/station1.png`, and `images/station20d.png` on question 20D) and a 2-point question (24A) to exercise all of this.
+Built as described under Output format. What remains is to look at it: open the placards, guide, and key built from the fixture (`uv run python practical_build.py tests/fixtures/practical/practical_test.md --students 12`) and print one placard to judge type size from arm's length.
 
 ### Step 7: documentation and a real scan
 
