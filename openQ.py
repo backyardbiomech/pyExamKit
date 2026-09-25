@@ -13,6 +13,7 @@ from PIL import Image as PILImage, ImageDraw as PILImageDraw
 
 from ocr import attempt_ocr, explain_suggestion, suggest_grade
 import ai_ocr as _ai_ocr_mod
+import outputs
 from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
                        _openq_sort_key)
 
@@ -593,9 +594,8 @@ class OpenQs(object):
     def _progress_cache_path(self) -> 'Path | None':
         if not self._output_csv_path:
             return None
-        app_data = Path(self._output_csv_path).parent / 'app_data'
         stem = Path(self._output_csv_path).stem
-        return app_data / f'{stem}_openq_progress.json'
+        return outputs.artifact_dir(self._output_csv_path) / f'{stem}_openq_progress.json'
 
     def _load_progress_cache(self) -> 'dict | None':
         p = self._progress_cache_path()
@@ -1299,12 +1299,12 @@ class OpenQs(object):
     def save_artifacts(self, csv_path: str, grade_config: dict | None = None) -> None:
         """
         Save acceptable answers, transcriptions, and optionally grade config
-        into the app_data/ subfolder next to results.csv.
+        beside the results file, in app_data/ (outputs.artifact_dir).
           app_data/{stem}_openq_answers.json
           app_data/{stem}_openq_transcriptions.json
           app_data/{stem}_openq_gradeconfig.json  (only written when grade_config provided)
         """
-        app_data_dir = Path(csv_path).parent / 'app_data'
+        app_data_dir = outputs.artifact_dir(csv_path)
         app_data_dir.mkdir(exist_ok=True)
         stem = str(app_data_dir / Path(csv_path).stem)
 
@@ -1357,8 +1357,9 @@ class RegradeDialog:
         self._on_complete = on_complete
         self._strictness = float(strictness)
 
-        # Prefer new app_data/ layout; fall back to old layout for existing runs
-        app_data_dir = Path(csv_path).parent / 'app_data'
+        # Prefer the app_data/ layout; fall back to the oldest layout, with
+        # the answers beside results.csv
+        app_data_dir = outputs.artifact_dir(csv_path)
         new_stem = str(app_data_dir / Path(csv_path).stem)
         old_stem = str(Path(csv_path).with_suffix(''))
         if Path(new_stem + '_openq_answers.json').exists():
@@ -1614,11 +1615,14 @@ class RegradeDialog:
                     openQ=has_open,
                     bubbleVal=bubble_val,
                     openVal=open_val,
-                    markeddir=Path(self._csv_path).parent / 'marked',
+                    markeddir=outputs.outdir_of(self._csv_path) / 'marked',
                     point_values=point_values,
                 )
-                if Path(self._csv_path).name.startswith('results_version'):
-                    grade_functions.write_combined_versions(Path(self._csv_path).parent)
+                outdir = outputs.outdir_of(self._csv_path)
+                if Path(self._csv_path).parent.name == outputs.APP_DATA:
+                    outputs.write(outdir)
+                else:   # a run from before results files moved into app_data/
+                    outputs.write(outdir, csvs=[self._csv_path])
             except Exception as exc:
                 print(f'[Regrade] gradeResults error: {exc}', flush=True)
             # A lab practical's source file is its key: keep its answers current
@@ -1679,6 +1683,7 @@ class KeyFileEditorDialog:
         # the answer sheet's row runs (without them a sheet printed for this
         # exam cannot be read) and the version letter.
         self._kept_meta: dict = {}
+        self._kept_sources: dict = {}
 
         if path and Path(path).exists():
             data = load_key_file(path)
@@ -1696,8 +1701,11 @@ class KeyFileEditorDialog:
                 self._point_values = dict(data.get('point_values', {}))
                 _meta = data.get('metadata', {})
                 self._kept_meta = {k: _meta[k] for k in ('sheet_rows', 'version',
-                                                         'answer_boxes')
+                                                         'answer_boxes', 'title')
                                    if _meta.get(k)}
+                # Where each row came from in the bank; kept for the item analysis
+                self._kept_sources = {k: dict(data[k]) for k in ('sources', 'choices')
+                                      if data.get(k)}
         # A key Build Exam wrote has its writing boxes where the sheet printed
         # them; drawing or typing new ones could only misplace them. Older
         # built keys lack the marker, but only Build Exam writes sheet_rows.
@@ -2306,6 +2314,7 @@ class KeyFileEditorDialog:
                 **self._kept_meta,
             },
             'point_values': dict(self._point_values),
+            **self._kept_sources,
         }
 
     def _save(self):

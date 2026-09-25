@@ -40,9 +40,9 @@
 
 **The key's transcription is wrong.** Edit it in the grading window. The correction applies to every student from that point on.
 
-**I graded twenty students before realizing an answer should have counted.** Use **Add as partial credit** in the grading window, which upgrades everyone already graded whose answer matches. After the scan, the [Re-grade](open-ended-questions.md#re-grading-afterward) tab does the same thing against a finished results file.
+**I graded twenty students before realizing an answer should have counted.** Use **Add as partial credit** in the grading window, which upgrades everyone already graded whose answer matches. After the scan, the [Re-grade](open-ended-questions.md#re-grading-afterward) tab does the same thing against a finished scan.
 
-**Can re-grading lower a grade?** No. It only upgrades. Edit the results file directly to lower one.
+**Can re-grading lower a grade?** No. It only upgrades. To lower one, change the points cell in `gradebook.xlsx` (the total follows) and the score in Canvas.
 
 **The app closed partway through grading.** Run the same scan again and it offers to resume where you stopped, reusing the transcriptions it already made.
 

@@ -8,6 +8,7 @@ class Answer:
     text: str
     is_correct: bool
     image_path: str | None = None  # relative path from source folder, for image answer choices
+    src: int = -1                  # position in the bank file, 0-based; -1 when not from a bank
 
 
 @dataclass
@@ -26,12 +27,14 @@ class OrderItem:
 class MatchLeft:
     text: str
     correct_label: str
+    src: int = -1      # position in the bank file, 0-based
 
 
 @dataclass
 class MatchRight:
     label: str
     text: str
+    src: int = -1      # position in the bank file, 0-based
 
 
 @dataclass
@@ -49,6 +52,7 @@ class Question:
     points: str | None = None   # e.g. "2" or None
     source_text: str = ''       # original raw block text, used for markdown re-export
     source_folder: Path | None = None  # absolute path to the folder this question came from
+    source_id: str = ''         # bank file and block number, 'bank.md#12'; '' when not from a bank
 
 
 @dataclass

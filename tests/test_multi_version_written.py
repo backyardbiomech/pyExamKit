@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tests'))
 
 import keyformat  # noqa: E402
+import outputs  # noqa: E402
 import scanner  # noqa: E402
 import sheet_layout  # noqa: E402
 from build_tab import write_answer_sheets  # noqa: E402
@@ -55,7 +56,7 @@ class AllCorrect:
         self._q_pages = {k: 1 for k in oq}
 
     def save_artifacts(self, csv_path, grade_config=None):
-        app = Path(csv_path).parent / 'app_data'
+        app = outputs.artifact_dir(csv_path)
         app.mkdir(exist_ok=True)
         stem = str(app / Path(csv_path).stem)
         Path(stem + '_openq_answers.json').write_text(json.dumps(self.acceptable_answers))
@@ -115,12 +116,13 @@ class TestMultiVersionWritten(unittest.TestCase):
         shutil.rmtree(cls.out, ignore_errors=True)
 
     def version_df(self, letter):
-        df = pd.read_csv(self.results / f'results_version{letter}.csv', dtype=object)
+        df = pd.read_csv(self.results / 'app_data' / f'results_version{letter}.csv', dtype=object)
         return df.set_index('index')
 
     def test_each_version_graded_against_its_own_key(self):
         self.assertEqual(sorted(p for p, _ in AllCorrect.calls),
-                         sorted(str(self.results / f'results_version{v}.csv') for v in 'AB'))
+                         sorted(str(self.results / 'app_data' / f'results_version{v}.csv')
+                                for v in 'AB'))
         self.assertTrue(all(n == 2 for _, n in AllCorrect.calls))
 
     def test_written_points_count_toward_the_score(self):
@@ -133,10 +135,47 @@ class TestMultiVersionWritten(unittest.TestCase):
                 self.assertAlmostEqual(float(df.loc[row, 'partialscore']),
                                        self.expected[letter], places=2)
 
-    def test_combined_file_lists_every_student(self):
-        combined = pd.read_csv(self.results / 'results_all_versions_forCanvas.csv')
-        self.assertEqual(sorted(combined['version']), ['A', 'A', 'B', 'B'])
-        self.assertTrue((combined['partialscore'] > 0).all())
+    def test_one_set_of_outputs_for_every_version(self):
+        top = sorted(p.name for p in self.results.iterdir())
+        self.assertEqual(top, ['ALERT.txt', 'app_data', 'canvas_upload.csv', 'gradebook.xlsx',
+                               'marked', 'marked.pdf'][0 if 'ALERT.txt' in top else 1:])
+        self.assertEqual(len(list((self.results / 'marked').glob('*.jpg'))), 4)
+
+    def test_canvas_file_uploads_as_is(self):
+        rows = (self.results / 'canvas_upload.csv').read_text().splitlines()
+        self.assertEqual(rows[0], 'Student,SIS User ID,MV')
+        possible = rows[1].split(',')
+        self.assertEqual(possible[:2], ['    Points Possible', ''])
+        self.assertAlmostEqual(float(possible[2]), self.expected['A'])
+        body = rows[2:]
+        self.assertEqual(len(body), 4)
+        for line in body:
+            sid, score = line.rsplit(',', 2)[-2:]
+            self.assertRegex(sid, r'^L\d{8}$')
+            self.assertGreater(float(score), 0)
+
+    def test_canvas_file_loads_back_as_a_roster(self):
+        import roster
+        r, _ = roster.load_roster(self.results / 'canvas_upload.csv')
+        self.assertEqual(len(r), 4)
+
+    def test_gradebook_tabs(self):
+        import openpyxl
+        wb = openpyxl.load_workbook(self.results / 'gradebook.xlsx')
+        self.assertEqual(wb.sheetnames, ['Version A', 'Version B', 'By question',
+                                         'Item analysis'])
+
+    def test_versions_combined_by_bank_question(self):
+        graded = [outputs.load(p) for p in outputs.listed(self.results)]
+        t = outputs.item_table(graded)
+        self.assertTrue(t.by_source)
+        for it in t.items:
+            # every question sat once on each version, answered by all four
+            self.assertEqual(sorted(w[0] for w in it.where), ['A', 'B'], it.label)
+            self.assertEqual(len(it.responses), 4, it.label)
+            # and every student chose the key, in the bank's letters
+            if not it.written:
+                self.assertEqual({a for *_, a in it.responses}, {it.key}, it.label)
 
     def test_regrade_config_carries_the_key_points(self):
         cfg = json.loads((self.results / 'app_data' /

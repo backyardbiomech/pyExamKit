@@ -16,7 +16,7 @@ The app opens to one window with five tabs, sharing a single log at the bottom. 
 
 **Build Practical** turns one plain-text source file into everything a lab practical needs: an answer sheet for each pairing of questions, station placards, a setup guide, and an instructor key. The same file is the key that grades every form's sheets in one scan.
 
-**Scan Exams** reads a stack of completed answer sheets, grades them against the key, and writes out a results spreadsheet, a per-question breakdown, a Canvas-ready upload file, and a marked copy of every student's sheet.
+**Scan Exams** reads a stack of completed answer sheets, grades them against the key, and writes out a gradebook with an item analysis of every question, a file that imports straight into the Canvas gradebook, and a marked copy of every student's sheet. A stack of several scrambled versions produces one of each, with the versions' questions matched back to the bank.
 
 **Re-grade** re-runs the open-ended grading against transcriptions already on disk, so a key that turns out to have been too strict can be loosened without rescanning anything.
 

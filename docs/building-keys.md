@@ -38,21 +38,23 @@ Note that acceptable answers also get written back to the key file *during* grad
 
 ## The key CSV format
 
-The key is an ordinary CSV with a header row, so it can be opened and edited in any spreadsheet app. It has ten columns:
+The key is an ordinary CSV with a header row, so it can be opened and edited in any spreadsheet app. It has twelve columns:
 
 ```
-type, question, page, x1, y1, x2, y2, answer, partial_answers, points
+type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, choices
 ```
 
 **`type`** is `metadata`, `bubble`, or `open`. A row with a blank type, or a type starting with `#`, is ignored, which makes comment rows possible.
 
-**Metadata rows** carry the settings the Scan Exams tab fills in for you. `num_questions` holds the bubble question count and `questions_to_skip` holds the comma-separated skip list, each with its value in the `answer` column. A key built with an exam whose sheet groups rows by question also has `sheet_rows`, which says where the rows are printed: the number of rows in each run between gaps, comma-separated, with columns separated by a slash (`5,4,3,5/2,5`). Keep it when editing a key by hand, since that sheet cannot be read without it.
+**Metadata rows** carry the settings the Scan Exams tab fills in for you. `num_questions` holds the bubble question count and `questions_to_skip` holds the comma-separated skip list, each with its value in the `answer` column. A key built with an exam whose sheet groups rows by question also has `sheet_rows`, which says where the rows are printed: the number of rows in each run between gaps, comma-separated, with columns separated by a slash (`5,4,3,5/2,5`). Keep it when editing a key by hand, since that sheet cannot be read without it. A key from Build Exam also has `title`, the exam's title, which names the grade column in the [Canvas upload file](outputs.md#the-results).
 
 **Bubble rows** name the question in `question` — `Q001`, or just `1`, which is normalized on read — and put the correct letters in `answer`. Multiple letters run together with no separator: `ABD`. The coordinate columns stay empty. `points` is the value of that question, and it is what the grader uses; leave it blank and the question falls back to the exam-wide points-per-bubble-question setting.
 
 **Open rows** name the question as `openQ_1` (or just `1`) and carry the crop rectangle in `page`, `x1`, `y1`, `x2`, `y2`. The `answer` column holds the full-credit answers and `partial_answers` holds the partial-credit ones, **each pipe-separated**: `stratum basale|basal layer`. That is the layout to use if you would rather type a key in a spreadsheet than draw it in the builder.
 
-Files are written as plain UTF-8 without a byte-order mark, and read tolerantly: a nine-column key with no `points` column still loads, and simply yields no per-question point values.
+**`source` and `choices`** are written by Build Exam and can be left blank in a key made any other way. `source` names the bank question the row came from, as the bank file and question block number (`bank.md#12`, or `bank.md#12.3` for the third row of a question that takes several). `choices` says where each printed choice sat in the bank, as letters: `CADB` means the sheet's A is the bank's C. They are what lets several shuffled versions be analyzed question by question ([Outputs](outputs.md#multiple-versions)); grading does not use them.
+
+Files are written as plain UTF-8 without a byte-order mark, and read tolerantly: an older key without the `points`, `source`, or `choices` columns still loads, and simply has nothing for them.
 
 ---
 

@@ -64,11 +64,11 @@ Grading progress — transcriptions, grades so far, and your position in the sta
 
 ## Re-grading afterward
 
-The **Re-grade** tab reopens a finished `results.csv` and lets you edit the acceptable-answer lists for open-ended questions, then re-runs the grading against the transcriptions saved during the original scan. Nothing is rescanned and no API calls are made.
+The **Re-grade** tab reopens a finished scan and lets you edit the acceptable-answer lists for open-ended questions, then re-runs the grading against the transcriptions saved during the original scan. Nothing is rescanned and no API calls are made.
 
-Re-grading **only upgrades** — wrong to partial, wrong to correct, partial to correct. It never takes points away. That makes it the right tool for a key that turned out to be too strict, which is the mistake that actually happens, and it means a student cannot lose points because you edited a key after handing work back. To lower a grade, edit the results file directly.
+Re-grading **only upgrades** — wrong to partial, wrong to correct, partial to correct. It never takes points away. That makes it the right tool for a key that turned out to be too strict, which is the mistake that actually happens, and it means a student cannot lose points because you edited a key after handing work back. To lower a grade, change the points cell in `gradebook.xlsx` and the score in Canvas.
 
-Point the tab at the `results.csv` from the scan (or a version's `results_versionA.csv`), click **Open Re-grader**, edit the answers, and it reports how many grades changed. Scores are recalculated with the per-question points from the key the scan used.
+Point the tab at the scan's `ExamScanner_outputs` folder, click **Open Re-grader** (and name the version, when the stack had several), edit the answers, and it reports how many grades changed. Scores are recalculated with the per-question points from the key the scan used, and `gradebook.xlsx` and `canvas_upload.csv` are rewritten. A folder from before results files moved into `app_data/` still works.
 
 ---
 

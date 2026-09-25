@@ -20,6 +20,7 @@ import practical_scan
 import grade_functions
 from openQ import OpenQs
 from keyformat import load_key_file, save_key_file
+import outputs
 
 
 class Scanner(object):
@@ -399,7 +400,9 @@ class Scanner(object):
                   'Check the version question number and key files.', flush=True)
             return
 
-        # 4. Grade (and optionally mark) each version group separately
+        # 4. Grade (and optionally mark) each version group separately, into
+        #    one set of outputs
+        ver_csvs = []
         for ver in sorted(version_groups):
             row_indices = version_groups[ver]
             kd = self.version_keys[ver]
@@ -428,7 +431,8 @@ class Scanner(object):
             for orig_row in row_indices:
                 first = (orig_row - 1) * pps  # 0-based into aligned_image_list
                 imgs_for_ver += self.aligned_image_list[first:first + pps]
-            ver_csv = str(self.outdir / f'results_version{ver}.csv')
+            ver_csv = outputs.results_csv(self.outdir, ver)
+            ver_csvs.append(ver_csv)
 
             # Written answers, graded against this version's key: its boxes
             # and accepted answers can differ from another version's.
@@ -457,29 +461,27 @@ class Scanner(object):
             grade_functions.gradeResults(
                 ver_csv, self.markmissing, openQs is not None,
                 self.bubbleVal, self.openVal, self.markeddir, self.strictness,
-                point_values=_point_values)
+                point_values=_point_values, key_data=kd)
 
-            # Mark sheets if requested
+            # Mark sheets if requested; every version's go in marked/
             if self.save_marked:
                 marked_list = [None] + imgs_for_ver  # None at [0] = synthetic key placeholder
-                ver_markeddir = self.outdir / f'marked_version{ver}'
-                ver_markeddir.mkdir(exist_ok=True)
-
                 _areas, _flags = self._row_areas(
                     {str(j + 1): orig for j, orig in enumerate(row_indices)})
-                keyname = grade_functions.markSheets(
-                    ver_csv, marked_list, ver_markeddir,
+                grade_functions.markSheets(
+                    ver_csv, marked_list, self.markeddir,
                     ver_areas, self.Qdict, self.markmissing, self.corrMark,
                     pages_per_student=pps, q_pages=q_pages,
                     row_areas=_areas, flags=_flags)
 
-                print(f'Saving marked files for version {ver}')
-                ver_pdf = FPDF('P', 'pt', 'Letter')
-                scan_functions.savePdf(ver_markeddir, ver_pdf, keyname)
-                ver_pdf.output(str(self.outdir / f'marked_version{ver}.pdf'))
+        if self.save_marked:
+            print('Saving marked files')
+            self.outpdf = FPDF('P', 'pt', 'Letter')
+            scan_functions.savePdf(self.markeddir, self.outpdf, None)
+            self.outpdf.output(str(self.outdir / 'marked.pdf'))
 
-        # ── Combined forCanvas CSV (all versions, sorted by last name) ────────
-        grade_functions.write_combined_versions(self.outdir, sorted(version_groups))
+        outputs.record(self.outdir, ver_csvs)
+        outputs.write(self.outdir)
 
         print('All steps complete!')
 
@@ -535,7 +537,7 @@ class Scanner(object):
                             pages_per_student=pps,
                             ignores=self.ignores,
                             strictness=self.strictness,
-                            output_csv_path=str(self.outdir / 'results.csv'))
+                            output_csv_path=outputs.results_csv(self.outdir))
             # results data frame is accessed as openQs.openQres
             # add openQcoords to self.qAreas
             # rearrange first
@@ -599,7 +601,7 @@ class Scanner(object):
             print(f'[Scanner] Could not save key CSV: {_exc}', flush=True)
 
         # write resdf to csv
-        self.resCsv = str(self.outdir / 'results.csv')
+        self.resCsv = outputs.results_csv(self.outdir)
         self.resdf.to_csv(self.resCsv, index=True, index_label = 'index')
 
         # Save acceptable answers, transcriptions, and grade config for post-session re-grading
@@ -615,6 +617,8 @@ class Scanner(object):
         
         # grade the results csv file and save out pts per question csv file
         grade_functions.gradeResults(self.resCsv, self.markmissing, self.openQ, self.bubbleVal, self.openVal, self.markeddir, self.strictness)
+        outputs.record(self.outdir, [self.resCsv])
+        outputs.write(self.outdir)
         
         # mark questions
         if self.save_marked:
@@ -773,7 +777,7 @@ class Scanner(object):
         # 3. Written answers, station by station, each across the students who have it
         labels = [self._who(row) + f'  ·  form {s.form}' for row, s in enumerate(sheets, 1)]
         image_list = [None] + [r.path if r else None for s in sheets for r in s.pages]
-        csv_path = str(self.outdir / 'results.csv')
+        csv_path = outputs.results_csv(self.outdir)
         openQs = self._grade_written(
             image_list, self._key_data, self.key_file_path, csv_path,
             locate=practical_scan.make_locate(sheets, len(p.stations)),
@@ -790,7 +794,9 @@ class Scanner(object):
             'key_file': str(Path(self.key_file_path).resolve())})
         grade_functions.gradeResults(self.resCsv, self.markmissing, True, self.bubbleVal,
                                      self.openVal, self.markeddir, self.strictness,
-                                     point_values=point_values)
+                                     point_values=point_values, key_data=self._key_data)
+        outputs.record(self.outdir, [self.resCsv])
+        outputs.write(self.outdir)
 
         # 5. Marked sheets
         if self.save_marked:
@@ -865,7 +871,7 @@ class Scanner(object):
         openQs = None
         if self.openQ:
             openQs = self._grade_written([None] + self.aligned_image_list, self._key_data,
-                                         self.key_file_path, str(self.outdir / 'results.csv'))
+                                         self.key_file_path, outputs.results_csv(self.outdir))
         if openQs is not None:
             for k, v in openQs.openQcoords.items():
                 self.qAreas[k] = ((v[0], v[1]), (v[2], v[3]))
@@ -873,7 +879,7 @@ class Scanner(object):
             self.resdf = self._with_written(self.resdf, openQs)
 
         # 6. Write CSV
-        self.resCsv = str(self.outdir / 'results.csv')
+        self.resCsv = outputs.results_csv(self.outdir)
         self.resdf.to_csv(self.resCsv, index=True, index_label='index')
 
         # 7. Save artifacts
@@ -892,7 +898,9 @@ class Scanner(object):
         grade_functions.gradeResults(
             self.resCsv, self.markmissing, openQs is not None,
             self.bubbleVal, self.openVal, self.markeddir, self.strictness,
-            point_values=_point_values)
+            point_values=_point_values, key_data=self._key_data)
+        outputs.record(self.outdir, [self.resCsv])
+        outputs.write(self.outdir)
 
         # 9. Mark sheets — None at [0] for synthetic key row, then all student pages in order
         if self.save_marked:

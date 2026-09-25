@@ -476,6 +476,15 @@ def _parse_mt(lines: list[str], image_paths: list[str], points: str | None,
 # Public API
 # ---------------------------------------------------------------------------
 
+def _stamp_sources(q: Question, source_id: str) -> None:
+    """Record where a question and each of its choices sit in the bank, before
+    any shuffle, so graded versions can be combined question by question."""
+    q.source_id = source_id
+    for group in [q.answers, q.match_lefts, q.match_rights] + [d.answers for d in q.dropdowns]:
+        for i, item in enumerate(group):
+            item.src = i
+
+
 def parse_file(filepath: Path) -> tuple[list[Question], list[str]]:
     """Parse a question bank file and return (questions, warnings).
 
@@ -527,6 +536,7 @@ def parse_file(filepath: Path) -> tuple[list[Question], list[str]]:
             warnings.append(warn or f"Block {q_index}: could not parse question. Skipped.")
             continue
 
+        _stamp_sources(q, f'{filepath.name}#{q_index}')
         questions.append(q)
 
     return questions, warnings

@@ -143,4 +143,6 @@ def _question_from_dict(data: dict) -> Question:
         points=data["points"],
         source_text=data["source_text"],
         source_folder=Path(data["source_folder"]) if data["source_folder"] else None,
+        # An exam saved before questions recorded their place in the bank has none
+        source_id=data.get("source_id", ""),
     )

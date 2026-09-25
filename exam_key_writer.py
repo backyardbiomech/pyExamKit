@@ -39,7 +39,7 @@ def _distribute_points(total: float, n: int) -> list[float]:
 def build_key_data(version: ExamVersion, default_points: float = 1.0,
                    open_coords: dict | None = None) -> dict:
     """Translate an ExamVersion into the generic dict keyformat.py expects:
-    bubble_answers, open_questions, metadata, point_values.
+    bubble_answers, open_questions, metadata, point_values, sources, choices.
 
     SA questions produce an 'ignore' bubble placeholder (so gradeResults/
     markSheets skip that slot) plus an open question carrying the answers.
@@ -51,21 +51,38 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     writing box on a generated answer sheet, so the scanner needs no boxes
     drawn by hand. When the sheet groups rows by question, the key records
     its row runs as sheet_rows, which is how the scanner finds the rows.
+
+    sources and choices record each row's bank question and the bank position
+    of each shown choice (see docs/dev/outputs-cleanup.md), so a stack graded
+    against several versions can be analyzed question by question.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
     point_values: dict = {}
+    sources: dict = {}
+    choices: dict = {}
     questions_to_skip: list[int] = []
+
+    def note_source(q_label: str, q: Question, part: int | None = None,
+                    shown: list | None = None) -> None:
+        # Where this row's question sits in the bank, and each shown choice's
+        # bank position, which is what lets versions be combined by question
+        if not q.source_id:
+            return
+        sources[q_label] = q.source_id if part is None else f'{q.source_id}.{part}'
+        if shown and all(c.src >= 0 for c in shown):
+            choices[q_label] = ''.join(chr(ord('A') + c.src) for c in shown)
 
     counter = 1
     for q in version.questions:
         if q.q_type == 'MD':
             total_pts = _effective_points(q, default_points)
             pts_list = _distribute_points(total_pts, len(q.dropdowns))
-            for dropdown, pts in zip(q.dropdowns, pts_list):
+            for part, (dropdown, pts) in enumerate(zip(q.dropdowns, pts_list), 1):
                 q_label = f"Q{counter:03d}"
                 bubble_answers[q_label] = _dropdown_answer(dropdown)
                 point_values[q_label] = pts
+                note_source(q_label, q, part, dropdown.answers)
                 counter += 1
 
         elif q.q_type == 'OR':
@@ -80,6 +97,11 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                 q_label = f"Q{counter:03d}"
                 bubble_answers[q_label] = chr(ord('A') + display_idx)
                 point_values[q_label] = pts_list[i]
+                # The bank lists an ordering's items in their true order
+                if q.source_id:
+                    sources[q_label] = f'{q.source_id}.{i + 1}'
+                    choices[q_label] = ''.join(chr(ord('A') + item.rank - 1)
+                                               for item in q.order_items)
                 counter += 1
 
         elif q.q_type == 'MT':
@@ -94,6 +116,9 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                 q_label = f"Q{counter:03d}"
                 bubble_answers[q_label] = chr(ord('A') + display_idx)
                 point_values[q_label] = pts_list[i]
+                # Lefts can be shuffled, so the part is the left's bank position
+                note_source(q_label, q, left.src + 1 if left.src >= 0 else i + 1,
+                            q.match_rights)
                 counter += 1
 
         elif q.q_type == 'SA':
@@ -112,6 +137,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                 'page': 1,
             }
             point_values[open_key] = pts
+            note_source(open_key, q)
             counter += 1
 
         else:
@@ -119,6 +145,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
             q_label = f"Q{counter:03d}"
             bubble_answers[q_label] = _mc_answer(q)
             point_values[q_label] = pts
+            note_source(q_label, q, shown=q.answers)
             counter += 1
 
     total_questions = counter - 1
@@ -127,7 +154,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     # answer_boxes: the writing boxes' positions come from the printed sheet,
     # so the key editor offers no tools to move them.
     metadata: dict = {'num_questions': total_questions, 'version': version.version_letter,
-                      'answer_boxes': 'printed'}
+                      'answer_boxes': 'printed', 'title': version.title}
     if questions_to_skip:
         metadata['questions_to_skip'] = ','.join(str(n) for n in questions_to_skip)
     try:
@@ -142,6 +169,8 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
         'open_questions': open_questions,
         'metadata': metadata,
         'point_values': point_values,
+        'sources': sources,
+        'choices': choices,
     }
 
 

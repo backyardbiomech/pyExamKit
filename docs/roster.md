@@ -45,7 +45,7 @@ Every sheet whose ID matches the roster exactly gets that student's name. The re
 - **Not on the roster.** The results keep the bubbled ID with no name. Look at the handwritten name at the top of that student's marked sheet.
 - **Two sheets, one ID.** Usually one student bubbled another's ID by one digit. Check both marked sheets.
 
-The scan number in each line is the sheet's position in the stack, which is also its row number in `results.csv`.
+The scan number in each line is the sheet's position in the stack.
 
 ---
 

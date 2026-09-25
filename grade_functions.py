@@ -6,6 +6,8 @@ import fnmatch
 import difflib
 import os
 from pathlib import Path
+
+import outputs
 from PIL import Image as PILImage, ImageDraw, ImageFont
 
 
@@ -35,7 +37,13 @@ def _get_font(size=28):
     return ImageFont.load_default(size=size)
 
     
-def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5, point_values=None):
+def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5,
+                 point_values=None, key_data=None):
+    """Score one results file in place and write its points file and grading
+    record beside it (outputs.points_csv, outputs.grading_json). key_data is
+    the key graded against: its title, sources and choices go in the grading
+    record, where a re-grade, which has no key, finds them again. The files a
+    person uses are written afterward, by outputs.write."""
     #open the csv into a Pandas data frame
     df=pd.read_csv(resCsv, dtype=object)
     df.set_index(['index'], inplace=True)
@@ -52,6 +60,9 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     #create a new dataframe that matches the results frame, but that contains points gained per question per student (replace answers with points gained
     ptsdf=df.copy(deep=True)
     ptsdf.iloc[:, 3:] = 0.0
+    q_cols = [c for c in df.columns[3:-2] if c not in outputs.ID_COLS]
+    # Points each question is worth, for the Canvas file's Points Possible
+    possible = {}
     #loop through students
     for row in range(1,df.shape[0]-1):
         row=str(row)
@@ -60,16 +71,17 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         #create grade of partial correct
         partscore = 0
         #loop through questions
-        for col in df.columns[3:-2]:
+        for col in q_cols:
             #compare student's answer to key
             key = df.loc['0', col]
-            if key == 'ignore':
+            if key == 'ignore' or pd.isna(key) or key == '':
                 continue
             # Per-question point value: use key-file override if available, else default
             if key == 'CC':
                 q_pts = point_values.get(col, openVal) if point_values else openVal
             else:
                 q_pts = point_values.get(col, bubbleVal) if point_values else bubbleVal
+            possible[col] = float(q_pts)
             #if it's an open ended question
             if key == 'CC':
                 ans = df.loc[row, col]
@@ -148,197 +160,22 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         ptsdf.loc[row,'partialscore'] = partscore
     #write the dataframe back to the csv
     df.to_csv(resCsv, index=True, index_label = 'index')
-    _stem = str(Path(resCsv).parent / Path(resCsv).stem)
-    ptsdf.to_csv(_stem + 'perquestions.csv')
-    try:
-        _xlsx_path = _stem + '_gradebook.xlsx'
-        # Load open-ended question answers for gradebook display
-        # (save_artifacts writes this file before gradeResults is called)
-        _open_q_answers = None
+    ptsdf.to_csv(outputs.points_csv(resCsv))
+    # Keep what the key said about itself across re-grades, which have no key
+    grading_path = outputs.grading_json(resCsv)
+    record = {}
+    if grading_path.exists():
         try:
-            _app_data = Path(resCsv).parent / 'app_data'
-            _ans_file = _app_data / (Path(resCsv).stem + '_openq_answers.json')
-            if _ans_file.exists():
-                _raw = json.loads(_ans_file.read_text(encoding='utf-8'))
-                _open_q_answers = {}
-                for _qk, _v in _raw.items():
-                    if isinstance(_v, dict):
-                        _open_q_answers[_qk] = _v.get('full', [])
-                    elif isinstance(_v, list):
-                        _open_q_answers[_qk] = _v
-        except Exception:
-            pass
-        save_gradebook_xlsx(_xlsx_path, df, ptsdf, open_q_answers=_open_q_answers)
-        print(f'Gradebook saved \u2192 {_xlsx_path}')
-    except Exception as _exc:
-        print(f'[gradeResults] Could not save gradebook xlsx: {_exc}')
-    # make a grades csv for upload to canvas, sorted by last name, just names, Lnum, and scores without the key
-    cols = ['LastName','FirstName','studentID','partialscore']
-    gradesdf = df[cols].copy()
-    gradesdf = gradesdf.drop(index='0')
-    gradesdf = gradesdf.drop(index='numb_correct')
-    gradesdf = gradesdf.sort_values(by=['LastName', 'FirstName','studentID'])
-    gradesdf.to_csv(_stem + 'forCanvas.csv')
+            record = json.loads(grading_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            record = {}
+    record['possible'] = possible
+    if key_data:
+        record['title'] = (key_data.get('metadata') or {}).get('title', '')
+        record['sources'] = key_data.get('sources') or {}
+        record['choices'] = key_data.get('choices') or {}
+    grading_path.write_text(json.dumps(record, indent=2), encoding='utf-8')
     print('Done grading')
-
-def write_combined_versions(outdir, versions=None) -> None:
-    """Write results_all_versions_forCanvas.csv from the results_versionX.csv
-    files in outdir: one row per student, with their version, sorted by name.
-    Run after a multi-version scan, which names the versions it graded, and
-    again after re-grading any version, which keeps the versions the combined
-    file already lists, so a file left from an earlier scan is not swept in."""
-    combined_path = Path(outdir) / 'results_all_versions_forCanvas.csv'
-    if versions is None and combined_path.exists():
-        versions = set(pd.read_csv(combined_path, dtype=object)['version'].dropna())
-    frames = []
-    for ver_csv in sorted(Path(outdir).glob('results_version*.csv')):
-        m = re.fullmatch(r'results_version([A-F])\.csv', ver_csv.name)
-        if not m or (versions is not None and m[1] not in versions):
-            continue
-        try:
-            vdf = pd.read_csv(ver_csv, dtype=object)
-            vdf.set_index('index', inplace=True)
-            vdf.index = vdf.index.map(str)
-            # drop key row and numb_correct row
-            vdf = vdf.drop(index=[r for r in ('0', 'numb_correct') if r in vdf.index])
-            sub = vdf[['LastName', 'FirstName', 'studentID', 'partialscore']].copy()
-            sub.insert(3, 'version', m[1])
-            frames.append(sub)
-        except Exception as _exc:
-            print(f'[MultiVersion] Could not read {ver_csv} for combined output: {_exc}',
-                  flush=True)
-    if frames:
-        combined = pd.concat(frames, ignore_index=True)
-        combined = combined.sort_values(by=['LastName', 'FirstName', 'studentID'])
-        combined.to_csv(combined_path, index=False)
-        print(f'Combined output saved → {combined_path}')
-
-
-def save_gradebook_xlsx(xlsx_path: str, df, ptsdf, open_q_answers: dict | None = None) -> None:
-    """
-    Write an xlsx gradebook with live SUM formulas.
-
-    Layout (one sheet "Gradebook"):
-      Row 1 — frozen header: LastName | FirstName | studentID |
-               Q Answer (Key: X) | Q Pts | ... | Total
-      Row 2 — KEY row (yellow): raw key answers; for open-ended questions,
-               pipe-separated acceptable answers from open_q_answers (if provided)
-      Rows 3+ — students: answer + points per question;
-                 Total cell is =SUM(...) formula so editing a Pts cell updates Total
-
-    df    — full results DataFrame (index '0' = key row)
-    ptsdf — points DataFrame (same shape; question cells contain float points)
-    open_q_answers — {qk: [answer_str, ...]} of full-credit answers for open-ended
-                     questions; used to populate the KEY row (optional)
-    """
-    import openpyxl
-    from openpyxl.styles import Font, Alignment, PatternFill
-    from openpyxl.utils import get_column_letter
-
-    # Question columns: everything after name cols (LastName/FirstName/studentID),
-    # before the score/partialscore summary columns at the end.
-    q_cols = list(df.columns[3:-2])
-    n_q = len(q_cols)
-
-    # Student row indices — string '1'...'N'; exclude key row '0' and 'numb_correct'
-    student_indices = [str(i) for i in range(1, df.shape[0] - 1)]
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Gradebook'
-
-    # Column layout:
-    #   cols 1-3  : LastName, FirstName, studentID
-    #   col 4+2*i : student answer for question i (0-based)
-    #   col 5+2*i : points for question i
-    #   col 4+2*n_q : Total
-    total_col_num = 4 + 2 * n_q  # 1-based
-
-    def pts_col_num(qi: int) -> int:
-        return 5 + 2 * qi
-
-    # ── Row 1: header ──────────────────────────────────────────────────────
-    header = ['LastName', 'FirstName', 'studentID']
-    for qi, qc in enumerate(q_cols):
-        key_val = str(df.loc['0', qc])
-        if key_val == 'CC':
-            key_label = f'{qc}\n(open-ended)'
-        elif key_val in ('ignore', 'nan', ''):
-            key_label = f'{qc}\n(ignored)'
-        else:
-            key_label = f'{qc}\n(Key: {key_val})'
-        header.append(key_label)
-        header.append(f'{qc} Pts')
-    header.append('Total')
-    ws.append(header)
-
-    hdr_fill = PatternFill('solid', fgColor='BDD7EE')
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
-        cell.fill = hdr_fill
-    ws.row_dimensions[1].height = 36
-
-    # ── Row 2: KEY row ──────────────────────────────────────────────────────
-    key_row = ['KEY', '', '']
-    for qi, qc in enumerate(q_cols):
-        key_val = str(df.loc['0', qc])
-        if key_val == 'CC' and open_q_answers and qc in open_q_answers:
-            answers = open_q_answers[qc]
-            key_display = ' | '.join(answers) if answers else 'CC'
-        else:
-            key_display = key_val
-        key_row.append(key_display)
-        key_row.append('')
-    key_row.append('')
-    ws.append(key_row)
-
-    key_fill = PatternFill('solid', fgColor='FFFF99')
-    for cell in ws[2]:
-        cell.font = Font(bold=True)
-        cell.fill = key_fill
-
-    # ── Rows 3+: student rows ───────────────────────────────────────────────
-    for row_str in student_indices:
-        row_data = [
-            str(df.loc[row_str, 'LastName']),
-            str(df.loc[row_str, 'FirstName']),
-            str(df.loc[row_str, 'studentID']),
-        ]
-        for qi, qc in enumerate(q_cols):
-            ans = df.loc[row_str, qc]
-            # blank, as for a practical question not on this student's form
-            ans = '' if pd.isna(ans) else str(ans)
-            try:
-                pts = float(ptsdf.loc[row_str, qc])
-            except (ValueError, TypeError, KeyError):
-                pts = 0.0
-            row_data.append(ans)
-            row_data.append(pts)
-        row_data.append('')  # placeholder for formula
-        ws.append(row_data)
-
-        excel_row = ws.max_row
-        sum_refs = ','.join(
-            f'{get_column_letter(pts_col_num(qi))}{excel_row}'
-            for qi in range(n_q)
-        )
-        ws.cell(row=excel_row, column=total_col_num).value = (
-            f'=SUM({sum_refs})' if sum_refs else 0
-        )
-
-    # ── Freeze header + key rows, set column widths ─────────────────────────
-    ws.freeze_panes = 'A3'
-
-    ws.column_dimensions['A'].width = 16
-    ws.column_dimensions['B'].width = 14
-    ws.column_dimensions['C'].width = 14
-    for qi in range(n_q):
-        ws.column_dimensions[get_column_letter(4 + 2 * qi)].width = 18
-        ws.column_dimensions[get_column_letter(5 + 2 * qi)].width = 8
-    ws.column_dimensions[get_column_letter(total_col_num)].width = 10
-
-    wb.save(xlsx_path)
 
 
 def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
