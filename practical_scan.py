@@ -133,8 +133,8 @@ GRADE_MARK = {'CC': ('C', (0, 170, 0)), 'CX': ('P', (230, 140, 0)), 'XX': ('X', 
 def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
                 markeddir: Path, font, small_font) -> None:
     '''
-    Write each student's pages with every graded box marked C, P, or X in
-    the box's right end, and the score and form on page 1. results is the
+    Write each student's pages with every graded box marked C, P, or X just
+    right of the box, and the score and form on page 1. results is the
     graded results frame, indexed '1'.. in sheet order.
     '''
     boxes = L.practical_boxes(len(p.stations))
@@ -153,7 +153,9 @@ def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
                 if d is None or cell[:2] not in GRADE_MARK:
                     continue
                 mark, color = GRADE_MARK[cell[:2]]
-                d.text((x1 - 34, y0 + 6), mark, fill=color, font=font)
+                # Just outside the box's right edge, clear of the writing
+                # and of the next box's printed letter
+                d.text((x1 + 5, (y0 + y1) / 2), mark, fill=color, font=font, anchor='lm')
         if draws[0] is not None:
             score = float(row.get('partialscore', 0) or 0)
             possible = p.total_points(sheet.form) if len(sheet.form) == 2 else 0

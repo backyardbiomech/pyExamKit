@@ -2,6 +2,7 @@ import base64
 import csv
 import io
 import json
+import re
 import numpy as np
 import pandas as pd
 import tkinter as tk
@@ -2267,7 +2268,10 @@ class KeyFileEditorDialog:
             except ValueError:
                 pass
         _skip_str = ','.join(str(n) for n in sorted(_skip_ns))
-        _total = sum(1 for v in self._bubble.values() if v != 'ignore')
+        # num_questions is how many rows the scanner reads, so it counts the
+        # rows marked 'ignore' too (a written question's row, a skipped one).
+        _total = max((int(m.group(1)) for qk in self._bubble
+                      if (m := re.fullmatch(r'Q?0*(\d+)', qk))), default=0)
         return {
             'bubble_answers': dict(self._bubble),
             'open_questions': {
