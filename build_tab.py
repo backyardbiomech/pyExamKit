@@ -140,7 +140,8 @@ def write_answer_sheets(versions: list[ExamVersion], output_path: Path,
         log.append(f'    Sheet → {name}{note}')
     if not shared and any(w for _, w in rows.values()):
         log.append('    Written questions fall in different rows in each version, so each '
-                   'version has its own answer sheet; hand each out with its exam.')
+                   'version has its own answer sheet; hand each out with its exam. Turn on '
+                   '"Use same questions across all versions" to get one sheet for all.')
     return crops, log
 
 

@@ -127,12 +127,28 @@ class ExamBuilder:
                     q.source_folder = folder
                 shared_sample.extend(chosen)
 
+        # With shared questions, written (SA) questions keep version A's
+        # positions in every version, so one answer sheet's writing boxes
+        # fit them all. Set from version A's shuffle.
+        base_order: list[int] | None = None
+
         for v in range(1, config.num_versions + 1):
             selected: list[Question] = []
 
             if shared_sample is not None:
                 # Deep-copy so each version can shuffle independently
                 selected = copy.deepcopy(shared_sample)
+                if config.shuffle_questions:
+                    written = [q.q_type == 'SA' for q in selected]
+                    if base_order is None:
+                        base_order = list(range(len(selected)))
+                        random.shuffle(base_order)
+                        order = base_order
+                    elif any(written):
+                        order = _shuffle_between_pinned(base_order, written)
+                    else:
+                        order = random.sample(base_order, len(base_order))
+                    selected = [selected[i] for i in order]
             else:
                 for (pool_qs, count, folder, pool_pts) in pool_sources:
                     pool_copy = copy.deepcopy(pool_qs)
@@ -147,7 +163,7 @@ class ExamBuilder:
                         q.source_folder = folder
                     selected.extend(chosen)
 
-            if config.shuffle_questions:
+            if config.shuffle_questions and shared_sample is None:
                 random.shuffle(selected)
 
             # Optionally shuffle answers (MD shuffles within each dropdown).
@@ -207,6 +223,27 @@ class ExamBuilder:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _shuffle_between_pinned(base_order: list[int], pinned: list[bool]) -> list[int]:
+    """Reshuffle base_order, keeping every pinned question where it is.
+
+    Questions move only within the stretch between two pinned ones. Each
+    stretch then holds the same questions in every version, so it takes the
+    same number of answer-sheet rows even when ordering, matching, or
+    dropdown questions take several, and every pinned question lands on the
+    same row number.
+    """
+    order: list[int] = []
+    stretch: list[int] = []
+    for idx in base_order:
+        if pinned[idx]:
+            random.shuffle(stretch)
+            order += stretch + [idx]
+            stretch = []
+        else:
+            stretch.append(idx)
+    random.shuffle(stretch)
+    return order + stretch
 
 def _make_version_question(version_letter: str) -> Question:
     """Create a synthetic MC question that identifies the exam version.

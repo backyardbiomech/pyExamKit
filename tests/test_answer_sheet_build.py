@@ -57,5 +57,93 @@ class TestBuildWritesSheet(unittest.TestCase):
         self.assertEqual(len(list(self.out.glob('*_answer_sheet.pdf'))), 1)
 
 
+
+PINNED_BANK = """MC
+1. First?
+*A. yes
+B. no
+
+SA
+2. Blank one ________.
+A. one
+
+OR
+3. Order these from small to large.
+1: small
+2: medium
+3: large
+
+MC
+4. Fourth?
+*A. yes
+B. no
+
+MT
+5. Match each term.
+[catA]term1: alpha
+[catB]term2: beta
+catA: first
+catB: second
+
+SA
+6. Blank two ________.
+A. two
+
+MC
+7. Seventh?
+*A. yes
+B. no
+
+MC
+8. Eighth?
+*A. yes
+B. no
+
+SA
+9. Blank three ________.
+A. three
+"""
+
+
+class TestWrittenRowsMatchAcrossVersions(unittest.TestCase):
+    """With shared questions, every version puts its written questions on the
+    same rows, so one answer sheet serves all versions."""
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp(prefix='sheet_pinned_'))
+        self.addCleanup(shutil.rmtree, self.out, ignore_errors=True)
+        self.bank = self.out / 'bank.txt'
+        self.bank.write_text(PINNED_BANK, encoding='utf-8')
+
+    def build(self, seed, same_questions=True):
+        config = BuildConfig(title='Pinned', course='', num_versions=4,
+                             shuffle_questions=True, shuffle_answers=True,
+                             exact_file=self.bank, pools=[], version_question=False,
+                             version_question_position='last', default_points=1.0,
+                             same_questions=same_questions)
+        random.seed(seed)
+        versions, _ = ExamBuilder().build(config)
+        return versions
+
+    def test_written_rows_identical_in_every_version(self):
+        for seed in range(25):
+            versions = self.build(seed)
+            rows = [answer_rows(v) for v in versions]
+            self.assertEqual(len(rows[0][1]), 3)
+            self.assertTrue(all(r == rows[0] for r in rows), f'seed {seed}: {rows}')
+
+    def test_versions_still_differ_in_order(self):
+        differ = 0
+        for seed in range(25):
+            orders = [tuple(q.text for q in v.questions) for v in self.build(seed)]
+            differ += len(set(orders)) > 1
+        self.assertGreater(differ, 20)
+
+    def test_one_sheet_for_all_versions(self):
+        crops, log = write_answer_sheets(self.build(7), self.out, 'Pinned')
+        self.assertEqual(len(list(self.out.glob('*_answer_sheet.pdf'))), 1, log)
+        self.assertEqual(len({tuple(sorted(c.items())) for c in crops.values()}), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
