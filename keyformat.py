@@ -62,6 +62,14 @@ def load_key_file(path: str) -> dict | None:
     # Dispatch CSV format
     if p.suffix.lower() == '.csv':
         return load_key_csv(path)
+    # A lab practical's markdown source is its own key
+    if p.suffix.lower() in ('.md', '.txt'):
+        import practical
+        try:
+            return practical.to_key_data(practical.load(p))
+        except practical.PracticalError as exc:
+            print(f'[KeyFile] Cannot use {path} as a practical:\n{exc}', flush=True)
+            return None
     try:
         data = json.loads(p.read_text(encoding='utf-8'))
         if not isinstance(data, dict):
@@ -331,8 +339,16 @@ def save_key_csv(path: str, data: dict) -> None:
 
 
 def save_key_file(path: str, data: dict) -> None:
-    """Write an exam key file. Dispatches to CSV or JSON based on file extension."""
+    """
+    Write an exam key file. Dispatches to CSV or JSON based on file extension.
+    A lab practical's markdown source only has its answers brought up to
+    date; everything else in it is the instructor's and is left alone.
+    """
     if Path(path).suffix.lower() == '.csv':
         save_key_csv(path, data)
+        return
+    if Path(path).suffix.lower() in ('.md', '.txt'):
+        import practical
+        practical.sync_answers(path, data.get('open_questions', {}))
         return
     Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')
