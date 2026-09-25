@@ -454,7 +454,7 @@ class pyScanUI(ctk.CTkFrame):
                 self._points_frame.grid_remove()
             else:
                 self._points_frame.grid()
-            if ks.written and not ks.multi:
+            if ks.written:
                 self._written_frame.grid()
             else:
                 self._written_frame.grid_remove()
@@ -603,7 +603,7 @@ class pyScanUI(ctk.CTkFrame):
         if ks.pages > int(self.pagesPerStudentEntry.get() or '1'):
             self.pagesPerStudentEntry.delete(0, 'end')
             self.pagesPerStudentEntry.insert(0, str(ks.pages))
-        if ks.written and not ks.multi and not self.openQvar.get():
+        if ks.written and not self.openQvar.get():
             self.openQvar.set(1)
             self._toggle_ai_frame()
         self._log('Keys loaded: ' + ', '.join(names) + f'. {ks.summary()}')
@@ -737,7 +737,7 @@ class pyScanUI(ctk.CTkFrame):
             return
         ignores = ','.join(str(n) for n in sorted(set((ks.skip if ks else []) + extra_rows)))
         markmissing  = bool(self.setavar.get())
-        openQ        = bool(self.openQvar.get()) and not (ks and ks.multi)
+        openQ        = bool(self.openQvar.get())
         save_marked  = bool(self.saveMarkedVar.get())
         corrmark     = bool(self.corrvar.get())
         thresh       = self.threshVar.get()

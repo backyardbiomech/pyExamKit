@@ -52,7 +52,7 @@ class TestLoadKeys(unittest.TestCase):
         self.assertEqual(len(skips), 1)
         self.assertEqual(ks.skip, [int(skips.pop())])
         self.assertTrue(ks.grouped)
-        self.assertTrue(any('bubbles only' in n for n in ks.notes))
+        self.assertEqual(ks.notes, [])
 
     def test_single_version(self):
         paths = self.write_build(1)

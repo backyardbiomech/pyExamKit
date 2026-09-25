@@ -52,7 +52,7 @@ A mixed stack is graded in one pass whenever more than one version's key is load
 
 Each student's version bubble is read, and each version group is graded against its own key. Results are written per version: `results_versionA.csv`, `marked_versionA/`, and so on.
 
-**A multi-version scan grades bubbles only.** Written answers are not graded or counted in it, and the key summary warns when the keys have any. To grade them, scan each version's sheets on their own, choosing that one key file with **Choose key files…**.
+Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab from its own `results_versionA.csv`, which also rebuilds `results_all_versions_forCanvas.csv`.
 
 When a student's version bubble cannot be read — left blank, or two letters filled — a dialog shows that student's sheet and asks you to assign a version by hand, or to skip the student. Skipped students are named in the log and appear in no version's results, so they have to be dealt with separately.
 

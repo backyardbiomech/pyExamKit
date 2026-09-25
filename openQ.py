@@ -1566,8 +1566,12 @@ class RegradeDialog:
                     bubble_val = float(cfg.get('bubbleVal', 1))
                     open_val   = float(cfg.get('openVal', 2))
                     select_all = bool(cfg.get('selectAll', False))
+                    # The key's own points, when the scan had them; older
+                    # configs fall back to the defaults above
+                    point_values = cfg.get('point_values') or None
                 else:
                     bubble_val, open_val, select_all = 1.0, 2.0, False
+                    point_values = None
                 df_check = pd.read_csv(self._csv_path)
                 has_open = any(c.startswith('openQ_') for c in df_check.columns)
                 grade_functions.gradeResults(
@@ -1577,7 +1581,10 @@ class RegradeDialog:
                     bubbleVal=bubble_val,
                     openVal=open_val,
                     markeddir=Path(self._csv_path).parent / 'marked',
+                    point_values=point_values,
                 )
+                if Path(self._csv_path).name.startswith('results_version'):
+                    grade_functions.write_combined_versions(Path(self._csv_path).parent)
             except Exception as exc:
                 print(f'[Regrade] gradeResults error: {exc}', flush=True)
 

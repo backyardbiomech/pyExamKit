@@ -113,9 +113,6 @@ def load_keys(chosen: list[str]) -> KeySet:
         pages=pages,
         grouped=any(m.get('sheet_rows') for m in metas),
     )
-    if ks.multi and written:
-        ks.notes.append('A scan of several versions grades bubbles only: the written answers '
-                        'are not graded or counted. Scan each version on its own to grade them.')
     if len(set(counts)) > 1:
         ks.notes.append('The versions have different numbers of questions, so each version '
                         'has its own answer sheet; check that every student used the right one.')

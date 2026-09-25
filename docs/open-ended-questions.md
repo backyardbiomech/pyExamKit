@@ -6,7 +6,7 @@ The grading is yours. The transcription and the suggestion are there to make goi
 
 ## Setting up the run
 
-On the [Scan Exams](scanning-and-grading.md) tab, **Grade written answers on screen** is checked for you when the key has written questions. With no key file, check it yourself, and list any mid-exam written question under **More options → Also skip questions**, since its bubble row would otherwise be graded as a wrong answer. Then run the scan as usual. A scan of several versions at once grades bubbles only; scan each version's sheets on their own to grade their written answers.
+On the [Scan Exams](scanning-and-grading.md) tab, **Grade written answers on screen** is checked for you when the key has written questions. With no key file, check it yourself, and list any mid-exam written question under **More options → Also skip questions**, since its bubble row would otherwise be graded as a wrong answer. Then run the scan as usual. A scan of several versions grades each version's written answers in turn, against that version's key.
 
 After the bubble questions are graded, the key image appears. **Drag a box around the answer area for each open-ended question**, in question order. Include only the space where students wrote — not the printed question number, not the label, not the printed line. Each box prompts for a label, which defaults to the next number in your ignore list, so a question numbered 14 on the exam stays question 14 in the results; labels can also be alphanumeric, so `1A` and `1B` work for two blanks in one question. The only way to correct a box is to remove the last one drawn and redraw it. When all the boxes are drawn, **press `g`** and the window closes.
 
@@ -68,7 +68,7 @@ The **Re-grade** tab reopens a finished `results.csv` and lets you edit the acce
 
 Re-grading **only upgrades** — wrong to partial, wrong to correct, partial to correct. It never takes points away. That makes it the right tool for a key that turned out to be too strict, which is the mistake that actually happens, and it means a student cannot lose points because you edited a key after handing work back. To lower a grade, edit the results file directly.
 
-Point the tab at the `results.csv` from the scan, click **Open Re-grader**, edit the answers, and it reports how many grades changed.
+Point the tab at the `results.csv` from the scan (or a version's `results_versionA.csv`), click **Open Re-grader**, edit the answers, and it reports how many grades changed. Scores are recalculated with the per-question points from the key the scan used.
 
 ---
 
