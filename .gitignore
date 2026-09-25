@@ -36,3 +36,6 @@ tests/practicaltest/ExamScanner_outputs/
 # Bubble measurements from tools/bubble_stats.py
 stats.csv
 bubble_stats.csv
+
+# Synthetic practical scans (tools/make_practical_test_stack.py regenerates them)
+tests/fixtures/practical/generated/

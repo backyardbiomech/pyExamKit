@@ -307,6 +307,70 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
     return SheetResult(doc.tobytes(garbage=4, deflate=True), crops)
 
 
+# ── Lab practical form sheets ──────────────────────────────────────────────
+
+PRACTICAL_NOTE = [
+    'Answer only the letters printed on this sheet, at every station.',
+    'Only what is written inside each box will be graded,',
+    'and everything written inside a box will be graded.',
+]
+
+
+def _form_code(page, form):
+    h = L.LAYOUT_CODE_SIZE / 2
+    for (cx, cy), letter in zip(L.FORM_CELLS, L.FORM_LETTERS):
+        if letter in form:
+            page.draw_rect(_rect(cx - h, cy - h, cx + h, cy + h), color=None, fill=BLACK)
+
+
+def build_practical_sheet(stations: int, form: str, title: str = '',
+                          logo=DEFAULT_LOGO) -> bytes:
+    '''
+    A lab practical form sheet: two writing boxes per station, labeled with
+    the form's two letters, on as many pages as the stations need. The form
+    is printed as squares on every page, so the scanner never relies on
+    anything the student wrote to know which questions a box answers.
+    '''
+    form = ''.join(sorted(form.upper()))
+    if len(form) != 2 or any(c not in L.FORM_LETTERS for c in form) or form[0] == form[1]:
+        raise SheetError(f'A form is two different letters from A to D, not "{form}".')
+    try:
+        pages = L.practical_pages(stations)
+        boxes = L.practical_boxes(stations)
+    except L.RunsError as exc:
+        raise SheetError(str(exc)) from None
+
+    doc = fitz.open()
+    for n in range(1, pages + 1):
+        page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
+        _registration(page)
+        _layout_code(page, L.PRACTICAL_CODES[n])
+        _form_code(page, form)
+        # Small print for whoever hands the sheets out and staples them
+        _text(page, 440, 1537, f'Form {form}, page {n} of {pages}', size=7, color=GUIDE)
+        if n == 1:
+            _header(page, logo, title)
+            _id_block(page)
+            y = 190
+            for i, line in enumerate(PRACTICAL_NOTE):
+                _text(page, 60, y, line, size=11, bold=i > 0)
+                y += 26 if i else 40
+        else:
+            _text(page, 60, 54, 'Name', size=8, color=GUIDE)
+            page.draw_line(_p(60, 96), _p(600, 96), color=BLACK, width=0.8)
+        top = L.P_FIRST_TOP[n]
+        _text(page, 60, top - 16, 'Station', size=10, bold=True)
+        for (station, slot), (bp, (x0, y0, x1, y1)) in boxes.items():
+            if bp != n:
+                continue
+            mid = (y0 + y1) / 2 + 6
+            if slot == 0:
+                _text(page, 76, mid, str(station), size=13, bold=True, align='right')
+            _text(page, x0 - 16, mid, form[slot], size=13, bold=True, align='center')
+            page.draw_rect(_rect(x0, y0, x1, y1), color=BLACK, width=0.9)
+    return doc.tobytes(garbage=4, deflate=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description='Draw a pyExamKit answer sheet.')
     ap.add_argument('-n', '--questions', type=int, default=150)

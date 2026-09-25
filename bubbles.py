@@ -73,6 +73,8 @@ def fill_scores(dark: dict[str, np.ndarray], exclude=()) -> dict[str, np.ndarray
     since nearly every bubble in a column is empty. Too few rows for that
     and the whole grid shares one baseline.
     '''
+    if not dark:
+        return {}
     base_keys = [k for k in dark if k not in exclude] or list(dark)
     stack = np.vstack([dark[k] for k in base_keys])
     if stack.shape[0] >= 4:
@@ -195,6 +197,10 @@ def _read_gray(gray, quests, ignores, cutoff, layout) -> SheetRead:
     ignored = {k for k in q_rows if int(k[1:]) in ignores}
     q_scores = fill_scores(darkness(gray, q_rows, paper), exclude=ignored)
     F = fill_level({k: v for k, v in q_scores.items() if k not in ignored})
+    if not q_rows and layout.id_digits:
+        # A page with no answer bubbles (a practical form sheet): the ID's
+        # eight marks are the only ones, so they set the student's level.
+        F = fill_level(fill_scores(darkness(gray, layout.id_digits, paper)))
     cut = max(FLOOR, cutoff * F)
 
     answers, flags = {}, []

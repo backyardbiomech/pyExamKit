@@ -12,7 +12,9 @@ change, since printed stock and archived scans depend on them. 'v2' is the
 generated sheet, with a gap after every fifth row. 'v2-keyed' is the v2
 sheet printed for one exam, whose gaps set off each ordering, matching, and
 dropdown question; its rows are described by run sizes that the exam's key
-carries (see keyed_layout). All share the three registration circles, so
+carries (see keyed_layout). The lab practical form sheet (see practical_boxes)
+has no answer bubbles: page 1 carries the ID, and every page carries writing
+boxes and the form it was printed for. All share the three registration circles, so
 one alignment step serves any of them, and the layout is identified after
 alignment by a printed code (see LAYOUT_CODE_CELLS).
 '''
@@ -57,6 +59,8 @@ class Layout:
     max_questions: int = 150
     # v2-keyed only: row runs, column by column (see keyed_layout)
     columns: list[list[int]] | None = None
+    # Practical form sheets only: which page of the sheet this is
+    practical_page: int = 0
 
     def question_rows(self, quests: int) -> dict[str, Row]:
         return {k: v for k, v in self.questions.items() if int(k[1:]) <= quests}
@@ -214,10 +218,87 @@ def _v2_keyed_unknown() -> Layout:
     return Layout('v2-keyed', 2, {}, id_digits, version=version, max_questions=0)
 
 
-LAYOUTS = {lay.code: lay for lay in (_classic(), _v2(), _v2_keyed_unknown())}
+# ── Lab practical form sheets ──────────────────────────────────────────────
+# Each station is a row of two writing boxes, left for the form's first
+# letter and right for its second. Page 1 keeps the v2 name line and ID block;
+# the stations start below the ID bubbles. Every page carries the form as
+# four squares beside the layout code, one per letter A to D, inked when the
+# form has that letter. The layout code says which page it is.
+PRACTICAL_CODES = {1: 3, 2: 4, 3: 5}       # page -> layout code
+FORM_CELLS = [(300 + 28 * i, 1532) for i in range(4)]
+FORM_LETTERS = 'ABCD'
+P_BOX_H = 72
+P_PITCH = 86                                # box top to next box top
+P_FIRST_TOP = {1: 540, 2: 150, 3: 150}      # first box top on each page
+P_BOTTOM = 1490                             # no box runs below this
+P_BOX_X = [(118, 600), (668, 1150)]         # left and right box, x0 to x1
+P_CROP_INSET = 4                            # crops stay clear of the printed border
+
+
+def practical_rows_per_page(page: int) -> int:
+    return (P_BOTTOM - P_BOX_H - P_FIRST_TOP[page]) // P_PITCH + 1
+
+
+def practical_pages(stations: int) -> int:
+    '''Pages a form sheet with this many stations needs.'''
+    total = 0
+    for page in P_FIRST_TOP:
+        total += practical_rows_per_page(page)
+        if stations <= total:
+            return page
+    raise RunsError(f'A form sheet holds at most {total} stations; this practical has {stations}.')
+
+
+def practical_boxes(stations: int) -> dict[tuple[int, int], tuple[int, tuple[int, int, int, int]]]:
+    '''
+    {(station, slot): (page, (x0, y0, x1, y1))}: the printed box for each
+    station's left (slot 0) and right (slot 1) answer, in the canonical frame.
+    The same on every form; which letter a slot holds depends on the form.
+    '''
+    practical_pages(stations)                 # raises when they do not fit
+    boxes, station = {}, 1
+    for page in P_FIRST_TOP:
+        for r in range(practical_rows_per_page(page)):
+            if station > stations:
+                return boxes
+            y0 = P_FIRST_TOP[page] + r * P_PITCH
+            for slot, (x0, x1) in enumerate(P_BOX_X):
+                boxes[(station, slot)] = (page, (x0, y0, x1, y0 + P_BOX_H))
+            station += 1
+    return boxes
+
+
+def practical_crop(box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = box
+    i = P_CROP_INSET
+    return (x0 + i, y0 + i, x1 - i, y1 - i)
+
+
+def _practical_page(page: int) -> Layout:
+    id_digits = _v2_header()[0] if page == 1 else {}
+    return Layout(f'practical-{page}', PRACTICAL_CODES[page], {}, id_digits,
+                  max_questions=0, practical_page=page)
+
+
+LAYOUTS = {lay.code: lay for lay in (_classic(), _v2(), _v2_keyed_unknown(),
+                                     *(_practical_page(p) for p in PRACTICAL_CODES))}
 CLASSIC = LAYOUTS[0]
 V2 = LAYOUTS[1]
 V2_KEYED = LAYOUTS[2]
+
+
+def _inked(gray, cells) -> list[bool]:
+    half = LAYOUT_CODE_SIZE // 2 - 2           # sample inside the square
+    inked = []
+    for cx, cy in cells:
+        patch = gray[cy - half:cy + half, cx - half:cx + half]
+        inked.append(patch.size > 0 and float(patch.mean()) < 110)
+    return inked
+
+
+def read_form(gray) -> str:
+    '''The form printed on an aligned practical page, such as 'AC'.'''
+    return ''.join(c for c, on in zip(FORM_LETTERS, _inked(gray, FORM_CELLS)) if on)
 
 
 def detect_layout(gray) -> Layout:
@@ -226,11 +307,7 @@ def detect_layout(gray) -> Layout:
     0-255). Unknown codes fall back to classic, since a stray pencil mark is
     the likeliest cause.
     '''
-    half = LAYOUT_CODE_SIZE // 2 - 2           # sample inside the square
-    inked = []
-    for cx, cy in LAYOUT_CODE_CELLS:
-        patch = gray[cy - half:cy + half, cx - half:cx + half]
-        inked.append(patch.size > 0 and float(patch.mean()) < 110)
+    inked = _inked(gray, LAYOUT_CODE_CELLS)
     if not inked[0]:
         return CLASSIC
     code = sum(1 << i for i, on in enumerate(inked[1:]) if on)
