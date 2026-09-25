@@ -130,6 +130,11 @@ class BuildMigrationGoldenFixture(unittest.TestCase):
             self.assertEqual((self.tmpdir / 'images' / name).read_bytes(),
                               (GOLDEN_DIR / 'images' / name).read_bytes())
 
+    def test_key_marks_its_boxes_as_printed(self):
+        """So the key editor offers no tools to move them."""
+        data = keyformat.load_key_csv(str(self.key_path))
+        self.assertEqual(data['metadata']['answer_boxes'], 'printed')
+
     def test_md_question_points_bug_fixed(self):
         """Phase 3.5 fix (docs/ordering-matching-spec.md): a 1-point MD
         question with two dropdowns must split the point evenly across its

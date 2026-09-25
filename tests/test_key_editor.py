@@ -59,6 +59,30 @@ class TestEditorKeepsTheKey(unittest.TestCase):
         self.assertEqual(after['point_values'], before['point_values'])
 
 
+class TestPrintedBoxes(unittest.TestCase):
+    '''The editor offers no box tools for a key whose boxes the sheet printed.'''
+
+    def editor(self, path):
+        with mock.patch.object(openQ.KeyFileEditorDialog, '_build_ui', lambda self: None):
+            return openQ.KeyFileEditorDialog(None, path=str(path))
+
+    def test_built_keys_are_recognized(self):
+        with tempfile.TemporaryDirectory() as d:
+            marked = Path(d) / 'new.csv'
+            data = keyformat.load_key_file(str(HERE / 'testkey.csv'))
+            data['metadata']['answer_boxes'] = 'printed'
+            keyformat.save_key_file(str(marked), data)
+            self.assertTrue(self.editor(marked).printed_boxes)
+            # the marker survives a save from the editor
+            with mock.patch.object(openQ.KeyFileEditorDialog, '_commit_current_edit',
+                                   lambda self: None):
+                keyformat.save_key_file(str(marked), self.editor(marked)._to_data())
+            self.assertEqual(keyformat.load_key_file(str(marked))['metadata']['answer_boxes'],
+                             'printed')
+        self.assertTrue(self.editor(BUILT_KEY).printed_boxes)       # older: sheet_rows
+        self.assertFalse(self.editor(HERE / 'testkey.csv').printed_boxes)
+
+
 class TestPracticalMarks(unittest.TestCase):
     def test_marks_sit_outside_the_boxes(self):
         p = practical.load(PRACTICAL)
