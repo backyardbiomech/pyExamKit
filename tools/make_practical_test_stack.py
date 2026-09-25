@@ -9,9 +9,10 @@ key and then varied: most full credit, some misspelled, some partial-credit
 answers, some wrong (another question's answer), some blank, and a few
 deliberate edge cases (a crossed-out answer, writing that runs past the box,
 a note written outside a box, a very light pencil ID, an ID one digit off the
-roster). Each page is then printed and scanned in software: rotated, shifted,
-scaled, blurred, speckled, and saved as a 200 dpi JPEG inside one PDF, the
-way a copier's scan-to-PDF arrives.
+roster). Each sheet is printed shrunk first (85% by default, as a printer
+with wide margins does), and each filled page is then scanned in software:
+rotated, shifted, scaled, blurred, speckled, and saved as a 200 dpi JPEG
+inside one PDF, the way a copier's scan-to-PDF arrives.
 
 Every name and ID is invented. Written to the output folder:
 
@@ -112,15 +113,20 @@ def choose_answer(rng, q: practical.Question, others: list[str]) -> tuple[str, s
 class Pen:
     '''Handwriting on a page image at scan resolution.'''
 
-    def __init__(self, img: Image.Image, rng: random.Random, s: Student):
+    def __init__(self, img: Image.Image, rng: random.Random, s: Student,
+                 print_scale: float = 1.0):
         self.img, self.rng, self.s = img, rng, s
+        # Where the printer put the shrunken page: canonical -> scan px
+        self.k = K * print_scale
+        self.ox = img.width * (1 - print_scale) / 2
+        self.oy = img.height * (1 - print_scale) / 2
         self.ink = Image.new('L', img.size, 0)          # coverage, 255 = full
         self.draw = ImageDraw.Draw(self.ink)
         self.font = load_font(s.font, s.size)
 
     def write(self, x: float, y: float, text: str) -> float:
         '''Write text with its left end at canonical (x, y middle); return end x (canonical).'''
-        px, py = x * K, y * K
+        px, py = self.ox + x * self.k, self.oy + y * self.k
         drift = self.rng.uniform(-0.04, 0.04)            # a line that climbs or sags
         x0 = px
         for ch in text:
@@ -128,17 +134,19 @@ class Pen:
             self.draw.text((px, py + (px - x0) * drift + jitter), ch, fill=235,
                            font=self.font, anchor='lm')
             px += self.font.getlength(ch) * self.rng.uniform(0.95, 1.08)
-        return px / K
+        return (px - self.ox) / self.k
 
     def strike(self, x0: float, x1: float, y: float):
-        self.draw.line((x0 * K, y * K, x1 * K, (y - 3) * K), fill=235, width=3)
+        self.draw.line((self.ox + x0 * self.k, self.oy + y * self.k,
+                        self.ox + x1 * self.k, self.oy + (y - 3) * self.k), fill=235, width=3)
 
     def bubble(self, cx: float, cy: float, coverage: int):
-        r = 9.5 * K
+        r = 9.5 * self.k
+        x, y = self.ox + cx * self.k, self.oy + cy * self.k
         pts = []
         for a in np.linspace(0, 2 * np.pi, 18, endpoint=False):
             rr = r * self.rng.uniform(0.85, 1.1)
-            pts.append((cx * K + rr * np.cos(a), cy * K + rr * np.sin(a)))
+            pts.append((x + rr * np.cos(a), y + rr * np.sin(a)))
         self.draw.polygon(pts, fill=coverage)
 
     def finish(self) -> Image.Image:
@@ -149,8 +157,8 @@ class Pen:
         return Image.fromarray(out.clip(0, 255).astype(np.uint8))
 
 
-def fill_page(page_img, n, s, p, boxes, rng, answers):
-    pen = Pen(page_img, rng, s)
+def fill_page(page_img, n, s, p, boxes, rng, answers, print_scale=1.0):
+    pen = Pen(page_img, rng, s, print_scale)
     name = f'{s.first} {s.last}'
     if n == 1:
         pen.write(480, 88, name)
@@ -243,8 +251,23 @@ def make_answers(rng, p, s: Student, idx: int) -> dict[str, tuple[str, str]]:
     return answers
 
 
-def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207) -> Path:
-    '''Write the stack and its truth files to outdir; return the scans PDF path.'''
+def printed(img: Image.Image, print_scale: float) -> Image.Image:
+    '''The page as a printer with wide margins prints it: shrunk and centered.'''
+    if print_scale == 1:
+        return img
+    small = img.resize((round(img.width * print_scale), round(img.height * print_scale)),
+                       Image.LANCZOS)
+    page = Image.new('RGB', img.size, 'white')
+    page.paste(small, ((img.width - small.width) // 2, (img.height - small.height) // 2))
+    return page
+
+
+def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207,
+               print_scale: float = 1.0) -> Path:
+    '''
+    Write the stack and its truth files to outdir; return the scans PDF path.
+    print_scale shrinks each sheet as it is printed, before students write on it.
+    '''
     rng = random.Random(seed)
     p = practical.load(source)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -262,7 +285,8 @@ def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207
         for n, page in enumerate(sheets[s.form], 1):
             pix = page.get_pixmap(matrix=fitz.Matrix(DPI / 72, DPI / 72), colorspace=fitz.csRGB)
             img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
-            img = scan(fill_page(img, n, s, p, boxes, rng, answers), rng)
+            img = printed(img, print_scale)
+            img = scan(fill_page(img, n, s, p, boxes, rng, answers, print_scale), rng)
             buf = io.BytesIO()
             img.save(buf, 'JPEG', quality=80)
             out = pdf.new_page(width=612, height=792)
@@ -295,9 +319,12 @@ def main():
                     help='output folder (default: generated/ beside the source)')
     ap.add_argument('-n', '--students', type=int, default=12)
     ap.add_argument('--seed', type=int, default=207)
+    ap.add_argument('--print-scale', type=float, default=0.85,
+                    help='how much the printer shrinks each sheet (default 0.85, a '
+                         'printer with wide margins)')
     args = ap.parse_args()
     outdir = args.outdir or args.source.parent / 'generated'
-    scans = make_stack(args.source, outdir, args.students, args.seed)
+    scans = make_stack(args.source, outdir, args.students, args.seed, args.print_scale)
     print(f'Wrote {args.students} students to {scans}, with roster.csv, students.csv, '
           f'and answers.csv beside it.')
 

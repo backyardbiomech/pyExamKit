@@ -306,7 +306,9 @@ def save_gradebook_xlsx(xlsx_path: str, df, ptsdf, open_q_answers: dict | None =
             str(df.loc[row_str, 'studentID']),
         ]
         for qi, qc in enumerate(q_cols):
-            ans = str(df.loc[row_str, qc])
+            ans = df.loc[row_str, qc]
+            # blank, as for a practical question not on this student's form
+            ans = '' if pd.isna(ans) else str(ans)
             try:
                 pts = float(ptsdf.loc[row_str, qc])
             except (ValueError, TypeError, KeyError):

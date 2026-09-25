@@ -573,7 +573,8 @@ class pyScanUI(ctk.CTkFrame):
     def _browse_key_file(self):
         filenames = filedialog.askopenfilenames(
             title='Choose the key file (the other versions are found beside it)',
-            filetypes=[('CSV key file', '*.csv'), ('JSON files', '*.json')])
+            filetypes=[('Key file', '*.csv *.json *.md'), ('CSV key file', '*.csv'),
+                       ('Lab practical', '*.md'), ('JSON files', '*.json')])
         if filenames:
             self._load_keys(list(filenames))
 
@@ -726,7 +727,7 @@ class pyScanUI(ctk.CTkFrame):
             self._log(f'Input error: {exc}. Check the number of questions, points, '
                       'and pages per student.')
             return
-        if not quests:
+        if not quests and not (ks and ks.practical):
             self._log('With no key file, give the number of questions.')
             return
         extra = self.ignoreEntry.get().replace(' ', '').strip(',')

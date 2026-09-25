@@ -290,7 +290,7 @@ def to_key_data(p: Practical) -> dict:
     for q in p.questions():
         qk = f'openQ_{q.key}'
         open_qs[qk] = {'full': list(q.full), 'partial': list(q.partial),
-                       'coords': None, 'page': 1}
+                       'coords': None, 'page': 1, 'text': q.text}
         points[qk] = p.points_for(q)
     return {
         'bubble_answers': {},

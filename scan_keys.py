@@ -30,12 +30,18 @@ class KeySet:
     pages: int                         # pages per student the written answers need
     grouped: bool                      # a sheet printed with rows grouped by question
     notes: list[str] = field(default_factory=list)
+    practical: str = ''                # a lab practical's forms, 'AB,CD,...'; '' otherwise
+    stations: int = 0                  # a lab practical's station count
 
     @property
     def multi(self) -> bool:
         return len(self.paths) > 1
 
     def summary(self) -> str:
+        if self.practical:
+            return (f'lab practical · {self.stations} stations, {self.written} written '
+                    f'questions · forms {self.practical.replace(",", ", ")} · '
+                    f'{self.pages} pages per student')
         parts = [f'{len(self.paths)} versions ({", ".join(sorted(self.paths))})'
                  if self.multi else 'one version']
         parts.append(f'{self.num_questions} questions'
@@ -73,6 +79,8 @@ def load_keys(chosen: list[str]) -> KeySet:
     '''
     if not chosen:
         raise KeySetError('Choose a key file.')
+    if any(Path(c).suffix.lower() in ('.md', '.txt') for c in chosen):
+        return _practical(chosen)
     files = _siblings(Path(chosen[0])) if len(chosen) == 1 else [Path(c) for c in chosen]
     keys: dict[str, tuple[str, dict]] = {}
     for f in files:
@@ -116,4 +124,25 @@ def load_keys(chosen: list[str]) -> KeySet:
     if len(set(counts)) > 1:
         ks.notes.append('The versions have different numbers of questions, so each version '
                         'has its own answer sheet; check that every student used the right one.')
+    return ks
+
+
+def _practical(chosen: list[str]) -> KeySet:
+    """A lab practical's source file, which is its own key and covers every form."""
+    import practical
+    import sheet_layout
+    if len(chosen) > 1:
+        raise KeySetError('A lab practical has one key, its .md file; choose only that.')
+    try:
+        p = practical.load(chosen[0])
+    except practical.PracticalError as exc:
+        raise KeySetError(f'{Path(chosen[0]).name} cannot be used: {exc}') from None
+    except (OSError, UnicodeDecodeError) as exc:
+        raise KeySetError(f'Could not read {Path(chosen[0]).name}: {exc}') from None
+    ks = KeySet(paths={'': str(chosen[0])}, num_questions=0, skip=[], has_points=True,
+                written=len(p.questions()), pages=sheet_layout.practical_pages(len(p.stations)),
+                grouped=False, practical=','.join(p.forms), stations=len(p.stations))
+    ks.notes += p.warnings[:10]
+    if len(p.warnings) > 10:
+        ks.notes.append(f'…and {len(p.warnings) - 10} more warnings.')
     return ks

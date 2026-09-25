@@ -223,7 +223,20 @@ class OpenQs(object):
                  ai_context='', preloaded_file: str = '', review_perfect: bool = True,
                  key_file_data: dict | None = None, key_file_path: str = '',
                  pages_per_student: int = 1, ignores=None, strictness: float = 0.0,
-                 output_csv_path: str = ''):
+                 output_csv_path: str = '', locate=None, student_info=None):
+        '''
+        locate, when given, says where each student's answer to each question
+        is: locate(question_key, student_index) returns (image_path, (x1, y1,
+        x2, y2)), or None when that student has no such question (a lab
+        practical form without that letter). Without it, every student
+        answers every question at the key's coordinates.
+        student_info(student_index) returns (label, name_crop or None), shown
+        in the grading window so the grader knows whose answer it is.
+        '''
+        self._locate = locate
+        self._student_info = student_info
+        self._q_text: dict[str, str] = {}
+        self._progress = None
         self._ignores: list[int] = sorted(ignores) if ignores else []
         self.openQcoords = {}
         self.openQkeyimgs = {}
@@ -258,11 +271,17 @@ class OpenQs(object):
             # Populate page mapping from key file data
             for qk, qdata in open_qs.items():
                 self._q_pages[qk] = int(qdata.get('page', 1) or 1)
-            # Pre-load coords for questions that have them
+            # Pre-load coords for questions that have them. With locate, the
+            # coordinates are per student, so every question is present
+            # without any.
             for qk, qdata in open_qs.items():
                 raw_coords = qdata.get('coords')
                 if raw_coords and len(raw_coords) == 4:
                     self.openQcoords[qk] = tuple(int(c) for c in raw_coords)
+                elif locate is not None:
+                    self.openQcoords[qk] = None
+                if qdata.get('text'):
+                    self._q_text[qk] = str(qdata['text'])
             # Pre-load answers and key text from key file
             for qk, qdata in open_qs.items():
                 full_list = [str(a).strip() for a in qdata.get('full', []) if str(a).strip()]
@@ -386,20 +405,17 @@ class OpenQs(object):
                 for qk, qv in self.openQcoords.items():
                     crops, ids = [], []
                     # Include key image as id '0' when available (not in key-file mode)
-                    if image_list[0] is not None:
+                    if image_list[0] is not None and qv is not None:
                         key_arr = np.array(PILImage.open(image_list[0]).convert('RGB'))
                         crops.append(key_arr[qv[1]:qv[3], qv[0]:qv[2]])
                         ids.append('0')
-                    _page = self._q_pages.get(qk, 1)
                     for s_idx in range(_n_students):
-                        actual_pos = 1 + s_idx * _pps + (_page - 1)
-                        if actual_pos >= len(image_list):
+                        where = self._where(qk, s_idx, image_list)
+                        if where is None or where[0] is None:
                             continue
-                        img_file = image_list[actual_pos]
-                        if img_file is None:
-                            continue
+                        img_file, box = where
                         arr = np.array(PILImage.open(img_file).convert('RGB'))
-                        crops.append(arr[qv[1]:qv[3], qv[0]:qv[2]])
+                        crops.append(arr[box[1]:box[3], box[0]:box[2]])
                         ids.append(str(s_idx + 1))  # 1-indexed student id = resdf row
                     batch = _ai_ocr_mod.recognize_batch(
                         crops, ids,
@@ -489,50 +505,70 @@ class OpenQs(object):
                     self._delete_progress_cache()
         # ─────────────────────────────────────────────────────────────────
 
+        # Each question is graded across the students who have it, one after
+        # another; the saved position is a place in that list, which is the
+        # student index when every student has every question.
         qi = _start_qi
         _resume_first_q = (_start_qi > 0 or _start_s_idx > 0)
+        _from_end = False
         while qi < len(openqs):
             if qi < 0:
                 qi = 0
             k = openqs[qi]
-            v = self.openQcoords[k]
-            _page = self._q_pages.get(k, 1)
-            # On the first question of a resume, start from the saved student index
+            who = [s for s in range(_n_students)
+                   if self._where(k, s, image_list) is not None]
             if _resume_first_q and qi == _start_qi:
-                s_idx = _start_s_idx
+                pos = _start_s_idx
+            elif _from_end:
+                pos = len(who) - 1       # stepped back from the next question
             else:
-                s_idx = 0
-            _resume_first_q = False
+                pos = 0
+            _resume_first_q = _from_end = False
             went_back_q = False
-            while s_idx < _n_students:
-                if s_idx < 0:
-                    s_idx = 0
-                actual_pos = 1 + s_idx * _pps + (_page - 1)
-                img_path = image_list[actual_pos] if actual_pos < len(image_list) else None
+            while pos < len(who):
+                if pos < 0:
+                    pos = 0
+                s_idx = who[pos]
+                img_path, v = self._where(k, s_idx, image_list)
+                self._progress = (pos + 1, len(who))
                 grade = self._gradeOneAnswer(img_path, k, v, img_idx=s_idx + 1)
                 if grade == 'back':
-                    s_idx -= 1
-                    if s_idx < 0:
-                        # Back past start of this question → go to previous question
-                        qi -= 1
+                    pos -= 1
+                    if pos < 0:
+                        # Back past start of this question → previous question's last answer
+                        if qi > 0:
+                            qi -= 1
+                            _from_end = True
                         went_back_q = True
                         break
                     continue
                 self.openQres.loc[s_idx + 1, k] = grade
                 # Save progress after each answer so a crash can be recovered
-                _next_s = s_idx + 1
+                _next_s = pos + 1
                 _next_qi = qi
-                if _next_s >= _n_students:
+                if _next_s >= len(who):
                     _next_qi = qi + 1
                     _next_s = 0
                 self._save_progress_cache(qi=_next_qi, s_idx=_next_s, openqs=openqs,
                                           questions=_current_questions)
-                s_idx += 1
+                pos += 1
             if went_back_q:
                 continue   # restart outer loop at new qi
             qi += 1
         # Grading complete — remove the progress cache
         self._delete_progress_cache()
+
+    def _where(self, k: str, s_idx: int, image_list) -> 'tuple | None':
+        '''
+        (image path, crop box) of student s_idx's answer to question k, or
+        None when that student has no such question. The path is None when
+        the page is missing from the scans.
+        '''
+        if self._locate is not None:
+            return self._locate(k, s_idx)
+        page = self._q_pages.get(k, 1)
+        pos = 1 + s_idx * self._pages_per_student + (page - 1)
+        return (image_list[pos] if pos < len(image_list) else None), self.openQcoords[k]
 
     # ------------------------------------------------------------------
     # Progress-cache helpers (resume after crash / AI-token reuse)
@@ -921,7 +957,9 @@ class OpenQs(object):
         result = {'grade': None}
 
         win = tk.Toplevel(self._root)
-        win.title(f'Grading {k}  —  C: correct   P: partial   X: wrong   B: go back')
+        _label = k[len('openQ_'):] if k.startswith('openQ_') else k
+        _count = f' ({self._progress[0]} of {self._progress[1]})' if self._progress else ''
+        win.title(f'Grading {_label}{_count}  —  C: correct   P: partial   X: wrong   B: go back')
         win.resizable(False, False)
         # Pin every grading window to the same screen position so they don't cascade.
         # On the first call _grading_win_geometry is unset; we let the window land
@@ -929,6 +967,25 @@ class OpenQs(object):
         if hasattr(self, '_grading_win_geometry') and self._grading_win_geometry:
             win.geometry(self._grading_win_geometry)
         _win_bg = win.cget('bg')
+
+        # Whose answer this is: the roster name, and their handwriting of it
+        if self._student_info is not None and img_idx is not None:
+            who_label, name_crop = self._student_info(img_idx - 1)
+            who_frame = tk.Frame(win)
+            who_frame.pack(fill='x', padx=8, pady=(6, 0))
+            tk.Label(who_frame, text=who_label, font=('Arial', 13, 'bold')).pack(side='left')
+            if name_crop is not None:
+                pil_name = PILImage.fromarray(name_crop)
+                if pil_name.width > 360:
+                    pil_name = pil_name.resize(
+                        (360, int(pil_name.height * 360 / pil_name.width)), PILImage.LANCZOS)
+                name_img = _pil_to_tkphoto(pil_name, master=win)
+                name_lbl = tk.Label(who_frame, image=name_img, relief='groove', bd=1)
+                name_lbl.pack(side='left', padx=(12, 0))
+                name_lbl.tk_img = name_img
+        if self._q_text.get(k):
+            tk.Label(win, text=f'{_label}. {self._q_text[k]}', font=('Arial', 12),
+                     wraplength=680, justify='left').pack(anchor='w', padx=8, pady=(4, 0))
 
         if key_crop is not None:
             header_text = 'KEY (top) ↕ Student (bottom)'
@@ -1587,6 +1644,19 @@ class RegradeDialog:
                     grade_functions.write_combined_versions(Path(self._csv_path).parent)
             except Exception as exc:
                 print(f'[Regrade] gradeResults error: {exc}', flush=True)
+            # A lab practical's source file is its key: keep its answers current
+            try:
+                key_file = cfg.get('key_file') if config_path.exists() else None
+                if key_file and Path(key_file).exists():
+                    kd = load_key_file(key_file)
+                    for qk, oq in (kd or {}).get('open_questions', {}).items():
+                        oq['full'] = list(self._acceptable_answers.get(qk, oq['full']))
+                        oq['partial'] = list(self._partial_credit_answers.get(qk, oq['partial']))
+                    if kd:
+                        save_key_file(key_file, kd)
+                        print(f'[Regrade] Answers saved to {key_file}', flush=True)
+            except Exception as exc:
+                print(f'[Regrade] Could not update the key file: {exc}', flush=True)
 
             status_var.set(
                 f'Done. {n} grade(s) upgraded and scores recalculated.')

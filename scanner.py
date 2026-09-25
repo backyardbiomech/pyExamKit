@@ -15,6 +15,8 @@ import scan_functions
 import bubbles
 import sheet_layout
 import roster as roster_mod
+import practical
+import practical_scan
 import grade_functions
 from openQ import OpenQs
 from keyformat import load_key_file, save_key_file
@@ -239,7 +241,9 @@ class Scanner(object):
         return areas, flags
 
     def run(self):
-        if self.version_keys:
+        if self._key_data and self._key_data.get('metadata', {}).get('practical'):
+            self._run_practical()
+        elif self.version_keys:
             self._run_multi_version()
         elif self.key_file_path and self._key_data:
             self._run_with_key_file()
@@ -633,10 +637,11 @@ class Scanner(object):
             self.outpdf.output(str(self.outdir / 'marked.pdf'))
         print('All steps complete!')
 
-    def _grade_written(self, image_list, key_data, key_path, csv_path):
+    def _grade_written(self, image_list, key_data, key_path, csv_path, **where):
         """Grade the written answers of the students in image_list ([None]
         then each student's pages) against one key. Returns the grader, or
-        None when the key has no written questions."""
+        None when the key has no written questions. `where` passes OpenQs its
+        locate and student_info hooks, for sheets whose boxes vary by student."""
         if not key_data.get('open_questions'):
             return None
         openQs = OpenQs(
@@ -653,6 +658,7 @@ class Scanner(object):
             ignores=self.ignores,
             strictness=self.strictness,
             output_csv_path=csv_path,
+            **where,
         )
         # Re-save the key with any answers the grader accepted during review
         if key_path:
@@ -693,6 +699,111 @@ class Scanner(object):
                 if text and grade in ('CC', 'CX', 'XX'):
                     df.loc[row, qk] = f'{grade}: {text}'
         return df
+
+    def _run_practical(self):
+        """
+        Grade a lab practical: every form in one stack, against the one key
+        the practical's source file is. See practical_scan.py.
+        """
+        p = practical.load(self.key_file_path)
+        n_pages = sheet_layout.practical_pages(len(p.stations))
+        self.pages_per_student = n_pages
+
+        # 1. Align every page and read what it is; read the ID on each page 1
+        reads, id_reads = [], {}
+        for i, path in enumerate(self.image_list):
+            aligned_path = str(self.aligneddir / f'aligned_{i + 1:03d}.jpg')
+            try:
+                if self.reuse_aligned:
+                    print(f'Re-reading {i + 1}')
+                    aligned = self._load_aligned(path)
+                    aligned_path = path
+                else:
+                    print(f'Processing scan {i + 1}')
+                    aligned = Image(path, self.scan_settings).aligned
+                    scan_functions.saveimg(i + 1, aligned, self.aligneddir)
+            except ValueError as exc:
+                print(f'[Practical] Scan {i + 1}: {exc}', flush=True)
+                reads.append(practical_scan.PageRead(i + 1, 0, '', None))
+                continue
+            gray = bubbles.to_gray(aligned)
+            lay = sheet_layout.detect_layout(gray)
+            page = lay.practical_page
+            form = sheet_layout.read_form(gray) if page else ''
+            reads.append(practical_scan.PageRead(i + 1, page, form, aligned_path))
+            if page == 1:
+                id_reads[i + 1] = bubbles.read_sheet(aligned, 0, self.ignores, self.cutoff,
+                                                     layout=lay)
+        sheets, alerts = practical_scan.group_pages(reads, n_pages)
+        for a in alerts:
+            self._alert(a)
+        if not sheets:
+            print('[Practical] No practical form sheets were found in the scans.', flush=True)
+            return
+        print(f'[Practical] {len(sheets)} students, forms: '
+              + ', '.join(f'{f} {sum(s.form == f for s in sheets)}'
+                          for f in sorted({s.form for s in sheets})), flush=True)
+
+        # 2. One row per student, with their form; row 0 is the key
+        self.resdf = pd.DataFrame('', index=range(len(sheets) + 1),
+                                  columns=['LastName', 'FirstName', 'studentID', 'form'])
+        self.resdf.loc[0] = ['KEY', '', '', 'ignore']
+        self.reads = {}
+        for row, sheet in enumerate(sheets, 1):
+            r = id_reads[sheet.first_scan]
+            self.reads[row] = r
+            for col in ('LastName', 'FirstName', 'studentID'):
+                self.resdf.loc[row, col] = r.answers[col]
+            self.resdf.loc[row, 'form'] = sheet.form
+        self._apply_roster()
+        self._write_read_alerts()
+        for row, sheet in enumerate(sheets, 1):
+            problems = sheet.notes + [practical_scan.form_problem(sheet.form, p)]
+            for note in filter(None, problems):
+                self._alert(f'PRACTICAL: scan {sheet.first_scan} '
+                            f'({self._who(row)}): {note}.')
+
+        # 3. Written answers, station by station, each across the students who have it
+        labels = [self._who(row) + f'  ·  form {s.form}' for row, s in enumerate(sheets, 1)]
+        image_list = [None] + [r.path if r else None for s in sheets for r in s.pages]
+        csv_path = str(self.outdir / 'results.csv')
+        openQs = self._grade_written(
+            image_list, self._key_data, self.key_file_path, csv_path,
+            locate=practical_scan.make_locate(sheets, len(p.stations)),
+            student_info=practical_scan.make_student_info(sheets, labels))
+        self.resdf = self._with_written(self.resdf, openQs)
+
+        # 4. Results, points, Canvas file
+        self.resCsv = csv_path
+        self.resdf.to_csv(self.resCsv, index=True, index_label='index')
+        point_values = self._key_data.get('point_values')
+        openQs.save_artifacts(self.resCsv, grade_config={
+            'bubbleVal': self.bubbleVal, 'openVal': self.openVal,
+            'selectAll': self.markmissing, 'point_values': point_values,
+            'key_file': str(Path(self.key_file_path).resolve())})
+        grade_functions.gradeResults(self.resCsv, self.markmissing, True, self.bubbleVal,
+                                     self.openVal, self.markeddir, self.strictness,
+                                     point_values=point_values)
+
+        # 5. Marked sheets
+        if self.save_marked:
+            graded = pd.read_csv(self.resCsv, dtype=object).set_index('index')
+            practical_scan.mark_sheets(graded, sheets, p, self.markeddir,
+                                       grade_functions._get_font(40),
+                                       grade_functions._get_font(28))
+            print('Saving marked files')
+            self.outpdf = FPDF('P', 'pt', 'Letter')
+            scan_functions.savePdf(self.markeddir, self.outpdf, None)
+            self.outpdf.output(str(self.outdir / 'marked.pdf'))
+        print('All steps complete!')
+
+    def _who(self, row) -> str:
+        '''A student as the grader and ALERT.txt name them: roster name, else the ID.'''
+        last, first, sid = (str(self.resdf.loc[row, c])
+                            for c in ('LastName', 'FirstName', 'studentID'))
+        if last not in ('', '-', 'nan'):
+            return f'{last}, {first}'.strip(', ')
+        return f'ID {sid}'
 
     def _run_with_key_file(self):
         """Scan all images as students; populate key row 0 from the JSON key file."""
