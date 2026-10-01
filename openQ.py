@@ -258,6 +258,8 @@ class OpenQs(object):
         self.openQkeyimgs = {}
         self.openQkeytext = {}   # OCR text from each key crop
         self._ai_texts: dict[str, dict[int, str]] = {}  # {qkey: {img_idx: text}}
+        # Read once, so the whole run and its cache name the same model
+        self._ai_model = _ai_ocr_mod.current_model()
         self.acceptable_answers: dict[str, list] = {}   # {qk: [str, ...]}
         self.partial_credit_answers: dict[str, list] = {}  # {qk: [str, ...]}
         self._transcriptions: dict[str, dict] = {}      # {qk: {img_idx: (text, conf)}}
@@ -387,9 +389,18 @@ class OpenQs(object):
                 print('[AI OCR] No API key provided — skipping AI OCR.', flush=True)
                 ai_ocr = False
         if ai_ocr and len(image_list) > 1:
-            # Use cached AI transcriptions when available to avoid repeat API charges
-            if (_loaded_cache and _loaded_cache.get('ai_texts')
-                    and _cache_questions == _current_questions):
+            # Use cached AI transcriptions when available to avoid repeat API
+            # charges, but only the chosen model's: re-running with another
+            # model is how two are compared. A cache older than the model
+            # menu came from Haiku 4.5.
+            _cache_model = (_loaded_cache or {}).get('ai_model', 'claude-haiku-4-5')
+            _cached = bool(_loaded_cache and _loaded_cache.get('ai_texts')
+                           and _cache_questions == _current_questions)
+            if _cached and _cache_model != self._ai_model:
+                print(f'[AI OCR] Saved transcriptions came from '
+                      f'{_ai_ocr_mod.model_label(_cache_model)}; transcribing again.',
+                      flush=True)
+            if _cached and _cache_model == self._ai_model:
                 print('[AI OCR] Loading cached AI transcriptions (no API call)…', flush=True)
                 _cp = self._progress_cache_path()
                 if _cp:
@@ -415,7 +426,8 @@ class OpenQs(object):
                                                     self.partial_credit_answers.get(qk, [])]:
                                 self.partial_credit_answers.setdefault(qk, []).append(_ans)
             else:
-                print('[AI OCR] Running batch handwriting recognition…', flush=True)
+                print(f'[AI OCR] Running batch handwriting recognition with '
+                      f'{_ai_ocr_mod.model_label(self._ai_model)}…', flush=True)
                 _pps = self._pages_per_student
                 _n_students = max(1, (len(image_list) - 1) // _pps)
                 for qk, qv in self.openQcoords.items():
@@ -437,6 +449,7 @@ class OpenQs(object):
                         crops, ids,
                         context=ai_context,
                         api_key=api_key,
+                        model=self._ai_model,
                     )
                     # '0' is the key image; remaining entries are students
                     ai_key_txt = batch.pop('0', '')
@@ -626,6 +639,7 @@ class OpenQs(object):
                     for qk, per_q in self._ai_texts.items()
                 },
                 'key_texts': dict(self.openQkeytext),
+                'ai_model': self._ai_model,
             }
             if openqs is not None:
                 grades: dict = {}

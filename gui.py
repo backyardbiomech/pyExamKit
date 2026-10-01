@@ -213,6 +213,17 @@ class pyScanUI(ctk.CTkFrame):
         self.aiCustomContextEntry.grid(row=1, column=1, columnspan=2, padx=(0, 4), pady=(0, 2), sticky='w')
         self.aiCustomContextEntry.grid_remove()
 
+        # One model setting, shared with the Build Key tab and saved with the
+        # API key, so a change in either place holds for both and next session
+        ctk.CTkLabel(self._ai_context_row, text="Model:").grid(
+            row=2, column=0, padx=(0, 6), pady=2, sticky='w')
+        self.aiModelVar = ctk.StringVar(value=ai_ocr.model_label(ai_ocr.current_model()))
+        ctk.CTkOptionMenu(self._ai_context_row,
+                          values=ai_ocr.MODEL_LABELS,
+                          variable=self.aiModelVar,
+                          command=self._on_ai_model_change,
+                          width=260).grid(row=2, column=1, padx=(0, 8), pady=2, sticky='w')
+
         ctk.CTkLabel(
             self._ai_context_row,
             text="⚠  This sends cropped answer images and an anonymized index to a cloud server.\n"
@@ -220,7 +231,7 @@ class pyScanUI(ctk.CTkFrame):
             justify='left',
             text_color='#b45309',
             font=small,
-        ).grid(row=2, column=0, columnspan=3, padx=(0, 4), pady=(4, 2), sticky='w')
+        ).grid(row=3, column=0, columnspan=3, padx=(0, 4), pady=(4, 2), sticky='w')
 
         self.reviewPerfectVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(self._ai_frame,
@@ -409,6 +420,15 @@ class pyScanUI(ctk.CTkFrame):
             row=1, column=1, columnspan=2, padx=(0, 4), pady=(0, 2), sticky='w')
         self._keyBuildCustomContextEntry.grid_remove()
 
+        ctk.CTkLabel(self._key_build_ai_row, text="Model:").grid(
+            row=2, column=0, padx=(0, 6), pady=2, sticky='w')
+        ctk.CTkOptionMenu(
+            self._key_build_ai_row,
+            values=ai_ocr.MODEL_LABELS,
+            variable=self.aiModelVar,
+            command=self._on_ai_model_change,
+            width=260).grid(row=2, column=1, padx=(0, 8), pady=2, sticky='w')
+
         ctk.CTkButton(key_frame, text="Build Key from Exam Scan…",
                       command=self._open_key_builder).grid(
             row=4, column=0, columnspan=2, pady=10)
@@ -573,6 +593,9 @@ class pyScanUI(ctk.CTkFrame):
             self.aiCustomContextEntry.grid()
         else:
             self.aiCustomContextEntry.grid_remove()
+
+    def _on_ai_model_change(self, label: str):
+        ai_ocr.save_config({'ai_model': ai_ocr.MODEL_IDS[label]})
 
     def _open_ai_settings(self):
         """Open a dialog for the user to enter and save their Anthropic API key."""

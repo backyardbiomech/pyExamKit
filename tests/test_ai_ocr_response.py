@@ -5,15 +5,20 @@ assumes. openQ indexes transcriptions by student row via int(label), so an
 invented or malformed label used to raise partway through building the
 review window -- after the API call had already been paid for.
 
-No network calls here; _clean_response is pure and is tested directly.
+No network calls here: _clean_response is pure and is tested directly, and
+recognize_batch runs against a fake client.
 """
 import json
 import os
 import stat
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
+
+import numpy as np
 
 import ai_ocr
 import openQ
@@ -93,6 +98,84 @@ class ApiKeyFilePermissions(unittest.TestCase):
         ai_ocr.save_config({'ai_context': 'Biology exam.'})
         self.assertEqual(json.loads(self.path.read_text()),
                          {'anthropic_api_key': 'sk-ant-FAKE', 'ai_context': 'Biology exam.'})
+
+
+class ModelChoice(unittest.TestCase):
+    '''The model menu's choice is saved in the config file, and the request
+    is shaped for the model it goes to. A fake client stands in for the API.'''
+
+    def setUp(self):
+        self.path = Path(tempfile.mkdtemp(prefix='ai_ocr_cfg_')) / '.pyexamkit_config.json'
+        patcher = mock.patch.object(ai_ocr, 'CONFIG_PATH', self.path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.requests = []
+
+    def _run(self, *content, stop_reason='end_turn', model=''):
+        requests = self.requests
+
+        class Messages:
+            def create(self, **kwargs):
+                requests.append(kwargs)
+                return SimpleNamespace(stop_reason=stop_reason, content=list(content))
+
+        fake = SimpleNamespace(Anthropic=lambda api_key: SimpleNamespace(messages=Messages()))
+        crops = [np.zeros((8, 8, 3), np.uint8)] * 2
+        with mock.patch.dict(sys.modules, {'anthropic': fake}):
+            return ai_ocr.recognize_batch(crops, ['1', '2'], api_key='sk-ant-FAKE', model=model)
+
+    def test_default_is_haiku(self):
+        self.assertEqual(ai_ocr.current_model(), 'claude-haiku-4-5')
+
+    def test_saved_choice_is_used(self):
+        ai_ocr.save_config({'ai_model': 'claude-sonnet-5-5'})
+        self.assertEqual(ai_ocr.current_model(), 'claude-sonnet-5-5')
+        self._run(SimpleNamespace(type='text', text='{}'))
+        self.assertEqual(self.requests[0]['model'], 'claude-sonnet-5-5')
+
+    def test_a_model_no_longer_offered_falls_back(self):
+        ai_ocr.save_config({'ai_model': 'claude-haiku-4-5-20251001'})
+        self.assertEqual(ai_ocr.current_model(), ai_ocr.DEFAULT_MODEL)
+
+    def test_every_menu_label_maps_back_to_its_model(self):
+        for label in ai_ocr.MODEL_LABELS:
+            self.assertEqual(ai_ocr.model_label(ai_ocr.MODEL_IDS[label]), label)
+
+    def test_sonnet_gets_effort_and_room_to_think(self):
+        self._run(SimpleNamespace(type='text', text='{}'), model='claude-sonnet-5-5')
+        req = self.requests[0]
+        self.assertEqual(req['output_config'], {'effort': 'low'})
+        self.assertGreaterEqual(req['max_tokens'], 8000)
+
+    def test_haiku_gets_no_effort(self):
+        """Haiku 4.5 rejects an effort setting."""
+        self._run(SimpleNamespace(type='text', text='{}'), model='claude-haiku-4-5')
+        self.assertNotIn('output_config', self.requests[0])
+
+    def test_reply_read_past_a_leading_thinking_block(self):
+        out = self._run(SimpleNamespace(type='thinking', thinking=''),
+                        SimpleNamespace(type='text', text='{"1": "aorta", "2": "vena cava"}'),
+                        model='claude-sonnet-5-5')
+        self.assertEqual(out, {'1': 'aorta', '2': 'vena cava'})
+
+    def test_refusal_leaves_the_batch_blank(self):
+        out = self._run(SimpleNamespace(type='text', text='{"1": "x"}'), stop_reason='refusal')
+        self.assertEqual(out, {})
+
+    def test_truncated_reply_leaves_the_batch_blank(self):
+        out = self._run(SimpleNamespace(type='text', text='{"1": "aor'), stop_reason='max_tokens')
+        self.assertEqual(out, {})
+
+
+class CacheNamesItsModel(unittest.TestCase):
+    def test_saved_progress_records_the_model(self):
+        q = object.__new__(openQ.OpenQs)
+        out = Path(tempfile.mkdtemp(prefix='openq_cache_'))
+        q.__dict__.update(_output_csv_path=str(out / 'app_data' / 'results.csv'),
+                          openQcoords={'openQ_1': (0, 0, 1, 1)}, _ai_texts={},
+                          openQkeytext={}, _ai_model='claude-sonnet-5-5')
+        q._save_progress_cache()
+        self.assertEqual(q._load_progress_cache()['ai_model'], 'claude-sonnet-5-5')
 
 
 if __name__ == '__main__':

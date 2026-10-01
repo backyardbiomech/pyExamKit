@@ -813,7 +813,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.40" },
+    { name = "anthropic", specifier = ">=0.89" },
     { name = "customtkinter", specifier = ">=5.2" },
     { name = "fpdf2", specifier = ">=2.7" },
     { name = "jinja2", specifier = ">=3.0.0" },

@@ -50,7 +50,7 @@
 
 **What leaves my computer?** Only the cropped answer images and a row number, and only when AI OCR is checked. Nothing else in the app sends anything anywhere. Crop tightly and no name or ID is in the image at all.
 
-**What does it cost?** Transcription uses a small Anthropic model, batched twenty images at a time, billed to your own API account. A typical exam is cents rather than dollars, but it is your account and your key.
+**What does it cost?** Transcription uses Claude Haiku 4.5 unless you choose Claude Sonnet 5.5, which costs twice as much per token. Images are batched twenty at a time, billed to your own API account. A typical exam is cents rather than dollars, but it is your account and your key.
 
 **Where is my API key stored?** In `~/.pyexamkit_config.json`, in plain text, created readable and writable only by you on macOS and Linux. On Windows the file is protected by your user profile's permissions.
 
