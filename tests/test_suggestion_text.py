@@ -21,15 +21,24 @@ def explain(text, threshold=None):
 
 class TestExplain(unittest.TestCase):
     def test_correct_names_the_match(self):
+        s, msg = explain('Renal Pelvis')
+        self.assertEqual(s, 'CC')
+        self.assertIn('correct. It matches “renal pelvis”', msg)
+
+    def test_correct_near_miss_gives_the_likeness(self):
         s, msg = explain('renal pelvus')
         self.assertEqual(s, 'CC')
-        self.assertIn('correct', msg)
-        self.assertIn('“renal pelvis”', msg)
+        self.assertIn('correct. It is 92% like “renal pelvis”', msg)
 
     def test_partial_from_the_list(self):
         s, msg = explain('pelvis')
         self.assertEqual(s, 'CX')
-        self.assertIn('partial-credit answer “pelvis”', msg)
+        self.assertIn('matches the partial-credit answer “pelvis”', msg)
+
+    def test_partial_near_miss_gives_the_likeness(self):
+        s, msg = explain('pelvus')
+        self.assertEqual(s, 'CX')
+        self.assertIn('83% like the partial-credit answer “pelvis”', msg)
 
     def test_partial_from_strictness(self):
         s, msg = explain('renal pyramid', threshold=0.5)
