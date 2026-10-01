@@ -84,31 +84,77 @@ class TestPrintedBoxes(unittest.TestCase):
 
 
 class TestPracticalMarks(unittest.TestCase):
+    '''Each graded box is marked with the points it earned, beside the box
+    and never on the writing.'''
+    GRADES = [('CC', 2.0, '2'), ('CX', 0.5, '0.5'), ('XX', 0.0, '0'), ('CX', 2 / 3, '0.67')]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.p = practical.load(PRACTICAL)
+        cls.pdf = answer_sheet.build_practical_sheet(len(cls.p.stations), 'AC', cls.p.title, None)
+        cls.boxes = L.practical_boxes(len(cls.p.stations))
+        row = {'LastName': 'Doe', 'FirstName': 'Jo', 'studentID': '1', 'partialscore': 0}
+        pts, cls.expected = {}, {}
+        qs = [q for q in cls.p.questions() if q.letter in 'AC']
+        for n, q in enumerate(qs):
+            grade, earned, text = cls.GRADES[n % len(cls.GRADES)]
+            row[f'openQ_{q.key}'] = f'{grade}: written'
+            pts[f'openQ_{q.key}'] = earned
+            cls.expected[q.key] = text
+        cls.results = pd.DataFrame([row], index=['1'])
+        cls.points = pd.DataFrame([pts], index=['1'])
+
+    def _mark(self, out: Path) -> list[practical_scan.PageRead]:
+        reads = []
+        for n, page in enumerate(fitz.open(stream=self.pdf, filetype='pdf'), 1):
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            path = out / f'a{n}.png'
+            Image.frombytes('RGB', (pix.width, pix.height), pix.samples).save(path)
+            reads.append(practical_scan.PageRead(n, n, 'AC', str(path)))
+        practical_scan.mark_sheets(self.results, self.points,
+                                   [practical_scan.Sheet('AC', reads)], self.p, out,
+                                   grade_functions._get_font(28))
+        return reads
+
     def test_marks_sit_outside_the_boxes(self):
-        p = practical.load(PRACTICAL)
-        pdf = answer_sheet.build_practical_sheet(len(p.stations), 'AC', p.title, None)
-        boxes = L.practical_boxes(len(p.stations))
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
-            reads = []
-            for n, page in enumerate(fitz.open(stream=pdf, filetype='pdf'), 1):
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                path = out / f'a{n}.png'
-                Image.frombytes('RGB', (pix.width, pix.height), pix.samples).save(path)
-                reads.append(practical_scan.PageRead(n, n, 'AC', str(path)))
-            row = {'LastName': 'Doe', 'FirstName': 'Jo', 'studentID': '1', 'partialscore': 0}
-            row.update({f'openQ_{q.key}': 'XX' for q in p.questions() if q.letter in 'AC'})
-            practical_scan.mark_sheets(pd.DataFrame([row], index=['1']),
-                                       [practical_scan.Sheet('AC', reads)], p, out,
-                                       grade_functions._get_font(40),
-                                       grade_functions._get_font(28))
+            self._mark(out)
             pages = [np.array(Image.open(out / f'Doe_Jo_1_p{n}.jpg').convert('RGB'))
                      .astype(int) for n in (1, 2)]
-        for (_, _), (page, (x0, y0, x1, y1)) in boxes.items():
+        # Green, orange, and red marks are saturated; the printed sheet is not
+        inked = lambda a: ((a.max(axis=-1) - a.min(axis=-1)) > 100).sum()  # noqa: E731
+        for (_, _), (page, (x0, y0, x1, y1)) in self.boxes.items():
             im = pages[page - 1]
-            red = lambda a: ((a[..., 0] > 150) & (a[..., 1] < 90)).sum()  # noqa: E731
-            self.assertEqual(red(im[y0:y1, x0:x1]), 0, 'a mark inside a box')
-            self.assertGreater(red(im[y0:y1, x1:x1 + 40]), 20, 'no mark beside a box')
+            self.assertEqual(inked(im[y0:y1, x0:x1]), 0, 'a mark inside a box')
+            self.assertGreater(inked(im[y0:y1, x1:x1 + 40]), 20, 'no mark beside a box')
+
+    def test_each_mark_is_the_points_earned(self):
+        drawn = []
+
+        class Recorder:
+            def __init__(self, image):
+                pass
+
+            def text(self, xy, text, fill=None, font=None, **_):
+                drawn.append((xy, text, fill))
+
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(practical_scan.ImageDraw, 'Draw', Recorder):
+            self._mark(Path(d))
+        marks = [text for _, text, _ in drawn if not text.startswith('Form')]
+        qs = [q for q in self.p.questions() if q.letter in 'AC']
+        self.assertEqual(marks, [self.expected[q.key] for q in qs])
+        colors = {text: fill for _, text, fill in drawn}
+        self.assertEqual(colors['2'], practical_scan.GRADE_COLOR['CC'])
+        self.assertEqual(colors['0.5'], practical_scan.GRADE_COLOR['CX'])
+        self.assertEqual(colors['0'], practical_scan.GRADE_COLOR['XX'])
+
+    def test_a_wide_mark_shrinks_to_clear_the_next_letter(self):
+        font = grade_functions._get_font(28)
+        room = practical_scan.MARK_ROOM[0]
+        self.assertIs(practical_scan._fit(font, '2', room), font)
+        self.assertLessEqual(practical_scan._fit(font, '0.67', room).getlength('0.67'), room)
 
 
 if __name__ == '__main__':

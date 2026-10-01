@@ -169,6 +169,7 @@ Built as described under Output format. What remains is to look at it: open the 
 
 - **Edit… on a practical key** is disabled (`gui._refresh_scan_tab`); the key is the source file. Checking it found a bug in the editor for every key: saving recomputed `num_questions` from the non-ignored bubble answers, so a key with written questions lost rows from the end and its last questions went unread. It now counts to the highest row, ignored rows included (`tests/test_key_editor.py`).
 - **Grade marks** sit just right of each box (`practical_scan.mark_sheets`), clear of an answer that fills it. A left box's mark falls just before the right box's printed letter; the color and size tell them apart.
+- **Marks are points** (2026-10-01): each box shows the points it earned, read from the points file the gradebook uses, in place of C, P, or X. A mark too wide for the gap before the right box's letter, such as 0.67, is drawn smaller to fit (`practical_scan._fit`); covering the writing is the one thing a mark must not do.
 - **Merged and released** as v3.3.0.
 
 ### Working here

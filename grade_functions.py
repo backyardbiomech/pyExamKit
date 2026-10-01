@@ -233,6 +233,16 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
     return total_upgraded
 
 
+def points_mark(value) -> str | None:
+    """Points as a marked sheet shows them (2, 1.5, 0.67), or None when the
+    value is not a number, as in a scan that was never graded."""
+    try:
+        points = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if np.isnan(points) else f'{round(points, 2):g}'
+
+
 def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr,
                pages_per_student=1, q_pages=None, row_areas=None, flags=None):
     """Mark student answer sheets with correct/incorrect indicators.
@@ -269,6 +279,10 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     BLUE  = (0, 0, 255)
     ORANGE = (255, 140, 0)
     flag_font = _get_font(size=20)
+    WRITTEN_COLOR = {'CC': GREEN, 'CX': ORANGE, 'XX': RED}
+    # Written answers are marked with the points they earned, from the points
+    # file gradeResults wrote; the key's own sheet shows what each is worth
+    graded = outputs.load(resCsv)
     row_areas = row_areas or {}
     flags = flags or {}
     base_areas = qAreas
@@ -334,13 +348,18 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
             if col[0:4] == 'open':
                 # extract just the 2-char grade code (supports 'CC: text' format)
                 grade_code = str(df.loc[row_str, col])[:2]
-                coord = 0
-                for lett in list(grade_code):
-                    markX = qAreas[col][0][0] + coord
-                    markY = qAreas[col][1][1]
-                    color = GREEN if lett == 'C' else RED
-                    draw.text((markX, markY - TEXT_Y_OFFSET), lett, fill=color, font=font)
-                    coord += 30
+                if grade_code not in WRITTEN_COLOR:
+                    continue
+                if row_str == '0':
+                    mark = points_mark(graded.possible.get(col))
+                elif row_str in graded.pts.index and col in graded.pts.columns:
+                    mark = points_mark(graded.pts.loc[row_str, col])
+                else:
+                    mark = None
+                markX = qAreas[col][0][0]
+                markY = qAreas[col][1][1]
+                draw.text((markX, markY - TEXT_Y_OFFSET), mark or grade_code,
+                          fill=WRITTEN_COLOR[grade_code], font=font)
 
             else:  # bubble questions
                 markY = qAreas[col][1][1]

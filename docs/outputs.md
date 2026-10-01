@@ -45,6 +45,7 @@ The marks mean:
 - a green **C** on a correct answer
 - a red **X** on an incorrect answer
 - a red **M** beside a question number where a correct answer was **missing** from the student's marks
+- on a written answer, the **points** it earned: green for full credit, orange for partial, a red **0** for none (on the key's own sheet, the points the question is worth)
 
 The M only appears when select-all-that-apply grading is on, and then it appears on single-answer questions too. Expect to explain it: a student who marked B when the answer was A gets a red X on B *and* a red M for having missed A. On a genuine select-all question a student can collect green C's, red X's, and a red M all on one question.
 

@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image as PILImage, ImageDraw
 
+import grade_functions
 import practical
 import sheet_layout as L
 
@@ -143,19 +144,34 @@ def make_student_info(sheets: list[Sheet], labels: list[str]):
     return info
 
 
-GRADE_MARK = {'CC': ('C', (0, 170, 0)), 'CX': ('P', (230, 140, 0)), 'XX': ('X', (220, 0, 0))}
+GRADE_COLOR = {'CC': (0, 170, 0), 'CX': (230, 140, 0), 'XX': (220, 0, 0)}
+# Width a mark has beside each slot's box: a left box's runs up to the right
+# box's printed letter, a right box's up to the page margin
+MARK_ROOM = {0: L.P_BOX_X[1][0] - 28 - (L.P_BOX_X[0][1] + 4),
+             1: L.PAGE_W - 12 - (L.P_BOX_X[1][1] + 4)}
 
 
-def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
-                markeddir: Path, font, small_font) -> None:
+def _fit(font, text: str, room: float):
+    '''font, or a smaller size of it when text would run wider than room,
+    so a mark like 0.67 shrinks rather than running into the next letter.'''
+    width = font.getlength(text)
+    if width <= room:
+        return font
+    return font.font_variant(size=max(14, int(font.size * room / width)))
+
+
+def mark_sheets(results, points, sheets: list[Sheet], p: practical.Practical,
+                markeddir: Path, font) -> None:
     '''
-    Write each student's pages with every graded box marked C, P, or X just
-    right of the box, and the score and form on page 1. results is the
-    graded results frame, indexed '1'.. in sheet order.
+    Write each student's pages with every graded box marked with the points
+    it earned, just right of the box, and the score and form on page 1.
+    results is the graded results frame and points the points earned per
+    question (outputs.Graded.pts), both indexed '1'.. in sheet order.
     '''
     boxes = L.practical_boxes(len(p.stations))
     for i, sheet in enumerate(sheets, 1):
         row = results.loc[str(i)]
+        earned = points.loc[str(i)]
         pages = [PILImage.open(r.path).convert('RGB') if r and r.path else None
                  for r in sheet.pages]
         draws = [ImageDraw.Draw(im) if im else None for im in pages]
@@ -163,20 +179,22 @@ def mark_sheets(results, sheets: list[Sheet], p: practical.Practical,
             for q in p.questions():
                 if q.letter not in sheet.form:
                     continue
-                page, (x0, y0, x1, y1) = boxes[(q.station, sheet.form.index(q.letter))]
+                slot = sheet.form.index(q.letter)
+                page, (x0, y0, x1, y1) = boxes[(q.station, slot)]
                 d = draws[page - 1]
-                cell = str(row.get(f'openQ_{q.key}', ''))
-                if d is None or cell[:2] not in GRADE_MARK:
+                col = f'openQ_{q.key}'
+                grade = str(row.get(col, ''))[:2]
+                mark = grade_functions.points_mark(earned.get(col))
+                if d is None or grade not in GRADE_COLOR or mark is None:
                     continue
-                mark, color = GRADE_MARK[cell[:2]]
                 # Just outside the box's right edge, clear of the writing
-                # and of the next box's printed letter
-                d.text((x1 + 5, (y0 + y1) / 2), mark, fill=color, font=font, anchor='lm')
+                d.text((x1 + 4, (y0 + y1) / 2), mark, fill=GRADE_COLOR[grade],
+                       font=_fit(font, mark, MARK_ROOM[slot]), anchor='lm')
         if draws[0] is not None:
             score = float(row.get('partialscore', 0) or 0)
             possible = p.total_points(sheet.form) if len(sheet.form) == 2 else 0
             draws[0].text((470, 118), f'Form {sheet.form}   Score {score:g} / {possible:g}',
-                          fill=(220, 0, 0), font=small_font)
+                          fill=(220, 0, 0), font=font)
         base = '_'.join(_safe(row.get(c, '')) for c in ('LastName', 'FirstName', 'studentID'))
         for n, im in enumerate(pages, 1):
             if im is not None:
