@@ -34,6 +34,33 @@ def _levenshtein_ratio(a: str, b: str) -> float:
     return 1.0 - dp[n] / max(m, n)
 
 
+def _normalized(text: str) -> str:
+    return ' '.join(text.split()).lower()
+
+
+def exact_match(student_text: str, answers) -> bool:
+    """
+    True when the reading is one of answers word for word, ignoring only
+    capitals and spacing.
+    """
+    reading = _normalized(student_text or '')
+    return bool(reading) and any(reading == _normalized(a) for a in answers if a)
+
+
+def exact_grade(student_text: str, full, partial) -> str | None:
+    """
+    The grade an answer may be given without the grader seeing it: 'CC' when
+    the reading is a full-credit answer exactly, 'CX' when it is a
+    partial-credit answer exactly, otherwise None. A near miss, a misspelling
+    included, always goes to the grader.
+    """
+    if exact_match(student_text, full):
+        return 'CC'
+    if exact_match(student_text, partial):
+        return 'CX'
+    return None
+
+
 def suggest_grade(student_text: str, key_texts,
                   conf: float,
                   conf_threshold: float = 0.20,
@@ -101,14 +128,19 @@ def explain_suggestion(student_text: str, full: list, partial: list,
     alike = f'{round(ratio * 100)}% alike'
     if suggestion == 'CC':
         best = max(s for s in scored if s[2] == 'full')
-        return (f'Suggested: correct. It matches “{best[1]}” ({round(best[0] * 100)}% alike). '
+        if exact_match(student_text, [best[1]]):
+            return f'Suggested: correct. It matches “{best[1]}”. Enter accepts.'
+        return (f'Suggested: correct. It is {round(best[0] * 100)}% like “{best[1]}”. '
                 f'Enter accepts.')
     if suggestion == 'CX':
         pmatch = [s for s in scored if s[2] == 'partial' and s[0] >= 0.70]
         if pmatch:
             best = max(pmatch)
-            return (f'Suggested: partial. It matches the partial-credit answer “{best[1]}” '
-                    f'({round(best[0] * 100)}% alike). Enter accepts.')
+            if exact_match(student_text, [best[1]]):
+                return (f'Suggested: partial. It matches the partial-credit answer “{best[1]}”. '
+                        f'Enter accepts.')
+            return (f'Suggested: partial. It is {round(best[0] * 100)}% like the partial-credit '
+                    f'answer “{best[1]}”. Enter accepts.')
         best = max(s for s in scored if s[2] == 'full')
         return (f'Suggested: partial. It is {round(best[0] * 100)}% like “{best[1]}”, '
                 f'within the partial-credit strictness. Enter accepts.')

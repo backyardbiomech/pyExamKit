@@ -11,7 +11,7 @@ import tkinter.simpledialog
 from pathlib import Path
 from PIL import Image as PILImage, ImageDraw as PILImageDraw
 
-from ocr import attempt_ocr, explain_suggestion, suggest_grade
+from ocr import attempt_ocr, exact_grade, explain_suggestion, suggest_grade
 import ai_ocr as _ai_ocr_mod
 import outputs
 from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
@@ -958,12 +958,13 @@ class OpenQs(object):
                                  else None)
         suggestion = _suggest(_key_list, _partial_list)
 
-        # Auto-grade perfect matches without showing the window
-        if not force_show and not self._review_perfect and suggestion == 'CC':
-            return 'CC'
-        # Auto-grade CX suggestions (explicit partial-answer match or spelling-threshold match)
-        if not force_show and suggestion == 'CX' and (_partial_list or self._strictness > 0):
-            return 'CX'
+        # Graded unseen only when the reading is a key answer exactly; a near
+        # miss, a misspelling included, is the grader's call. Review perfect
+        # matches shows exact full-credit answers too.
+        exact = exact_grade(student_text, _key_list, _partial_list)
+        if (not force_show and exact and exact == suggestion
+                and (exact == 'CX' or not self._review_perfect)):
+            return exact
         self._last_shown = True
 
         # ── The window ─────────────────────────────────────────────────────
@@ -1285,7 +1286,8 @@ class OpenQs(object):
         """
         Re-grade the students graded before current_idx on qk against the
         key's answers as they now stand, only ever upgrading (XX→CX, XX→CC,
-        CX→CC). Returns the number of grades upgraded.
+        CX→CC), and only where the answer is a key answer exactly, since the
+        grader does not see these. Returns the number of grades upgraded.
         """
         grade_rank = {'CC': 3, 'CX': 2, 'XX': 1, '': 0}
         upgraded = 0
@@ -1293,18 +1295,11 @@ class OpenQs(object):
         for prev_idx in range(1, current_idx):
             if prev_idx not in transcriptions_for_q:
                 continue
-            text, conf = transcriptions_for_q[prev_idx]
-            if not text:
-                continue
+            text, _conf = transcriptions_for_q[prev_idx]
             old_grade = (self.openQres.loc[prev_idx, qk]
                          if prev_idx in self.openQres.index else '')
-            new_sug = suggest_grade(
-                text,
-                self.acceptable_answers.get(qk, []),
-                conf,
-                partial_texts=self.partial_credit_answers.get(qk, []),
-                partial_threshold=self._strictness if self._strictness > 0 else None,
-            )
+            new_sug = exact_grade(text, self.acceptable_answers.get(qk, []),
+                                  self.partial_credit_answers.get(qk, []))
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
                 self.openQres.loc[prev_idx, qk] = new_sug
                 upgraded += 1
@@ -1365,11 +1360,10 @@ class RegradeDialog:
     and gradeResults() when the user clicks Apply.
     """
 
-    def __init__(self, parent, csv_path: str, on_complete=None, strictness: float = 0.0):
+    def __init__(self, parent, csv_path: str, on_complete=None):
         self._parent = parent
         self._csv_path = csv_path
         self._on_complete = on_complete
-        self._strictness = float(strictness)
 
         # Prefer the app_data/ layout; fall back to the oldest layout, with
         # the answers beside results.csv
@@ -1602,8 +1596,7 @@ class RegradeDialog:
                 # Re-grade CSV
                 n = grade_functions.regrade_open_questions(
                     self._csv_path, self._acceptable_answers, self._transcriptions,
-                    partial_answers=self._partial_credit_answers,
-                    strictness=self._strictness)
+                    partial_answers=self._partial_credit_answers)
             except Exception as exc:
                 status_var.set(f'Error: {exc}')
                 return

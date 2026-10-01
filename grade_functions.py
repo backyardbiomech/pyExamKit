@@ -180,20 +180,20 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
 
 
 def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
-                            partial_answers: dict | None = None,
-                            strictness: float = 0.0) -> int:
+                            partial_answers: dict | None = None) -> int:
     """
     Re-evaluate open-ended question grades in an existing results.csv using
     updated acceptable_answers and stored transcriptions.
 
-    Only upgrades grades (XX→CC, XX→CX, CX→CC), never downgrades.
-    Returns the total number of grade slots upgraded.
+    Only upgrades grades (XX→CC, XX→CX, CX→CC), never downgrades, and only
+    where the answer is a key answer exactly, since the grader does not see
+    these. Returns the total number of grade slots upgraded.
 
     acceptable_answers: {qk: [str, ...]}
     transcriptions:     {qk: {str(idx): [text, conf]}}
     partial_answers:    {qk: [str, ...]}  (optional; earn partial credit CX)
     """
-    from ocr import suggest_grade
+    from ocr import exact_grade
     df = pd.read_csv(resCsv, dtype=object)
     df.set_index(['index'], inplace=True)
     df.index = df.index.map(str)
@@ -216,15 +216,11 @@ def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions
                 continue
             if row_str in ('0', 'numb_correct'):
                 continue
-            text, conf = trans_val[0], float(trans_val[1])
-            if not text:
-                continue
+            text = trans_val[0]
             old_grade_cell = str(df.loc[row_str, qk])
             # support 'CC: transcription text' format as well as plain 'CC'/'CX'/'XX'
             old_grade = old_grade_cell[:2] if old_grade_cell[:2] in ('CC', 'CX', 'XX') else old_grade_cell
-            new_sug = suggest_grade(text, acc_list, conf,
-                                    partial_texts=partial_list if partial_list else None,
-                                    partial_threshold=strictness if strictness > 0 else None)
+            new_sug = exact_grade(text, acc_list, partial_list)
             if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
                 df.loc[row_str, qk] = f'{new_sug}: {text}'
                 total_upgraded += 1

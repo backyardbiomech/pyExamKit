@@ -235,7 +235,7 @@ class pyScanUI(ctk.CTkFrame):
 
         self.reviewPerfectVar = ctk.IntVar(value=0)
         ctk.CTkCheckBox(self._ai_frame,
-                        text="Review perfect matches? (confirm even high-confidence correct answers)",
+                        text="Review perfect matches? (confirm even answers that match the key exactly)",
                         variable=self.reviewPerfectVar).grid(
             row=3, column=0, columnspan=3, padx=0, pady=(4, 2), sticky='w')
 
@@ -576,7 +576,6 @@ class pyScanUI(ctk.CTkFrame):
             return
         from openQ import RegradeDialog
         RegradeDialog(self.parent, csv_path,
-                      strictness=self.strictnessVar.get(),
                       on_complete=lambda n: self._log(
                           f'Re-grading complete: {n} grade(s) upgraded.'))
 
