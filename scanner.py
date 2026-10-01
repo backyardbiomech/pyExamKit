@@ -800,9 +800,8 @@ class Scanner(object):
 
         # 5. Marked sheets
         if self.save_marked:
-            graded = pd.read_csv(self.resCsv, dtype=object).set_index('index')
-            practical_scan.mark_sheets(graded, sheets, p, self.markeddir,
-                                       grade_functions._get_font(40),
+            graded = outputs.load(self.resCsv)
+            practical_scan.mark_sheets(graded.df, graded.pts, sheets, p, self.markeddir,
                                        grade_functions._get_font(28))
             print('Saving marked files')
             self.outpdf = FPDF('P', 'pt', 'Letter')

@@ -8,9 +8,13 @@ Public API
 CONTEXT_PRESETS  : list[(label, context_string)] — preset context options for the UI
 PRESET_LABELS    : list[str]
 PRESET_VALUES    : dict[label, context_string | None]  (None = custom entry)
+MODEL_LABELS     : list[str] — model menu labels, default first
+MODEL_IDS        : dict[label, model_id]
 
 load_config()    -> dict
 save_config(data)
+current_model()  -> str   the model chosen in the app, saved in the config file
+model_label(model_id) -> str
 
 recognize_batch(crops, student_ids, context, api_key, model) -> dict[str, str]
 """
@@ -93,6 +97,36 @@ CONTEXT_PRESETS: list[tuple[str, str | None]] = [
 PRESET_LABELS: list[str] = [label for label, _ in CONTEXT_PRESETS]
 PRESET_VALUES: dict[str, str | None] = {label: val for label, val in CONTEXT_PRESETS}
 
+# ── Models ───────────────────────────────────────────────────────────────────
+
+# Models offered for transcription: (menu label, model ID, request options).
+# The first is the default. Sonnet 5.5 thinks before it answers when it judges
+# a task needs it, and that thinking counts against max_tokens: low effort keeps
+# it brief on a reading task, and the larger max_tokens leaves room for it as
+# well as the reply. Haiku 4.5 takes no effort setting.
+MODELS: list[tuple[str, str, dict]] = [
+    ('Claude Haiku 4.5 (fast, cheapest)', 'claude-haiku-4-5',
+     {'max_tokens': 2048}),
+    ('Claude Sonnet 5.5 (slower, costs more)', 'claude-sonnet-5-5',
+     {'max_tokens': 16000, 'output_config': {'effort': 'low'}}),
+]
+
+DEFAULT_MODEL: str = MODELS[0][1]
+MODEL_LABELS: list[str] = [label for label, _, _ in MODELS]
+MODEL_IDS: dict[str, str] = {label: model for label, model, _ in MODELS}
+_REQUEST_OPTIONS: dict[str, dict] = {model: opts for _, model, opts in MODELS}
+
+
+def current_model() -> str:
+    """The model chosen in the app, or the default when none is saved or the
+    saved one is no longer offered (a model retired in a later release)."""
+    model = load_config().get('ai_model', '')
+    return model if model in _REQUEST_OPTIONS else DEFAULT_MODEL
+
+
+def model_label(model: str) -> str:
+    return next((label for label, m, _ in MODELS if m == model), model)
+
 # ── Encoding helpers ─────────────────────────────────────────────────────────
 
 _BATCH_SIZE = 20   # max images per API call (stays well within token limits)
@@ -115,7 +149,7 @@ def recognize_batch(
     student_ids: list[str],
     context: str = '',
     api_key: str = '',
-    model: str = 'claude-haiku-4-5-20251001',
+    model: str = '',
 ) -> dict[str, str]:
     """
     Transcribe a list of handwritten image crops via the Claude API.
@@ -126,7 +160,7 @@ def recognize_batch(
     student_ids : matching list of string IDs (used as dict keys in result).
     context     : optional subject-specific hint for the model.
     api_key     : Anthropic API key; falls back to saved config if empty.
-    model       : Claude model identifier.
+    model       : Claude model ID; falls back to current_model() if empty.
 
     Returns
     -------
@@ -147,6 +181,8 @@ def recognize_batch(
         return {}
 
     client = anthropic.Anthropic(api_key=api_key)
+    model = model or current_model()
+    options = _REQUEST_OPTIONS.get(model, {'max_tokens': 2048})
 
     system = (
         'You are a handwriting transcription assistant for a university exam autograder. '
@@ -188,11 +224,22 @@ def recognize_batch(
         try:
             msg = client.messages.create(
                 model=model,
-                max_tokens=512,
                 system=system,
                 messages=[{'role': 'user', 'content': user_content}],
+                **options,
             )
-            raw = msg.content[0].text.strip()
+            if msg.stop_reason == 'refusal':
+                print(f'[AI OCR] The model declined a batch of {len(chunk_ids)} image(s); '
+                      f'those will be blank for manual review.', flush=True)
+                continue
+            if msg.stop_reason == 'max_tokens':
+                print(f'[AI OCR] The reply for a batch of {len(chunk_ids)} image(s) was cut '
+                      f'off at the length limit; those will be blank for manual review.',
+                      flush=True)
+                continue
+            # By type, not position: a model that thinks first puts a
+            # thinking block ahead of the text.
+            raw = next((b.text for b in msg.content if b.type == 'text'), '').strip()
             # Strip any accidental markdown fences
             raw = re.sub(r'```[a-z]*\n?', '', raw).strip().rstrip('`')
             chunk_results = json.loads(raw)
