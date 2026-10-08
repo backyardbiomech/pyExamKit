@@ -1,8 +1,9 @@
 import sys
 import io
 import json
+import traceback
 from pathlib import Path
-from scanner import Scanner
+from scanner import Scanner, PageError
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -872,10 +873,19 @@ class pyScanUI(ctk.CTkFrame):
                     version_key_paths=version_key_paths or None,
                     reuse_aligned=reuse_aligned,
                     roster_path=self._roster_path)
-        except (bubbles.KeyedSheetError, sheet_layout.RunsError) as exc:
+        except (bubbles.KeyedSheetError, sheet_layout.RunsError, PageError) as exc:
             sys.stdout = old_stdout
             self._log(f'Scan stopped: {exc}')
             messagebox.showerror('Scan stopped', str(exc))
+            return
+        except Exception as exc:
+            # Anything else used to reach only the launching terminal, leaving
+            # the log on its last progress line as if the scan had hung
+            sys.stdout = old_stdout
+            self._log(f'Scan failed: {exc}\n\n{traceback.format_exc()}')
+            messagebox.showerror(
+                'Scan failed',
+                f'{exc}\n\nThe full error is in the log.')
             return
         finally:
             sys.stdout = old_stdout

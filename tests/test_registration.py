@@ -6,6 +6,7 @@ little large. Each is checked with blur, which fattens every mark.
     python -m unittest tests.test_registration -v
 '''
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 
 import answer_sheet  # noqa: E402
 import scan_functions  # noqa: E402
+import scanner  # noqa: E402
 from settings import Settings  # noqa: E402
 
 
@@ -57,8 +59,33 @@ class TestRegistration(unittest.TestCase):
                     self.assertLess(np.abs(pts - expected(scale)).max(), 2.0)
 
     def test_blank_page_raises(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(scan_functions.RegistrationError):
             scan_functions.getRegPts(np.full((1584, 1224, 3), 255, np.uint8), Settings())
+
+
+class PageNamedTest(unittest.TestCase):
+    '''A page without its circles stops the scan with a message naming the
+    page, not the one before it that the log last printed.'''
+
+    def scanner_over(self, names, from_pdf):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        for name in names:
+            Image.new('RGB', (1224, 1584), 'white').save(tmp / name)
+        s = scanner.Scanner.__new__(scanner.Scanner)
+        s.image_list = [str(tmp / n) for n in names]
+        s.scan_settings = Settings()
+        s._from_pdf = from_pdf
+        return s
+
+    def test_pdf_page_number(self):
+        s = self.scanner_over([f'_scan_{i:03d}.jpg' for i in range(17)], True)
+        with self.assertRaisesRegex(scanner.PageError, r'^Page 9 of 17 in the PDF: found 0 of the 3'):
+            s._align(8)
+
+    def test_jpg_file_name(self):
+        s = self.scanner_over(['key.jpg', 'smith.jpg'], False)
+        with self.assertRaisesRegex(scanner.PageError, r'^smith\.jpg: '):
+            s._align(1)
 
 
 if __name__ == '__main__':

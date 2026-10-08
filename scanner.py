@@ -23,6 +23,10 @@ from keyformat import load_key_file, save_key_file
 import outputs
 
 
+class PageError(ValueError):
+    '''A page that cannot be aligned; the message names it for the user.'''
+
+
 class Scanner(object):
     '''
     Scanner is the main class that contains scanner settings from the GUI,
@@ -143,6 +147,7 @@ class Scanner(object):
                 self.image_list = [str(p) for p in _existing]
                 print(f'[Scanner] Re-using {len(self.image_list)} existing aligned images. '
                       'Skipping PDF split and alignment.', flush=True)
+        self._from_pdf = Path(input_file).suffix.lower() == '.pdf'
         if not self.reuse_aligned:
             self.image_list = init_functions.filenames(
                 input_file, scan_jpgs_dir=self.app_data_dir / 'scanJPGs')
@@ -172,6 +177,19 @@ class Scanner(object):
         registration and warping."""
         with PILImage.open(path) as pil:
             return np.array(pil.convert('RGB'))
+
+    def _align(self, i):
+        """Load and align image i, or stop the scan with a message naming
+        the page, since the last log line is the page before it."""
+        try:
+            return Image(self.image_list[i], self.scan_settings)
+        except scan_functions.RegistrationError as exc:
+            where = (f'Page {i + 1} of {len(self.image_list)} in the PDF'
+                     if self._from_pdf else Path(self.image_list[i]).name)
+            raise PageError(
+                f'{where}: {exc}\n\nRescan that page with all three corner '
+                'dots showing, or take it out of the stack, then scan again.'
+            ) from exc
 
     def _read(self, row, aligned, layout=None, answers_only=False):
         """Read one sheet's bubbles into resdf row `row`. answers_only keeps
@@ -323,8 +341,8 @@ class Scanner(object):
                 print(f'Re-reading {i + 1}')
                 aligned = self._load_aligned(self.image_list[i])
             else:
-                img = Image(self.image_list[i], self.scan_settings)
                 print(f'Processing scan {i + 1}')
+                img = self._align(i)
                 scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
                 aligned = img.aligned
             if i % pps == 0:   # first page per student — scan MC bubbles
@@ -494,12 +512,12 @@ class Scanner(object):
             if self.reuse_aligned:
                 if not is_first_page:
                     continue  # aligned images already exist; only scan first page per student
-                print('Re-reading {0:1d}'.format(i))
+                print(f'Re-reading {i + 1}')
                 aligned = self._load_aligned(self.image_list[i])
             else:
                 # create image object, which will load and align image
-                img = Image(self.image_list[i], self.scan_settings)
-                print('Processing scan {0:1d}'.format(i))
+                print(f'Processing scan {i + 1}')
+                img = self._align(i)
                 #save the aligned image aligned_00i.jpg in ./aligned
                 scan_functions.saveimg(i, img.aligned, self.aligneddir)
                 if not is_first_page:
@@ -845,8 +863,8 @@ class Scanner(object):
                 print('Re-reading {:1d}'.format(i + 1))
                 aligned = self._load_aligned(self.image_list[i])
             else:
-                img = Image(self.image_list[i], self.scan_settings)
-                print('Processing scan {:1d}'.format(i + 1))
+                print(f'Processing scan {i + 1}')
+                img = self._align(i)
                 scan_functions.saveimg(i + 1, img.aligned, self.aligneddir)
                 if not is_first_page:
                     continue  # aligned image saved; only scan first page per student

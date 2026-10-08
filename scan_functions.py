@@ -78,6 +78,10 @@ def _arrangement_error(pts, expected) -> float:
     return abs(base / rise - want) / want + cos
 
 
+class RegistrationError(ValueError):
+    '''A page whose three registration circles cannot be found.'''
+
+
 def getRegPts(img, scan_settings):
     '''
     Find the three registration points in a (resized, not yet aligned) image.
@@ -104,10 +108,8 @@ def getRegPts(img, scan_settings):
     cands = sorted(cands, reverse=True)[:8]
 
     if len(cands) < 3:
-        raise ValueError(
-            f'getRegPts: only {len(cands)} registration dot(s) found. '
-            'Ensure the scan is well-lit and all three corner dots are visible.'
-        )
+        raise RegistrationError(
+            f'found {len(cands)} of the 3 registration dots.')
 
     # The best triple: similar sizes, laid out like the printed circles
     expected = np.asarray(scan_settings.keyRegPts, float)
@@ -120,10 +122,8 @@ def getRegPts(img, scan_settings):
         if err < best_err:
             best, best_err = pts, err
     if best_err > 0.3:
-        raise ValueError(
-            'getRegPts: no three dots are laid out like the registration circles. '
-            'Ensure the scan is well-lit and all three corner dots are visible.'
-        )
+        raise RegistrationError(
+            'found dots, but no three are laid out like the registration circles.')
     return np.array(best, dtype=np.float32)
 
 
