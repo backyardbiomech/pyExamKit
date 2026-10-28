@@ -24,13 +24,19 @@ TAB_PAGES = {
 }
 
 
+def app_version() -> str:
+    '''This copy's version, from the git tag it was built at, or '' with
+    no package metadata.'''
+    try:
+        return metadata.version('pyexamkit')
+    except metadata.PackageNotFoundError:
+        return ''
+
+
 def _ref() -> str:
     '''The release tag this copy was built from, or main when it was not
     built from one (a .dev or .post version, or no package metadata).'''
-    try:
-        found = metadata.version('pyexamkit')
-    except metadata.PackageNotFoundError:
-        return 'main'
+    found = app_version()
     return f'v{found}' if re.fullmatch(r'\d+(\.\d+)*', found) else 'main'
 
 

@@ -46,7 +46,9 @@ class pyScanUI(ctk.CTkFrame):
         self.__initUI()
 
     def __initUI(self):
-        self.parent.title("Python ExamScan")
+        # The version in the title says which release a user is running
+        version = help_links.app_version()
+        self.parent.title('Python ExamScan' + (f' v{version}' if version else ''))
         self.parent.resizable(True, True)
         self.parent.geometry('840x860')
         self.parent.minsize(700, 580)
