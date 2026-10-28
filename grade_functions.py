@@ -240,7 +240,8 @@ def points_mark(value) -> str | None:
 
 
 def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr,
-               pages_per_student=1, q_pages=None, row_areas=None, flags=None):
+               pages_per_student=1, q_pages=None, row_areas=None, flags=None,
+               scan_rows=None):
     """Mark student answer sheets with correct/incorrect indicators.
 
     aligned_image_list layout (both single- and multi-page):
@@ -255,6 +256,9 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                         layout from qAreas; merged over qAreas for that row
     flags             — {row: [bubbles.Flag]} marks the reader was unsure of,
                         drawn as an orange '?letter' beside the row
+    scan_rows         — {row: student's position in the scanned stack} when
+                        the rows are a subset (one version of several);
+                        the row itself otherwise
     """
     # load results csv
     df = pd.read_csv(resCsv)
@@ -383,9 +387,12 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
         # Save each page — sanitize name to prevent path traversal
         def _safe(s):
             return re.sub(r'[^\w\-]', '_', str(s))
+        # The stack position keeps names unique: students whose name and ID
+        # were not read all share one name, and each overwrote the last
+        scan_row = (scan_rows or {}).get(row_str, int(row_str))
         name_base = (_safe(df.loc[row_str, 'LastName']) + '_' +
                      _safe(df.loc[row_str, 'FirstName']) + '_' +
-                     _safe(df.loc[row_str, 'studentID']))
+                     _safe(df.loc[row_str, 'studentID']) + f'_{scan_row:03d}')
         for page_num, pil_img in enumerate(pil_pages, 1):
             if pil_img is None:
                 continue

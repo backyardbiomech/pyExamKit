@@ -23,6 +23,14 @@ from keyformat import load_key_file, save_key_file
 import outputs
 
 
+def _header(aligned) -> PILImage.Image:
+    """The top quarter of a sheet, where the name and ID are written, small
+    enough to keep for every student."""
+    img = PILImage.fromarray(aligned)
+    top = img.crop((0, 0, img.width, img.height // 4))
+    return top.resize((800, max(1, top.height * 800 // top.width)), PILImage.LANCZOS)
+
+
 class PageError(ValueError):
     '''A page that cannot be aligned; the message names it for the user.'''
 
@@ -115,6 +123,9 @@ class Scanner(object):
         self.cutoff = thresh
         # What the reader found on each scanned row: layout, flags, version
         self.reads: dict[int, bubbles.SheetRead] = {}
+        # The top of each sheet, where the student wrote their name and ID,
+        # shown when the bubbled ID cannot name the student
+        self._headers: dict[int, PILImage.Image] = {}
         self.roster = None
         if roster_path:
             try:
@@ -197,6 +208,8 @@ class Scanner(object):
         r = bubbles.read_sheet(aligned, self.quests, self.ignores, self.cutoff,
                                layout=layout, keyed=self._keyed)
         self.reads[row] = r
+        if not answers_only:
+            self._headers[row] = _header(aligned)
         for k, v in r.answers.items():
             if answers_only and not k.startswith('Q'):
                 continue
@@ -210,19 +223,24 @@ class Scanner(object):
             f.write(line)
 
     def _apply_roster(self, skip_rows=()):
-        """Replace bubbled names with roster names, matched by ID."""
-        if not self.roster:
-            return
+        """Replace bubbled names with roster names, matched by ID. A sheet
+        whose ID names no one is shown to the user, who types the L number
+        or name the student wrote at the top."""
         seen: dict[str, int] = {}
         for row in sorted(self.reads):
             if row in skip_rows:
                 continue
             scanned = str(self.resdf.loc[row, 'studentID'])
+            if not self.roster:
+                if '-' in scanned and self.resdf.loc[row, 'LastName'] in ('-', ''):
+                    self._identify(row, scanned, 'no ID bubbled')
+                continue
             student, note = roster_mod.match_id(scanned, self.roster)
             if student is None:
-                self._alert(f'ROSTER: scan {row} (ID read as {scanned}, name bubbles '
-                            f'"{self.resdf.loc[row, "LastName"]}"): {note}. Check the '
-                            'handwritten name on the marked sheet.')
+                if not self._identify(row, scanned, note):
+                    self._alert(f'ROSTER: scan {row} (ID read as {scanned}, name bubbles '
+                                f'"{self.resdf.loc[row, "LastName"]}"): {note}. Check the '
+                                'handwritten name on the marked sheet.')
                 continue
             self.resdf.loc[row, 'LastName'] = student.last
             self.resdf.loc[row, 'FirstName'] = student.first
@@ -234,6 +252,75 @@ class Scanner(object):
                 self._alert(f'ROSTER: scans {seen[student.id]} and {row} both read as '
                             f'ID {student.id} ({student.last}, {student.first}).')
             seen.setdefault(student.id, row)
+
+    def _identify(self, row: int, scanned: str, why: str) -> bool:
+        """Ask who scan `row` belongs to and fill in the name and ID typed.
+        False when there is no window to ask in or the user skipped it."""
+        if self.parent is None:
+            return False
+        typed = self._ask_identity(row, scanned, why)
+        if not typed:
+            return False
+        student, note = roster_mod.match_typed(typed, self.roster)
+        self.resdf.loc[row, 'LastName'] = student.last
+        self.resdf.loc[row, 'FirstName'] = student.first
+        if student.id:
+            self.resdf.loc[row, 'studentID'] = student.id
+        print(f'[Roster] Scan {row} entered by hand as {student.last}, {student.first}'
+              f'{f" ({student.id})" if student.id else ""}.', flush=True)
+        if note:
+            self._alert(f'ROSTER: scan {row} entered as "{typed}": {note}.')
+        return True
+
+    def _ask_identity(self, row: int, scanned: str, why: str) -> str:
+        """Show the top of the sheet and ask for the student's L number or
+        name. Returns what was typed, or '' to skip."""
+        import tkinter as tk
+        from openQ import _pil_to_tkphoto
+
+        result = ['']
+        win = tk.Toplevel(self.parent)
+        win.title(f'Who is scan {row}?')
+        win.transient(self.parent)
+        win.grab_set()
+        win.lift()
+        win.focus_force()
+
+        tk.Label(win, text=f'Scan {row}: the ID does not name a student',
+                 font=('Arial', 13, 'bold')).pack(pady=(10, 2))
+        tk.Label(win, text=f'ID read as "{scanned}" ({why}).\n'
+                           'Type the L number or the name the student wrote, '
+                           'or click Skip:',
+                 font=('Arial', 11), justify='center').pack(pady=(0, 8))
+        header = self._headers.get(row)
+        if header is not None:
+            photo = _pil_to_tkphoto(header, master=win)
+            img_lbl = tk.Label(win, image=photo)
+            img_lbl.image = photo  # prevent GC
+            img_lbl.pack(padx=8, pady=(0, 8))
+
+        entry = tk.Entry(win, width=36, font=('Arial', 13))
+        entry.pack(pady=(0, 8))
+        entry.focus_set()
+
+        def _done(value):
+            result[0] = value.strip()
+            win.destroy()
+
+        btns = tk.Frame(win)
+        btns.pack(pady=(0, 12))
+        tk.Button(btns, text='OK', width=10, font=('Arial', 12),
+                  command=lambda: _done(entry.get())).pack(side='left', padx=6)
+        tk.Button(btns, text='Skip', width=8, font=('Arial', 12), fg='gray',
+                  command=lambda: _done('')).pack(side='left', padx=6)
+        entry.bind('<Return>', lambda _e: _done(entry.get()))
+
+        win.update_idletasks()
+        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
+        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 2)
+        win.geometry(f'+{x}+{y}')
+        win.wait_window()
+        return result[0]
 
     def _write_read_alerts(self):
         """Report marks the reader could not call confidently."""
@@ -506,13 +593,13 @@ class Scanner(object):
             # Mark sheets if requested; every version's go in marked/
             if self.save_marked:
                 marked_list = [None] + imgs_for_ver  # None at [0] = synthetic key placeholder
-                _areas, _flags = self._row_areas(
-                    {str(j + 1): orig for j, orig in enumerate(row_indices)})
+                _scan_rows = {str(j + 1): orig for j, orig in enumerate(row_indices)}
+                _areas, _flags = self._row_areas(_scan_rows)
                 grade_functions.markSheets(
                     ver_csv, marked_list, self.markeddir,
                     ver_areas, self.Qdict, self.markmissing, self.corrMark,
                     pages_per_student=pps, q_pages=q_pages,
-                    row_areas=_areas, flags=_flags)
+                    row_areas=_areas, flags=_flags, scan_rows=_scan_rows)
 
         if self.save_marked:
             print('Saving marked files')
@@ -754,7 +841,7 @@ class Scanner(object):
         self.pages_per_student = n_pages
 
         # 1. Align every page and read what it is; read the ID on each page 1
-        reads, id_reads = [], {}
+        reads, id_reads, id_headers = [], {}, {}
         blank = 0
         for i, path in enumerate(self.image_list):
             aligned_path = str(self.aligneddir / f'aligned_{i + 1:03d}.jpg')
@@ -783,6 +870,7 @@ class Scanner(object):
             if page == 1:
                 id_reads[i + 1] = bubbles.read_sheet(aligned, 0, self.ignores, self.cutoff,
                                                      layout=lay)
+                id_headers[i + 1] = _header(aligned)
         if blank:
             print(f'[Practical] Skipped {blank} blank page(s), the backs of sheets.', flush=True)
         sheets, alerts = practical_scan.group_pages(reads, n_pages)
@@ -803,6 +891,8 @@ class Scanner(object):
         for row, sheet in enumerate(sheets, 1):
             r = id_reads[sheet.first_scan]
             self.reads[row] = r
+            if id_headers.get(sheet.first_scan) is not None:
+                self._headers[row] = id_headers[sheet.first_scan]
             for col in ('LastName', 'FirstName', 'studentID'):
                 self.resdf.loc[row, col] = r.answers[col]
             self.resdf.loc[row, 'form'] = sheet.form

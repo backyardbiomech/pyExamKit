@@ -75,5 +75,29 @@ class TestMatch(unittest.TestCase):
         self.assertEqual(note, 'not on the roster')
 
 
+class TestTyped(unittest.TestCase):
+    '''What the user types when a sheet's bubbled ID named no one.'''
+    R = TestMatch.R
+
+    def test_l_number(self):
+        s, note = roster.match_typed('l 987654', self.R)
+        self.assertEqual((s.last, s.first, s.id, note), ('Roe', 'Ann', '00987654', ''))
+
+    def test_name_either_order(self):
+        for typed in ('Jon Doe', 'doe, jon', 'Doe'):
+            s, note = roster.match_typed(typed, self.R)
+            self.assertEqual((s.id, note), ('00123456', ''), typed)
+
+    def test_name_off_the_roster_is_kept_as_typed(self):
+        s, note = roster.match_typed('Pat Smith', self.R)
+        self.assertEqual((s.last, s.first, s.id, note), ('Smith', 'Pat', '', 'not on the roster'))
+
+    def test_without_a_roster(self):
+        s, _ = roster.match_typed('123456', None)
+        self.assertEqual((s.last, s.id), ('-', '00123456'))
+        s, _ = roster.match_typed('Pat Smith', None)
+        self.assertEqual((s.last, s.first, s.id), ('Smith', 'Pat', ''))
+
+
 if __name__ == '__main__':
     unittest.main()

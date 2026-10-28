@@ -120,7 +120,7 @@ class TestPracticalMarks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
             self._mark(out)
-            pages = [np.array(Image.open(out / f'Doe_Jo_1_p{n}.jpg').convert('RGB'))
+            pages = [np.array(Image.open(out / f'Doe_Jo_1_001_p{n}.jpg').convert('RGB'))
                      .astype(int) for n in (1, 2)]
         # Green, orange, and red marks are saturated; the printed sheet is not
         inked = lambda a: ((a.max(axis=-1) - a.min(axis=-1)) > 100).sum()  # noqa: E731

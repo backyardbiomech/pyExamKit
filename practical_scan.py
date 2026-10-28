@@ -195,7 +195,9 @@ def mark_sheets(results, points, sheets: list[Sheet], p: practical.Practical,
             possible = p.total_points(sheet.form) if len(sheet.form) == 2 else 0
             draws[0].text((470, 118), f'Form {sheet.form}   Score {score:g} / {possible:g}',
                           fill=(220, 0, 0), font=font)
+        # The stack position keeps names unique when a name and ID went unread
         base = '_'.join(_safe(row.get(c, '')) for c in ('LastName', 'FirstName', 'studentID'))
+        base += f'_{i:03d}'
         for n, im in enumerate(pages, 1):
             if im is not None:
                 im.save(str(markeddir / f'{base}_p{n}.jpg'), quality=90)

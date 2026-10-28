@@ -158,3 +158,33 @@ def match_id(scanned: str, roster: dict[str, Student]) -> tuple[Student | None, 
     if len(near) > 1:
         return None, 'one digit off from more than one roster ID'
     return None, 'not on the roster'
+
+
+def match_typed(typed: str, roster: dict[str, Student] | None) -> tuple[Student, str]:
+    '''
+    Who a sheet belongs to, from an L number or name typed by hand when the
+    bubbled ID named no one. A name matches a roster student when every word
+    typed starts their last or first name. Without a unique roster match the
+    typed name or ID is used as given, with a note saying why; '-' stands for
+    a part that was not typed.
+    '''
+    sid = normalize_id(typed)
+    if sid:
+        if roster is None:
+            return Student('-', '-', sid), ''
+        if sid in roster:
+            return roster[sid], ''
+        return Student('-', '-', sid), 'not on the roster'
+    last, first = _split_full(typed)
+    given = Student(last or '-', first or '-', '')
+    if roster is None:
+        return given, ''
+    words = [w for w in re.split(r'[\s,]+', typed.lower()) if w]
+    found = [s for s in roster.values()
+             if all(any(n.startswith(w) for n in (s.last.lower(), s.first.lower()))
+                    for w in words)]
+    if len(found) == 1:
+        return found[0], ''
+    if found:
+        return given, f'matches {len(found)} roster students; check the name'
+    return given, 'not on the roster'
