@@ -269,13 +269,22 @@ class Scanner(object):
         else:
             self._run_scan_key()
 
+    def _version_problem(self, raw_ver: str) -> str:
+        """Why a student's version could not be used. A letter read cleanly
+        but missing from the keys means the key set is short, not the sheet."""
+        letter = raw_ver[:1].upper() if raw_ver and raw_ver != '-' else ''
+        if letter and letter not in self.version_keys:
+            return (f'Version {letter} was bubbled, but no key for version {letter} '
+                    f'was loaded (keys: {", ".join(sorted(self.version_keys))}).')
+        return f'Version bubble not detected  (scanned: "{raw_ver}")'
+
     def _ask_version_for_student(self, row_idx: int, name: str,
                                    raw_ver: str, img_path: str | None) -> str | None:
         """Show a dialog with the student's aligned scan and ask the user to
         manually select an exam version.  Returns a version letter (e.g. 'A')
         from self.version_keys, or None to skip the student."""
         import tkinter as tk
-        from PIL import ImageTk, Image as _PILImage
+        from openQ import _pil_to_tkphoto
 
         result = [None]
         win = tk.Toplevel(self.parent)
@@ -289,19 +298,21 @@ class Scanner(object):
                  text=f'Student row {row_idx}:  {name}',
                  font=('Arial', 13, 'bold')).pack(pady=(10, 2))
         tk.Label(win,
-                 text=f'Version bubble not detected  (scanned: "{raw_ver}")\n'
+                 text=self._version_problem(raw_ver) + '\n'
                       'Select the correct version or click Skip to exclude this student:',
                  font=('Arial', 11), justify='center').pack(pady=(0, 8))
 
         if img_path:
             try:
-                with _PILImage.open(img_path) as pil_img:
-                    max_w, max_h = 620, 780
+                with PILImage.open(img_path) as pil_img:
+                    # Leave room below the scan for the labels and buttons
+                    max_w = 620
+                    max_h = max(300, min(780, win.winfo_screenheight() - 320))
                     ratio = min(max_w / pil_img.width, max_h / pil_img.height, 1.0)
                     disp = pil_img.resize(
                         (int(pil_img.width * ratio), int(pil_img.height * ratio)),
-                        _PILImage.LANCZOS)
-                photo = ImageTk.PhotoImage(disp)
+                        PILImage.LANCZOS)
+                photo = _pil_to_tkphoto(disp, master=win)
                 img_lbl = tk.Label(win, image=photo)
                 img_lbl.image = photo  # prevent GC
                 img_lbl.pack(padx=8, pady=(0, 8))
@@ -316,12 +327,23 @@ class Scanner(object):
             result[0] = v
             win.destroy()
 
-        for ver in sorted(self.version_keys):
+        # Three to a row: six versions and Skip in one row run wider than
+        # the scan, and the last ones fell off the screen's edge
+        for i, ver in enumerate(sorted(self.version_keys)):
             tk.Button(btn_frame, text=f'Version {ver}', width=12,
                       font=('Arial', 12),
-                      command=lambda v=ver: _choose(v)).pack(side='left', padx=6)
+                      command=lambda v=ver: _choose(v)).grid(
+                          row=i // 3, column=i % 3, padx=6, pady=3)
         tk.Button(btn_frame, text='Skip', width=8, font=('Arial', 12),
-                  fg='gray', command=lambda: _choose(None)).pack(side='left', padx=10)
+                  fg='gray', command=lambda: _choose(None)).grid(
+                      row=(len(self.version_keys) + 2) // 3, column=0,
+                      columnspan=3, pady=(8, 0))
+
+        # Open centered on the screen so no edge of the dialog is cut off
+        win.update_idletasks()
+        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
+        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 2)
+        win.geometry(f'+{x}+{y}')
 
         win.wait_window()
         return result[0]
@@ -377,8 +399,8 @@ class Scanner(object):
                 version_groups.setdefault(ver_letter, []).append(row_idx)
             else:
                 name = self.resdf.loc[row_idx, 'LastName']
-                print(f'[MultiVersion] WARNING — Student row {row_idx} ({name}) version '
-                      f'bubble not detected (scanned: "{raw_ver}").', flush=True)
+                print(f'[MultiVersion] WARNING — Student row {row_idx} ({name}): '
+                      f'{self._version_problem(raw_ver)}', flush=True)
                 # Try to get the aligned image for this student
                 img_idx = (row_idx - 1) * pps
                 img_path = (self.aligned_image_list[img_idx]
