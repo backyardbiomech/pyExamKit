@@ -8,6 +8,7 @@ keep the two in step.
 import csv
 import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 
 ID_DIGITS = 8
@@ -160,6 +161,41 @@ def match_id(scanned: str, roster: dict[str, Student]) -> tuple[Student | None, 
     return None, 'not on the roster'
 
 
+# A suggestion is shown from SUGGEST_AT; a name typed but not picked is taken
+# as the best match only from ACCEPT_AT, and only when it clearly beats the next
+SUGGEST_AT = 0.6
+ACCEPT_AT = 0.8
+
+
+def _word_score(word: str, s: Student) -> float:
+    '''How well one typed word fits a student: 1 when it starts their last
+    or first name, otherwise how close its spelling is to either.'''
+    names = [n for n in (s.last.lower(), s.first.lower()) if n]
+    if any(n.startswith(word) for n in names):
+        return 1.0
+    return max((SequenceMatcher(None, word, n).ratio() for n in names), default=0.0)
+
+
+def suggest(typed: str, roster: dict[str, Student], limit: int = 6) -> list[tuple[Student, float]]:
+    '''
+    Roster students that fit a typed name or partial ID, best first, with a
+    score from 0 to 1. Every word starting a name scores 1; misspellings
+    score by how close they are, so "jonson" still finds Johnson.
+    '''
+    typed = typed.strip()
+    digits = re.sub(r'\D', '', typed)
+    if re.fullmatch(r'[Ll]?\s*\d+', typed):
+        return [(st, 1.0) for st in roster.values() if digits in st.id][:limit]
+    words = [w for w in re.split(r'[\s,]+', typed.lower()) if w]
+    if not words:
+        return []
+    scored = [(st, sum(_word_score(w, st) for w in words) / len(words))
+              for st in roster.values()]
+    scored = [(st, sc) for st, sc in scored if sc >= SUGGEST_AT]
+    scored.sort(key=lambda p: (-p[1], p[0].last, p[0].first))
+    return scored[:limit]
+
+
 def match_typed(typed: str, roster: dict[str, Student] | None) -> tuple[Student, str]:
     '''
     Who a sheet belongs to, from an L number or name typed by hand when the
@@ -179,12 +215,14 @@ def match_typed(typed: str, roster: dict[str, Student] | None) -> tuple[Student,
     given = Student(last or '-', first or '-', '')
     if roster is None:
         return given, ''
-    words = [w for w in re.split(r'[\s,]+', typed.lower()) if w]
-    found = [s for s in roster.values()
-             if all(any(n.startswith(w) for n in (s.last.lower(), s.first.lower()))
-                    for w in words)]
-    if len(found) == 1:
-        return found[0], ''
-    if found:
-        return given, f'matches {len(found)} roster students; check the name'
+    ranked = suggest(typed, roster, limit=len(roster))
+    exact = [st for st, sc in ranked if sc == 1.0]
+    if len(exact) == 1:
+        return exact[0], ''
+    if exact:
+        return given, f'matches {len(exact)} roster students; check the name'
+    if ranked and ranked[0][1] >= ACCEPT_AT and (
+            len(ranked) == 1 or ranked[1][1] < ranked[0][1] - 0.1):
+        best = ranked[0][0]
+        return best, f'no exact match; taken as {best.last}, {best.first} by spelling'
     return given, 'not on the roster'

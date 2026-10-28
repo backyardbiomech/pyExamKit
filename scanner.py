@@ -307,13 +307,49 @@ class Scanner(object):
             result[0] = value.strip()
             win.destroy()
 
+        # Roster students that fit what is typed, refreshed on each key;
+        # Down or a click picks one, and Return takes it by its ID
+        shown: list = []
+        picks = None
+        if self.roster:
+            picks = tk.Listbox(win, width=40, height=6, font=('Arial', 12),
+                               exportselection=False)
+            picks.pack(pady=(0, 8))
+
+            def _refresh(event):
+                if event.keysym in ('Up', 'Down', 'Return'):
+                    return
+                shown[:] = [st for st, _ in roster_mod.suggest(entry.get(), self.roster)]
+                picks.delete(0, 'end')
+                for st in shown:
+                    picks.insert('end', f'{st.last}, {st.first}   L{st.id}')
+
+            def _move(step):
+                if not shown:
+                    return 'break'
+                cur = picks.curselection()
+                i = min(max((cur[0] + step) if cur else 0, 0), len(shown) - 1)
+                picks.selection_clear(0, 'end')
+                picks.selection_set(i)
+                picks.see(i)
+                return 'break'
+
+            entry.bind('<KeyRelease>', _refresh)
+            entry.bind('<Down>', lambda _e: _move(1))
+            entry.bind('<Up>', lambda _e: _move(-1))
+            picks.bind('<Double-Button-1>', lambda _e: _submit())
+
+        def _submit():
+            cur = picks.curselection() if picks is not None else ()
+            _done(shown[cur[0]].id if cur else entry.get())
+
         btns = tk.Frame(win)
         btns.pack(pady=(0, 12))
         tk.Button(btns, text='OK', width=10, font=('Arial', 12),
-                  command=lambda: _done(entry.get())).pack(side='left', padx=6)
+                  command=_submit).pack(side='left', padx=6)
         tk.Button(btns, text='Skip', width=8, font=('Arial', 12), fg='gray',
                   command=lambda: _done('')).pack(side='left', padx=6)
-        entry.bind('<Return>', lambda _e: _done(entry.get()))
+        entry.bind('<Return>', lambda _e: _submit())
 
         win.update_idletasks()
         x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)

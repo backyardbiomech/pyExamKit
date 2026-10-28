@@ -99,5 +99,29 @@ class TestTyped(unittest.TestCase):
         self.assertEqual((s.last, s.first, s.id), ('Smith', 'Pat', ''))
 
 
+class TestSpelling(unittest.TestCase):
+    '''A misspelled name still finds the student, and one that fits no one
+    clearly is kept as typed rather than dropped.'''
+    R = {s.id: s for s in [roster.Student('Johnson', 'Mary', '00111111'),
+                           roster.Student('Johnston', 'Mark', '00222222'),
+                           roster.Student('Doe', 'Jon', '00123456')]}
+
+    def test_suggestions_rank_the_closest_first(self):
+        found = [s.last for s, _ in roster.suggest('mary jonson', self.R)]
+        self.assertEqual(found[:2], ['Johnson', 'Johnston'])
+
+    def test_partial_id_suggests_its_student(self):
+        self.assertEqual([s.last for s, _ in roster.suggest('L1234', self.R)], ['Doe'])
+
+    def test_close_misspelling_is_taken_with_a_note(self):
+        s, note = roster.match_typed('Mery Johnsen', self.R)
+        self.assertEqual(s.id, '00111111')
+        self.assertIn('by spelling', note)
+
+    def test_equally_close_names_keep_what_was_typed(self):
+        s, note = roster.match_typed('Jonson', self.R)
+        self.assertEqual((s.last, s.id, note), ('Jonson', '', 'not on the roster'))
+
+
 if __name__ == '__main__':
     unittest.main()
