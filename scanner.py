@@ -322,7 +322,8 @@ class Scanner(object):
                 shown[:] = [st for st, _ in roster_mod.suggest(entry.get(), self.roster)]
                 picks.delete(0, 'end')
                 for st in shown:
-                    picks.insert('end', f'{st.last}, {st.first}   L{st.id}')
+                    # First Last, the way students write it at the top
+                    picks.insert('end', f'{st.first} {st.last}   L{st.id}')
 
             def _move(step):
                 if not shown:
