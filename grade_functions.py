@@ -37,6 +37,46 @@ def _get_font(size=28):
     return ImageFont.load_default(size=size)
 
     
+def graded_key(key) -> bool:
+    """False for a question the key leaves ungraded."""
+    return not (pd.isna(key) or key in ('ignore', ''))
+
+
+def score_answer(ans, keys, q_pts: float, partial: bool, strictness: float = 0.5
+                 ) -> tuple[float, bool]:
+    """Points one answer earns, and whether it is fully right. keys is the
+    key, or a list of keys any of which is accepted (the best one counts).
+    A written question's key is 'CC', and its answer carries the grader's
+    judgment: CC full credit, CX half. partial is the select-all or
+    written-answers grading, where a bubble answer close enough to the key
+    (difflib ratio at or above strictness) earns a share of the points: each
+    bubble is worth points / bubbles on the key, gained if on the key and
+    lost if not, never below zero."""
+    if isinstance(keys, str):
+        keys = [keys]
+    best = (0.0, False)
+    for key in keys:
+        if key == 'CC':
+            grade = str(ans)[:2]
+            got = (q_pts, True) if grade == 'CC' else (q_pts / 2, False) if grade == 'CX' else (0.0, False)
+        elif pd.isna(ans):
+            got = (0.0, False)
+        elif not partial:
+            got = (q_pts, True) if ans == key else (0.0, False)
+        else:
+            ratio = difflib.SequenceMatcher(None, key, ans).ratio()
+            if ratio == 1:
+                got = (q_pts, True)
+            elif 0 < ratio < 1 and ratio >= strictness:
+                share = q_pts / len(key)
+                pts = sum(share if ch in key else -share for ch in ans)
+                got = (max(pts, 0.0), False)
+            else:
+                got = (0.0, False)
+        best = max(best, got)
+    return best
+
+
 def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strictness=0.5,
                  point_values=None, key_data=None):
     """Score one results file in place and write its points file and grading
@@ -72,9 +112,8 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         partscore = 0
         #loop through questions
         for col in q_cols:
-            #compare student's answer to key
             key = df.loc['0', col]
-            if key == 'ignore' or pd.isna(key) or key == '':
+            if not graded_key(key):
                 continue
             # Per-question point value: use key-file override if available, else default
             if key == 'CC':
@@ -82,25 +121,9 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
             else:
                 q_pts = point_values.get(col, bubbleVal) if point_values else bubbleVal
             possible[col] = float(q_pts)
-            #if it's an open ended question
-            if key == 'CC':
-                ans = df.loc[row, col]
-                # support 'CC: transcription text' format as well as plain 'CC'
-                ans_grade = str(ans)[:2]
-                if ans_grade == 'CC':
-                    score += q_pts
-                    partscore += q_pts
-                    ptsdf.loc[row,col] = q_pts
-                    df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
-                if ans_grade == 'CX':
-                    score += q_pts / 2
-                    partscore += q_pts / 2
-                    ptsdf.loc[row,col] = q_pts / 2
-                # go on to the next question
-                continue
             ans = df.loc[row, col]
             # catch when ans is '-' meaning no answer was scanned
-            if ans == '-':
+            if key != 'CC' and ans == '-':
                     # get scan number (index), name, and L number
                     alertStr = 'Name: {},{}, Lnumber: {} had no answer scanned for question {}'.format(
                                 df.loc[row, 'LastName'],
@@ -115,44 +138,15 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
                         with open(alertPath, 'a') as f:
                             f.write('\n')
                             f.write(alertStr)
-                            
-            #if no partial credit calculations necessary
-            if not selectAll and not openQ:
-                if ans == key:
-                    score += q_pts
-                    partscore += q_pts
-                    ptsdf.loc[row,col] = q_pts
-                    df.loc['numb_correct',col] = df.loc['numb_correct',col] + 1
-            # if necessary to calculate for partial credit:
-            else:
-                #match sequences
-                s = difflib.SequenceMatcher(None, key, ans)
-                #if it's completely right, add one
-                if s.ratio() == 1:
-                    score += q_pts
-                    partscore += q_pts
-                    ptsdf.loc[row,col] = q_pts
-                else:
-                    ptsdf.loc[row,col]=0
-                #if anything matches above the strictness threshold, award partial credit
-                if 0 < s.ratio() < 1 and s.ratio() >= strictness:
-                    ptscore=0
-                    #each bubble is worth 1/(# of filled bubbles on key) up to 1
-                    partial = q_pts/len(key)
-                    #for each bubble in the student's answer
-                    for i in ans:
-                        #if it's in the key, add the fractional point
-                        if i in key:
-                            ptscore = ptscore + partial
-                        #if it's not in the key, penalize by the fractional point
-                        if i not in key:
-                            ptscore = ptscore - partial
-                    #make sure the partial score is positive and add
-                    if ptscore>0:
-                        partscore = partscore + ptscore
-                        ptsdf.loc[row,col]=ptscore
-                #calculate the per-question calculation of the number of students selecting the correct answer
-                df.loc['numb_correct',col] = df.loc['numb_correct',col] + int(s.ratio())
+            pts, right = score_answer(ans, key, q_pts, bool(selectAll or openQ), strictness)
+            ptsdf.loc[row, col] = pts
+            if right:
+                df.loc['numb_correct', col] = df.loc['numb_correct', col] + 1
+            # score counts full credit, and a written answer's half credit;
+            # partialscore counts every point
+            if right or key == 'CC':
+                score += pts
+            partscore += pts
         #save score and partscore to new columns
         df.loc[row,'score']=score
         df.loc[row,'partialscore']=partscore
@@ -170,6 +164,10 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         except (OSError, ValueError):
             record = {}
     record['possible'] = possible
+    # How this file was scored, so the Results tab can score it again
+    # with a corrected key (docs/dev/results-tab.md)
+    record['settings'] = {'partial': bool(selectAll or openQ), 'strictness': strictness,
+                          'bubble_points': bubbleVal, 'written_points': openVal}
     if key_data:
         record['title'] = (key_data.get('metadata') or {}).get('title', '')
         record['sources'] = key_data.get('sources') or {}

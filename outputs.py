@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pandas as pd
 
+import analysis
+
 APP_DATA = 'app_data'
 GRADEBOOK = 'gradebook.xlsx'
 CANVAS = 'canvas_upload.csv'
@@ -84,6 +86,11 @@ def record(outdir, csv_paths) -> None:
     names = sorted(Path(p).name for p in csv_paths)
     (app_data(outdir) / MANIFEST).write_text(json.dumps({'results': names}, indent=2),
                                              encoding='utf-8')
+    import edits
+    moved = edits.set_aside(outdir)
+    if moved:
+        print(f'[Outputs] Edits made to the earlier scan here were set aside → {moved.name}',
+              flush=True)
 
 
 def listed(outdir) -> list[Path]:
@@ -122,6 +129,15 @@ class Graded:
     choices: dict = field(default_factory=dict)
     texts: dict = field(default_factory=dict)            # {question column: question text}
     open_answers: dict = field(default_factory=dict)   # {openQ_N: [accepted answers]}
+    settings: dict = field(default_factory=dict)       # how it was scored (grading record)
+    accepted: dict = field(default_factory=dict)       # {column: [keys]} after a key edit
+    dropped: set = field(default_factory=set)          # columns a credit edit dropped
+
+    def key_label(self, col: str, bank: bool = False) -> str:
+        """The key as shown: every accepted answer, in the bank's letters
+        when bank is set."""
+        keys = self.accepted.get(col) or [str(self.df.loc['0', col])]
+        return ' or '.join(self.bank_letters(col, k) if bank else k for k in keys)
 
     @property
     def students(self) -> list[str]:
@@ -193,7 +209,8 @@ def load(csv_path) -> Graded:
     return Graded(version=version_of(csv_path), df=df, pts=pts,
                   possible=rec.get('possible', {}), title=rec.get('title', ''),
                   sources=rec.get('sources', {}), choices=rec.get('choices', {}),
-                  texts=rec.get('texts', {}), open_answers=open_answers)
+                  texts=rec.get('texts', {}), open_answers=open_answers,
+                  settings=rec.get('settings', {}))
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────
@@ -206,14 +223,20 @@ def write(outdir, prefix: str | None = None, csvs=None) -> None:
     if not graded:
         print('[Outputs] No graded results to write.', flush=True)
         return
+    import edits
+    made = edits.load(outdir)
+    graded, problems = edits.apply(graded, made)
+    for msg in problems:
+        print(f'[Outputs] {msg}', flush=True)
+    adjust = edits.adjustments(made)
     title = next((g.title for g in graded if g.title), '') or Path(outdir).resolve().parent.name
     prefix = id_prefix() if prefix is None else prefix
     try:
-        write_gradebook(Path(outdir) / GRADEBOOK, graded, title, prefix)
+        write_gradebook(Path(outdir) / GRADEBOOK, graded, title, prefix, adjust)
         print(f'Gradebook saved → {Path(outdir) / GRADEBOOK}', flush=True)
     except Exception as exc:
         print(f'[Outputs] Could not save the gradebook: {exc}', flush=True)
-    write_canvas(Path(outdir) / CANVAS, graded, title, prefix)
+    write_canvas(Path(outdir) / CANVAS, graded, title, prefix, adjust)
     print(f'Canvas file saved → {Path(outdir) / CANVAS}', flush=True)
 
 
@@ -239,10 +262,17 @@ def _canvas_rows(graded: list[Graded], prefix: str) -> list[tuple]:
     return [row[3:] for row in rows]
 
 
-def write_canvas(path, graded: list[Graded], title: str, prefix: str) -> None:
+def adjustment(adjust: dict, version: str) -> float:
+    """Points added to a version's students: the class's plus the version's."""
+    return (adjust or {}).get('', 0) + ((adjust or {}).get(version, 0) if version else 0)
+
+
+def write_canvas(path, graded: list[Graded], title: str, prefix: str,
+                 adjust: dict | None = None) -> None:
     """A file Canvas's gradebook import takes as is: its own header, a Points
     Possible row, then one row per student, sorted by name. Canvas matches
-    students on SIS User ID and asks which assignment the column is."""
+    students on SIS User ID and asks which assignment the column is. The
+    scores carry the adjustments ({version: points}, '' the class)."""
     possible = {g.points_possible() for g in graded}
     if len(possible) > 1:
         print('[Outputs] The versions are worth different totals ('
@@ -253,19 +283,21 @@ def write_canvas(path, graded: list[Graded], title: str, prefix: str) -> None:
         w.writerow(['Student', 'SIS User ID', title])
         w.writerow(['    Points Possible', '', _score(max(possible))])
         for name, sis, i, r in _canvas_rows(graded, prefix):
-            w.writerow([name, sis, _score(graded[i].total(r))])
+            w.writerow([name, sis, _score(graded[i].total(r)
+                                          + adjustment(adjust, graded[i].version))])
 
 
-def write_gradebook(path, graded: list[Graded], title: str = '', prefix: str = '') -> None:
+def write_gradebook(path, graded: list[Graded], title: str = '', prefix: str = '',
+                    adjust: dict | None = None) -> None:
     import openpyxl
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     stats = wb.create_sheet('Exam stats')
-    adjust = _adjust_cells([g.version for g in graded if g.students])
+    cells = _adjust_cells([g.version for g in graded if g.students])
     by_version = []
     for g in graded:
         name = f'Version {g.version}' if g.version else 'Gradebook'
-        refs = [adjust['']] + ([adjust[g.version]] if g.version in adjust else [])
+        refs = [cells['']] + ([cells[g.version]] if g.version in cells else [])
         by_version.append(_gradebook_sheet(wb.create_sheet(name), g, refs))
     ranges = [r for r in by_version if r]
     items = item_table(graded)
@@ -274,7 +306,8 @@ def write_gradebook(path, graded: list[Graded], title: str = '', prefix: str = '
         combined = _by_question_sheet(wb.create_sheet('By question'), graded, items)
     if len(ranges) == 1:
         combined = ranges[0]
-    _stats_sheet(stats, ranges, combined, next((g.title for g in graded if g.title), ''))
+    _stats_sheet(stats, ranges, combined, next((g.title for g in graded if g.title), ''),
+                 adjust or {})
     _item_sheet(wb.create_sheet('Item analysis'), items)
     _canvas_sheet(wb.create_sheet('Canvas scores'), graded, by_version,
                   title or 'Score', prefix)
@@ -319,7 +352,7 @@ def _text_row(ws, first_col: int, texts: list[str]) -> None:
 
 # Canvas's discrimination index compares the top and bottom 27% of the class
 # by total score (docs/outputs.md).
-DI_GROUP = 0.27
+DI_GROUP = analysis.DI_GROUP
 
 
 def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int,
@@ -366,12 +399,14 @@ def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
     header = list(ids)
     for qc in qs:
         key = str(g.df.loc['0', qc])
-        if key == 'CC':
+        if qc in g.dropped:
+            label = f'{qc}\n(dropped)'
+        elif key == 'CC':
             label = f'{qc}\n(written)'
         elif key in ('ignore', 'nan', ''):
             label = f'{qc}\n(not graded)'
         else:
-            label = f'{qc}\n(Key: {key})'
+            label = f'{qc}\n(Key: {g.key_label(qc)})'
         header += [label, f'{qc} Pts']
     header += ['Total', 'Adjusted']
     _header(ws, header)
@@ -384,6 +419,8 @@ def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
         key = str(g.df.loc['0', qc])
         if key == 'CC' and g.open_answers.get(qc):
             key = ' | '.join(g.open_answers[qc])
+        elif qc in g.accepted:
+            key = g.key_label(qc)
         key_row += ['' if key == 'nan' else key, g.possible.get(qc, '')]
     key_row.append(g.points_possible())
     ws.append(key_row)
@@ -465,16 +502,8 @@ class TotalRange:
         return f'=IFERROR(ROUND({k}/{k - 1}*(1-SUM({items})/VARP({self.ref})),2),"")'
 
 
-# Letter-grade bands by percent of the points possible, lowest first: each
-# runs from its lower bound up to, not including, the next. F is split to
-# tell a near miss from a long way off.
-BANDS = [('Low F', None, 50, 'below 50%'), ('Close F', 50, 60, '50–59%')]
-for _letter, _base in (('D', 60), ('C', 70), ('B', 80)):
-    BANDS += [(f'{_letter}−', _base, _base + 3, f'{_base}–{_base + 2}%'),
-              (_letter, _base + 3, _base + 7, f'{_base + 3}–{_base + 6}%'),
-              (f'{_letter}+', _base + 7, _base + 10, f'{_base + 7}–{_base + 9}%')]
-BANDS += [('A−', 90, 93, '90–92%'), ('A', 93, None, '93–100%')]
-del _letter, _base
+# Letter-grade bands, shared with the Results tab (analysis.py)
+BANDS = analysis.BANDS
 BAR_COLOR = '2A78D6'
 UNADJUSTED_COLOR = 'B4B2AC'
 
@@ -496,14 +525,15 @@ def _adjust_cells(versions: list[str]) -> dict:
 
 
 def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
-                 title: str) -> None:
+                 title: str, adjust: dict | None = None) -> None:
     """The adjustment inputs, then summary statistics of the totals for the
     class and for each version, each beside its adjusted figures, and how
     many students earn each letter grade before and after adjusting. Every
     number is a formula over the gradebook tabs, so it follows corrected
     points and a changed adjustment. combined is the whole class question
     by question (By question, or the one version), which the class's
-    reliability needs; None leaves it blank."""
+    reliability needs; None leaves it blank. adjust is the Results tab's
+    adjustments, the Points added row's starting values."""
     from openpyxl.chart import BarChart, Reference
     from openpyxl.chart.series import SeriesLabel
     from openpyxl.chart.shapes import GraphicalProperties
@@ -525,7 +555,12 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
 
     # Adjustment: typed here, added to every total on the gradebook tabs
     _header(ws, ['Adjustment'] + [label for label, _ in groups], height=20)
-    ws.append(['Points added'] + [0] * len(groups))
+    adjust = adjust or {}
+    if len(groups) > 1:
+        added = [adjust.get('', 0)] + [adjust.get(r.version, 0) for r in ranges]
+    else:
+        added = [adjustment(adjust, ranges[0].version)]
+    ws.append(['Points added'] + [_num(a) for a in added])
     assert ws.max_row == ADJUST_ROW
     for cell in ws[ADJUST_ROW][1:]:
         cell.fill = st['key_fill']
@@ -730,7 +765,7 @@ def item_table(graded: list[Graded]) -> ItemTable:
                 it = items[ident] = Item(
                     label=ident, where=[], points=pts, written=written,
                     text=g.texts.get(col, ''),
-                    key='written' if written else g.bank_letters(col, key))
+                    key='written' if written else g.key_label(col, bank=True))
             it.where.append(where)
             for r in g.students:
                 if not g.asked(r, col):

@@ -1,6 +1,6 @@
 # Results tab
 
-Planned 2026-10-29; phase 1 under way. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
+Planned 2026-10-29. Phase 1 (foundations) shipped the same day; see "Phase 1 as built" at the end. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
 
 ## Settled defaults (Brandon accepted all four, 2026-10-29)
 
@@ -72,3 +72,13 @@ A lab practical (several forms, blanks for questions a form didn't include) goes
 4. **Afterward.** Re-marking sheets after a key change: `markSheets` needs the aligned images plus the layout and row areas computed during the scan, which would have to be recorded too. Also folders scanned before phase 1 (default 4).
 
 The user docs (`docs/outputs.md`, and a new page for the tab) follow phases 2 and 3.
+
+## Phase 1 as built (2026-10-29)
+
+Two gaps in "The raw scan" turned out not to be gaps. `gradeResults` does rewrite `results.csv`, but it only appends derived columns (`score`, `partialscore`) and a `numb_correct` row; the answers and the key row are left as read, and `outputs` already ignores the derived ones. So the answers file stays the raw layer and the scorer still writes it. The key files need no copies either: row 0 of each results file is the key, and the grading record holds the sources, choices, texts and points, which is everything rescoring uses.
+
+`grade_functions.score_answer` is the scoring rule pulled out of `gradeResults`, with a list of accepted keys added; on 300 random gradings across every combination of select-all, written answers, strictness and point values it gives the same points as before. The grading record now keeps a `settings` entry (partial credit, strictness, default points) so a key edit scores the way the scan did.
+
+`edits.py` owns `edits.json` and `apply()`, and `outputs.write` applies the edits every time, so Re-grade keeps them. A new scan into the folder renames the old file to `edits_replaced_<time>.json` rather than applying it to different sheets. Adjustments fill the gradebook's Points added cells and are added to the Canvas file's scores.
+
+`analysis.py` holds the statistics in Python, and `outputs` takes `BANDS` and `DI_GROUP` from it. One subtlety: the gradebook's band counts join the cutoff into the COUNTIFS criterion as text (`">="&0.93*30`), and Excel writes that number to 15 significant digits, so 27.9 of 30 is an A in the workbook although 0.93 × 30 is 27.900000000000002 as a double. `analysis` rounds its cutoffs the same way (checked in Excel).
