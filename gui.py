@@ -13,6 +13,7 @@ import scan_keys
 import sheet_layout
 from build_tab import BuildExamUI, open_sheet_dialog
 from practical_tab import BuildPracticalUI
+from results_tab import ResultsUI
 import help_links
 import outputs
 
@@ -75,10 +76,14 @@ class pyScanUI(ctk.CTkFrame):
         build_tab  = tabs.add("Build Exam")
         practical_tab = tabs.add("Build Practical")
         scan_tab   = tabs.add("Scan Exams")
+        results_tab = tabs.add("Results")
         regrade_tab = tabs.add("Re-grade")
         key_tab    = tabs.add("Standard Sheet")
         BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
         BuildPracticalUI(practical_tab, log_fn=self._log).pack(fill='both', expand=True)
+        self._tabs = tabs
+        self.results = ResultsUI(results_tab, log_fn=self._log)
+        self.results.pack(fill='both', expand=True)
 
         # ════════════════════════════════════════════════════════
         # TAB 1 — Scan Exams
@@ -862,7 +867,7 @@ class pyScanUI(ctk.CTkFrame):
         old_stdout = sys.stdout
         sys.stdout = TextRedirector(self.log_box)
         try:
-            Scanner(input_file, quests, markmissing, openQ, corrmark,
+            scan = Scanner(input_file, quests, markmissing, openQ, corrmark,
                     ignores, thresh, bubbleVal, openVal,
                     parent=self.parent,
                     ai_ocr=use_ai, api_key=api_key, ai_context=ai_context,
@@ -892,4 +897,7 @@ class pyScanUI(ctk.CTkFrame):
         finally:
             sys.stdout = old_stdout
         self._log('Done.')
+        # Straight to the results, the next thing to look at
+        if self.results.open(scan.outdir):
+            self._tabs.set('Results')
 

@@ -41,25 +41,32 @@ def quiet(fn, *a, **kw):
         return fn(*a, **kw)
 
 
+def make_outputs(root: Path) -> tuple[Path, list[Path]]:
+    """An outputs folder holding VERSIONS graded, as a scan leaves it."""
+    out = root / 'ExamScanner_outputs'
+    (out / 'marked').mkdir(parents=True)
+    csvs = []
+    for v, spec in VERSIONS.items():
+        rows = [['0', 'KEY', '', ''] + spec['key']]
+        rows += [[str(i), last, 'X', sid] + ans
+                 for i, (last, sid, ans) in enumerate(spec['students'], 1)]
+        path = Path(outputs.results_csv(out, v))
+        pd.DataFrame(rows, columns=['index', 'LastName', 'FirstName', 'studentID'] + QS
+                     ).to_csv(path, index=False)
+        quiet(grade_functions.gradeResults, str(path), False, False, 1, 2,
+              out / 'marked', key_data={
+                  'metadata': {'title': 'Quiz'},
+                  'sources': dict(zip(QS, spec['sources'])),
+                  'texts': {q: f'Question from {src}: a stem long enough to wrap onto '
+                               'several lines of the Results tab' for q, src in zip(QS, spec['sources'])}})
+        csvs.append(path)
+    quiet(outputs.record, out, csvs)
+    return out, csvs
+
+
 class EditsTest(unittest.TestCase):
     def setUp(self):
-        self.out = Path(tempfile.mkdtemp()) / 'ExamScanner_outputs'
-        (self.out / 'marked').mkdir(parents=True)
-        csvs = []
-        for v, spec in VERSIONS.items():
-            rows = [['0', 'KEY', '', ''] + spec['key']]
-            rows += [[str(i), last, 'X', sid] + ans
-                     for i, (last, sid, ans) in enumerate(spec['students'], 1)]
-            path = Path(outputs.results_csv(self.out, v))
-            pd.DataFrame(rows, columns=['index', 'LastName', 'FirstName', 'studentID'] + QS
-                         ).to_csv(path, index=False)
-            quiet(grade_functions.gradeResults, str(path), False, False, 1, 2,
-                  self.out / 'marked', key_data={
-                      'metadata': {'title': 'Quiz'},
-                      'sources': dict(zip(QS, spec['sources']))})
-            csvs.append(path)
-        quiet(outputs.record, self.out, csvs)
-        self.csvs = csvs
+        self.out, self.csvs = make_outputs(Path(tempfile.mkdtemp()))
 
     def tearDown(self):
         shutil.rmtree(self.out.parent)

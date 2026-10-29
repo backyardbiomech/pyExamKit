@@ -1,6 +1,6 @@
 # Results tab
 
-Planned 2026-10-29. Phase 1 (foundations) shipped the same day; see "Phase 1 as built" at the end. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
+Planned 2026-10-29. Phases 1 (foundations) and 2 (the read-only tab) shipped the same day; see "Phase 1 as built" and "Phase 2 as built" at the end. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
 
 ## Settled defaults (Brandon accepted all four, 2026-10-29)
 
@@ -82,3 +82,11 @@ Two gaps in "The raw scan" turned out not to be gaps. `gradeResults` does rewrit
 `edits.py` owns `edits.json` and `apply()`, and `outputs.write` applies the edits every time, so Re-grade keeps them. A new scan into the folder renames the old file to `edits_replaced_<time>.json` rather than applying it to different sheets. Adjustments fill the gradebook's Points added cells and are added to the Canvas file's scores.
 
 `analysis.py` holds the statistics in Python, and `outputs` takes `BANDS` and `DI_GROUP` from it. One subtlety: the gradebook's band counts join the cutoff into the COUNTIFS criterion as text (`">="&0.93*30`), and Excel writes that number to 15 significant digits, so 27.9 of 30 is an A in the workbook although 0.93 × 30 is 27.900000000000002 as a double. `analysis` rounds its cutoffs the same way (checked in Excel).
+
+## Phase 2 as built (2026-10-29)
+
+`results_model.py` computes everything the tab shows from a folder with its edits applied, with no Tk, so it is tested without a display; `results_tab.py` draws it, and `charts.py` holds the two Canvas charts (the grade bands before and after adjusting, and one question's answers with the key in green). The tab sits after Scan Exams, and a finished scan, exam or practical, opens it on its own outputs folder. The adjusted columns and the second chart series appear only once there is an adjustment, so an unadjusted exam isn't shown everything twice.
+
+A student's marked pages are found by name and ID. Their filenames also carry the sheet's place in the stack, which a version's results rows don't record, so two students whose names and IDs were both unread would share a match.
+
+One layout trap, worth knowing before adding to the tab: a label that sets its own `wraplength` from its own `<Configure>` width changes its size, which sends `<Configure>` again. In the full window that loop ran inside Tk until Python's recursion limit. Wrap to a parent's width or a fixed width instead. `tests/test_results_tab.py` shows every view in a child process with a time limit, which catches a loop that never settles; with the small fixture the old loop settled slowly rather than running away, so the test doesn't reproduce that particular one.
