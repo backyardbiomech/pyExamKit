@@ -8,6 +8,7 @@ marks every written answer correct; what is tested is everything around it.
 
     python -m unittest tests.test_multi_version_written -v
 '''
+import csv
 import json
 import random
 import shutil
@@ -163,10 +164,14 @@ class TestMultiVersionWritten(unittest.TestCase):
         import openpyxl
         wb = openpyxl.load_workbook(self.results / 'gradebook.xlsx')
         self.assertEqual(wb.sheetnames, ['Exam stats', 'Version A', 'Version B', 'By question',
-                                         'Item analysis'])
+                                         'Item analysis', 'Canvas scores'])
         stats = wb['Exam stats']
-        self.assertEqual([c.value for c in stats[3]], ['Scores', 'All students', 'Version A',
+        self.assertEqual([c.value for c in stats[3]][:4], ['Adjustment', 'All students', 'Version A',
                                                        'Version B'])
+        self.assertEqual([c.value for c in stats[outputs.ADJUST_ROW]][:4], ['Points added', 0, 0, 0])
+        self.assertEqual([c.value for c in stats[7]][:7],
+                         ['Scores', 'All students', 'Adjusted', 'Version A', 'Adjusted',
+                          'Version B', 'Adjusted'])
         self.assertEqual(len(stats._charts), 1)
         labels = [stats.cell(row=r, column=1).value for r in range(1, stats.max_row + 1)]
         self.assertIn("Reliability (Cronbach's alpha)", labels)
@@ -180,6 +185,25 @@ class TestMultiVersionWritten(unittest.TestCase):
             self.assertEqual(ws.cell(row=2, column=1).value, 'Question', name)
             self.assertTrue(str(ws.cell(row=1, column=5).value).startswith(('Q0', 'bank1')), name)
             self.assertTrue(any(c.value for c in ws[2][4:]), name)
+        # each student's adjusted total is their total plus the class's and
+        # their version's adjustment
+        for name, cell in (('Version A', '$C$4'), ('Version B', '$D$4')):
+            ws = wb[name]
+            header = [c.value for c in ws[1]]
+            self.assertEqual(header[-2:], ['Total', 'Adjusted'], name)
+            total = ws.cell(row=4, column=len(header) - 1).coordinate
+            self.assertEqual(ws.cell(row=4, column=len(header)).value,
+                             f"={total}+N('Exam stats'!$B$4)+N('Exam stats'!{cell})", name)
+
+    def test_canvas_scores_tab_matches_the_canvas_file(self):
+        import openpyxl
+        ws = openpyxl.load_workbook(self.results / 'gradebook.xlsx')['Canvas scores']
+        rows = list(csv.reader((self.results / 'canvas_upload.csv').open()))
+        self.assertEqual([c.value for c in ws[1]][:3], rows[0])
+        self.assertEqual(ws.max_row, len(rows))
+        for i, row in enumerate(rows[2:], 3):
+            self.assertEqual([ws.cell(row=i, column=c).value or '' for c in (1, 2)], row[:2])
+            self.assertTrue(str(ws.cell(row=i, column=3).value).startswith("=ROUND('Version "))
 
     def test_versions_combined_by_bank_question(self):
         graded = [outputs.load(p) for p in outputs.listed(self.results)]

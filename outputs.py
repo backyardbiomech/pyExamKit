@@ -18,7 +18,7 @@ import csv
 import json
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pandas as pd
@@ -206,19 +206,37 @@ def write(outdir, prefix: str | None = None, csvs=None) -> None:
     if not graded:
         print('[Outputs] No graded results to write.', flush=True)
         return
+    title = next((g.title for g in graded if g.title), '') or Path(outdir).resolve().parent.name
+    prefix = id_prefix() if prefix is None else prefix
     try:
-        write_gradebook(Path(outdir) / GRADEBOOK, graded)
+        write_gradebook(Path(outdir) / GRADEBOOK, graded, title, prefix)
         print(f'Gradebook saved → {Path(outdir) / GRADEBOOK}', flush=True)
     except Exception as exc:
         print(f'[Outputs] Could not save the gradebook: {exc}', flush=True)
-    title = next((g.title for g in graded if g.title), '') or Path(outdir).resolve().parent.name
-    write_canvas(Path(outdir) / CANVAS, graded, title,
-                 id_prefix() if prefix is None else prefix)
+    write_canvas(Path(outdir) / CANVAS, graded, title, prefix)
     print(f'Canvas file saved → {Path(outdir) / CANVAS}', flush=True)
 
 
 def _score(x: float) -> str:
     return f'{round(x, 2):g}'
+
+
+def _canvas_rows(graded: list[Graded], prefix: str) -> list[tuple]:
+    """The Canvas file's students in its order, sorted by name, as
+    (Student, SIS User ID, index into graded, results row). The gradebook's
+    Canvas scores tab uses the same order, so it pastes over the file."""
+    rows = []
+    for i, g in enumerate(graded):
+        for r in g.students:
+            last, first, sid = (str(g.df.loc[r, c]) if not pd.isna(g.df.loc[r, c]) else ''
+                                for c in ('LastName', 'FirstName', 'studentID'))
+            # Name bubbles pad with dashes, and v2 sheets have none to read
+            last, first = (x.rstrip('-') for x in (last, first))
+            name = f'{last}, {first}' if first else last
+            rows.append((last.lower(), first.lower(), sid, name,
+                         f'{prefix}{sid}' if sid else '', i, r))
+    rows.sort(key=lambda row: row[:3])
+    return [row[3:] for row in rows]
 
 
 def write_canvas(path, graded: list[Graded], title: str, prefix: str) -> None:
@@ -230,35 +248,26 @@ def write_canvas(path, graded: list[Graded], title: str, prefix: str) -> None:
         print('[Outputs] The versions are worth different totals ('
               + ', '.join(_score(p) for p in sorted(possible))
               + '); Points Possible uses the largest.', flush=True)
-    rows = []
-    for g in graded:
-        for r in g.students:
-            last, first, sid = (str(g.df.loc[r, c]) if not pd.isna(g.df.loc[r, c]) else ''
-                                for c in ('LastName', 'FirstName', 'studentID'))
-            # Name bubbles pad with dashes, and v2 sheets have none to read
-            last, first = (x.rstrip('-') for x in (last, first))
-            name = f'{last}, {first}' if first else last
-            rows.append((last.lower(), first.lower(), sid, name,
-                         f'{prefix}{sid}' if sid else '', _score(g.total(r))))
-    rows.sort()
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
         w.writerow(['Student', 'SIS User ID', title])
         w.writerow(['    Points Possible', '', _score(max(possible))])
-        for row in rows:
-            w.writerow(row[3:])
+        for name, sis, i, r in _canvas_rows(graded, prefix):
+            w.writerow([name, sis, _score(graded[i].total(r))])
 
 
-def write_gradebook(path, graded: list[Graded]) -> None:
+def write_gradebook(path, graded: list[Graded], title: str = '', prefix: str = '') -> None:
     import openpyxl
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     stats = wb.create_sheet('Exam stats')
-    ranges = []
+    adjust = _adjust_cells([g.version for g in graded if g.students])
+    by_version = []
     for g in graded:
         name = f'Version {g.version}' if g.version else 'Gradebook'
-        ranges.append(_gradebook_sheet(wb.create_sheet(name), g))
-    ranges = [r for r in ranges if r]
+        refs = [adjust['']] + ([adjust[g.version]] if g.version in adjust else [])
+        by_version.append(_gradebook_sheet(wb.create_sheet(name), g, refs))
+    ranges = [r for r in by_version if r]
     items = item_table(graded)
     combined = None
     if len(graded) > 1 and items.by_source:
@@ -267,6 +276,8 @@ def write_gradebook(path, graded: list[Graded]) -> None:
         combined = ranges[0]
     _stats_sheet(stats, ranges, combined, next((g.title for g in graded if g.title), ''))
     _item_sheet(wb.create_sheet('Item analysis'), items)
+    _canvas_sheet(wb.create_sheet('Canvas scores'), graded, by_version,
+                  title or 'Score', prefix)
     wb.save(path)
 
 
@@ -311,10 +322,12 @@ def _text_row(ws, first_col: int, texts: list[str]) -> None:
 DI_GROUP = 0.27
 
 
-def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int) -> None:
+def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int,
+                  more_totals: tuple = ()) -> None:
     """Mean, median, and discrimination index under each points column, as
     formulas over student rows first..last, so they follow edited points the
-    way the totals do. pts_cols is [(column number, points possible)]."""
+    way the totals do. pts_cols is [(column number, points possible)];
+    more_totals are columns like Adjusted that get a mean and median too."""
     from openpyxl.utils import get_column_letter
     st = _styles()
     tot = get_column_letter(total_col)
@@ -325,7 +338,7 @@ def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int) -> 
         rows[label] = ws.max_row
         for cell in ws[ws.max_row]:
             cell.font, cell.fill = st['hdr_font'], st['key_fill']
-    for col, possible in pts_cols + [(total_col, None)]:
+    for col, possible in pts_cols + [(c, None) for c in (total_col, *more_totals)]:
         c = get_column_letter(col)
         rng = f'{c}{first}:{c}{last}'
         ws.cell(row=rows['Mean'], column=col).value = f'=IFERROR(ROUND(AVERAGE({rng}),2),"")'
@@ -340,10 +353,11 @@ def _summary_rows(ws, first: int, last: int, pts_cols: list, total_col: int) -> 
                 f'=IFERROR(ROUND(({upper}-{lower})/{possible},2),"")')
 
 
-def _gradebook_sheet(ws, g: Graded):
+def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
     """Row 1 headers, row 2 the key (yellow), then a row per student: each
     question's answer and points, and a Total that is a live SUM of the
-    points, so correcting a points cell after a regrade updates the total."""
+    points, so correcting a points cell after a regrade updates the total.
+    Adjusted is the total plus the adjustment cells on Exam stats."""
     from openpyxl.utils import get_column_letter
     st = _styles()
     ids, qs = g.id_cols, g.q_cols
@@ -359,7 +373,7 @@ def _gradebook_sheet(ws, g: Graded):
         else:
             label = f'{qc}\n(Key: {key})'
         header += [label, f'{qc} Pts']
-    header.append('Total')
+    header += ['Total', 'Adjusted']
     _header(ws, header)
     has_text = any(g.texts.get(qc) for qc in qs)
     if has_text:
@@ -390,10 +404,13 @@ def _gradebook_sheet(ws, g: Graded):
                         for i in range(len(qs)))
         ws.cell(row=ws.max_row, column=n_id + 1 + 2 * len(qs)).value = (
             f'=SUM({refs})' if refs else 0)
+        total = f'{get_column_letter(n_id + 1 + 2 * len(qs))}{ws.max_row}'
+        ws.cell(row=ws.max_row, column=n_id + 2 + 2 * len(qs)).value = (
+            '=' + '+'.join([total] + [f'N({a})' for a in adjust]))
     if g.students:
         _summary_rows(ws, first, ws.max_row,
                       [(n_id + 2 + 2 * i, g.possible.get(qc, 0)) for i, qc in enumerate(qs)],
-                      n_id + 1 + 2 * len(qs))
+                      n_id + 1 + 2 * len(qs), (n_id + 2 + 2 * len(qs),))
 
     ws.freeze_panes = ws.cell(row=first, column=n_id + 1)
     for i, w in enumerate([16, 14, 12, 8][:n_id], 1):
@@ -402,13 +419,15 @@ def _gradebook_sheet(ws, g: Graded):
         ws.column_dimensions[get_column_letter(n_id + 1 + 2 * i)].width = 18
         ws.column_dimensions[get_column_letter(n_id + 2 + 2 * i)].width = 8
     ws.column_dimensions[get_column_letter(n_id + 1 + 2 * len(qs))].width = 10
+    ws.column_dimensions[get_column_letter(n_id + 2 + 2 * len(qs))].width = 10
     if not g.students:
         return None
-    # Where the totals are, for the Exam stats tab
+    # Where the totals are, for the Exam stats and Canvas scores tabs
     return TotalRange(g.version, ws.title, get_column_letter(n_id + 1 + 2 * len(qs)),
                       first, first + len(g.students) - 1, g.points_possible(),
                       [get_column_letter(n_id + 2 + 2 * i) for i, qc in enumerate(qs)
-                       if g.possible.get(qc, 0) > 0])
+                       if g.possible.get(qc, 0) > 0],
+                      get_column_letter(n_id + 2 + 2 * len(qs)))
 
 
 # ── Exam stats ───────────────────────────────────────────────────────────────
@@ -422,6 +441,11 @@ class TotalRange:
     last: int
     possible: float
     items: list = field(default_factory=list)    # each graded question's points column
+    adj_col: str = ''                            # the Adjusted column, if any
+
+    def adjusted(self) -> TotalRange:
+        """The same students' adjusted totals."""
+        return replace(self, col=self.adj_col)
 
     def col_ref(self, col: str) -> str:
         return f"'{self.sheet}'!${col}${self.first}:${col}${self.last}"
@@ -452,21 +476,42 @@ for _letter, _base in (('D', 60), ('C', 70), ('B', 80)):
 BANDS += [('A−', 90, 93, '90–92%'), ('A', 93, None, '93–100%')]
 del _letter, _base
 BAR_COLOR = '2A78D6'
+UNADJUSTED_COLOR = 'B4B2AC'
+
+
+# The adjustment inputs sit at the top of Exam stats, a fixed place the
+# gradebook tabs' Adjusted formulas can point at before the tab is written
+ADJUST_ROW = 4
+
+
+def _adjust_cells(versions: list[str]) -> dict:
+    """Where each adjustment is typed: '' for the whole class, and one per
+    version when there are several. A version's students get both."""
+    from openpyxl.utils import get_column_letter
+    cells = {'': f"'Exam stats'!$B${ADJUST_ROW}"}
+    if len(versions) > 1:
+        for i, v in enumerate(versions):
+            cells[v] = f"'Exam stats'!${get_column_letter(3 + i)}${ADJUST_ROW}"
+    return cells
 
 
 def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
                  title: str) -> None:
-    """Summary statistics of the totals, for the class and for each version,
-    and how many students earn each letter grade. Every number is a formula
-    over the gradebook tabs, so it follows corrected points. combined is
-    the whole class question by question (By question, or the one version),
-    which the class's reliability needs; None leaves it blank."""
+    """The adjustment inputs, then summary statistics of the totals for the
+    class and for each version, each beside its adjusted figures, and how
+    many students earn each letter grade before and after adjusting. Every
+    number is a formula over the gradebook tabs, so it follows corrected
+    points and a changed adjustment. combined is the whole class question
+    by question (By question, or the one version), which the class's
+    reliability needs; None leaves it blank."""
     from openpyxl.chart import BarChart, Reference
+    from openpyxl.chart.series import SeriesLabel
     from openpyxl.chart.shapes import GraphicalProperties
     from openpyxl.drawing.line import LineProperties
     from openpyxl.styles import Font
     from openpyxl.utils import get_column_letter
     st = _styles()
+    note_font = Font(italic=True, color='52514E')
     ws.append([title or 'Exam stats'])
     ws['A1'].font = Font(bold=True, size=14)
     ws.append([])
@@ -474,11 +519,30 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
         ws.append(['No graded students.'])
         return
 
-    # Scores: one column for the class, and one per version when there are several
-    cols = [('All students', ranges)]
+    groups = [('All students', ranges)]
     if len(ranges) > 1:
-        cols += [(f'Version {r.version}', [r]) for r in ranges]
-    _header(ws, ['Scores'] + [c for c, _ in cols], height=20)
+        groups += [(f'Version {r.version}', [r]) for r in ranges]
+
+    # Adjustment: typed here, added to every total on the gradebook tabs
+    _header(ws, ['Adjustment'] + [label for label, _ in groups], height=20)
+    ws.append(['Points added'] + [0] * len(groups))
+    assert ws.max_row == ADJUST_ROW
+    for cell in ws[ADJUST_ROW][1:]:
+        cell.fill = st['key_fill']
+        cell.font = Font(bold=True, color='0000FF')
+    ws.append(['Type the points to add to every score in the yellow cells. '
+               + ('A student gets the class amount plus their version\'s. '
+                  if len(groups) > 1 else '')
+               + 'The Adjusted columns here, on the gradebook tabs, and on Canvas '
+                 'scores follow.'])
+    ws.cell(row=ws.max_row, column=1).font = note_font
+    ws.append([])
+
+    # Scores: each group's totals, then its adjusted totals beside them
+    cols = []
+    for label, rs in groups:
+        cols += [(label, rs, False), ('Adjusted', [r.adjusted() for r in rs], True)]
+    _header(ws, ['Scores'] + [label for label, _, _ in cols], height=20)
     same_possible = len({r.possible for r in ranges}) == 1
 
     def union(rs):
@@ -489,17 +553,25 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
              ('Standard deviation', 'ROUND(STDEV({}),2)', False),
              ('Highest', 'MAX({})', True), ('Lowest', 'MIN({})', True)]
     ws.append(['Points possible'] + [_num(rs[0].possible) if same_possible or len(rs) == 1
-                                     else 'varies' for _, rs in cols])
+                                     else 'varies' for _, rs, _ in cols])
     pct_rows = []
     for label, f, as_pct in stats:
-        ws.append([label] + [f'=IFERROR({f.format(union(rs))},"")' for _, rs in cols])
+        ws.append([label] + [f'=IFERROR({f.format(union(rs))},"")' for _, rs, _ in cols])
         if label == 'Standard deviation':
-            alphas = [(combined.alpha() if combined else None) if len(rs) > 1 or i == 0
-                      else rs[0].alpha() for i, (_, rs) in enumerate(cols)]
+            # Adding points moves no student relative to another on a version,
+            # so reliability is the unadjusted figure's and left blank
+            alphas = []
+            for i, (_, rs, adj) in enumerate(cols):
+                if adj:
+                    alphas.append(None)
+                elif len(rs) > 1 or i == 0:
+                    alphas.append(combined.alpha() if combined else None)
+                else:
+                    alphas.append(rs[0].alpha())
             ws.append(["Reliability (Cronbach's alpha)"] + alphas)
         if as_pct:
             row = [f'{label} (% of possible)']
-            for i, (_, rs) in enumerate(cols):
+            for i, (_, rs, _) in enumerate(cols):
                 if same_possible or len(rs) == 1:
                     ref = f'{get_column_letter(2 + i)}{ws.max_row}'
                     row.append(f'=IFERROR({ref}/{rs[0].possible},"")')
@@ -512,53 +584,90 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
             cell.number_format = '0.0%'
 
     # Distribution across the whole class, each student against their own
-    # version's points possible
+    # version's points possible, before and after adjusting
     ws.append([])
     ws.append([])
-    _header(ws, ['Grade', 'Percent of possible', 'Students', '% of class'], height=20)
+    _header(ws, ['Grade', 'Percent of possible', 'Students', '% of class',
+                 'Adjusted', 'Adjusted % of class'], height=20)
     first = ws.max_row + 1
-    n_ref = f'$C${first + len(BANDS)}'
-    for grade, lo, hi, label in BANDS:
+    n_row = first + len(BANDS)
+
+    def count(rs, lo, hi):
         terms = []
-        for r in ranges:
+        for r in rs:
             conds = []
             if lo is not None:
                 conds.append(f'{r.ref},">="&{lo / 100}*{r.possible}')
             if hi is not None:
                 conds.append(f'{r.ref},"<"&{hi / 100}*{r.possible}')
             terms.append(f'COUNTIFS({",".join(conds)})')
-        ws.append([grade, label, '=' + '+'.join(terms), f'=IFERROR(C{ws.max_row + 1}/{n_ref},"")'])
-        ws.cell(row=ws.max_row, column=4).number_format = '0%'
+        return '=' + '+'.join(terms)
+
+    adjusted = [r.adjusted() for r in ranges]
+    for grade, lo, hi, label in BANDS:
+        row = ws.max_row + 1
+        ws.append([grade, label, count(ranges, lo, hi), f'=IFERROR(C{row}/$C${n_row},"")',
+                   count(adjusted, lo, hi), f'=IFERROR(E{row}/$E${n_row},"")'])
+        for c in (4, 6):
+            ws.cell(row=row, column=c).number_format = '0%'
     last = ws.max_row
-    ws.append(['Total', '', f'=SUM(C{first}:C{last})', f'=SUM(D{first}:D{last})'])
-    ws.cell(row=ws.max_row, column=4).number_format = '0%'
+    ws.append(['Total', ''] + [f'=SUM({c}{first}:{c}{last})' for c in 'CDEF'])
+    for c in (4, 6):
+        ws.cell(row=ws.max_row, column=c).number_format = '0%'
     for cell in ws[ws.max_row]:
         cell.font = st['hdr_font']
     ws.append(['Each band runs from its lower bound up to, not including, the next: '
-               '82.9% is a B−.'])
-    ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color='52514E')
+               '82.9% is a B−. An adjusted score above the points possible counts as an A.'])
+    ws.cell(row=ws.max_row, column=1).font = note_font
 
-    # One series, so no legend: the title names it
+    # Unadjusted in gray behind the adjusted in blue
     chart = BarChart()
     chart.type = 'col'
     chart.title = 'Students by grade'
     chart.y_axis.title = 'Students'
-    chart.legend = None
+    chart.legend.position = 'b'
     chart.gapWidth = 30
-    chart.add_data(Reference(ws, min_col=3, min_row=first, max_row=last), titles_from_data=False)
+    for col, color, name in ((3, UNADJUSTED_COLOR, 'Unadjusted'), (5, BAR_COLOR, 'Adjusted')):
+        chart.add_data(Reference(ws, min_col=col, min_row=first, max_row=last),
+                       titles_from_data=False)
+        series = chart.series[-1]
+        series.tx = SeriesLabel(v=name)
+        series.graphicalProperties = GraphicalProperties(solidFill=color)
+        series.graphicalProperties.line.noFill = True
     chart.set_categories(Reference(ws, min_col=1, min_row=first, max_row=last))
-    chart.series[0].graphicalProperties = GraphicalProperties(solidFill=BAR_COLOR)
-    chart.series[0].graphicalProperties.line.noFill = True
     chart.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill='E0E0DD'))
     chart.y_axis.number_format = '0'
     chart.x_axis.delete = False
     chart.y_axis.delete = False
     chart.height, chart.width = 8, 16
-    ws.add_chart(chart, f'{get_column_letter(max(len(cols), 3) + 3)}3')
+    ws.add_chart(chart, f'{get_column_letter(max(len(cols), 6) + 3)}3')
 
     ws.column_dimensions['A'].width = 30
     for i in range(len(cols)):
         ws.column_dimensions[get_column_letter(2 + i)].width = 14
+
+
+def _canvas_sheet(ws, graded: list[Graded], ranges: list, title: str, prefix: str) -> None:
+    """canvas_upload.csv with the adjusted scores: the same header, Points
+    Possible row, and students in the same order, so column C pastes over the
+    file's scores. ranges[i] locates graded[i]'s totals. The unadjusted
+    scores sit to the right, past a blank column, for checking."""
+    from openpyxl.styles import Font
+    possible = max(g.points_possible() for g in graded)
+    _header(ws, ['Student', 'SIS User ID', title, None, 'Unadjusted'], height=20)
+    ws.append(['    Points Possible', '', _num(possible)])
+    for name, sis, i, r in _canvas_rows(graded, prefix):
+        t = ranges[i]
+        row = t.first + graded[i].students.index(r)
+        ws.append([name, sis, f"=ROUND('{t.sheet}'!{t.adj_col}{row},2)", None,
+                   f"=ROUND('{t.sheet}'!{t.col}{row},2)"])
+    ws.cell(row=1, column=7).value = (
+        'Column C is canvas_upload.csv with the adjustment on Exam stats added, row for row. '
+        'Copy C3 down to the last student and paste it over C3 in canvas_upload.csv.')
+    ws.cell(row=1, column=7).font = Font(italic=True, color='52514E')
+    ws.freeze_panes = 'A3'
+    for col, w in zip('ABCDE', (28, 14, 14, 3, 12)):
+        ws.column_dimensions[col].width = w
 
 
 def _num(x: float):
