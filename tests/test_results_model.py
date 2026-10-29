@@ -99,9 +99,96 @@ class ResultsModelTest(unittest.TestCase):
         rec_path.write_text(json.dumps(rec))
         self.assertTrue(rm.open_folder(self.out).legacy)
 
-    def test_a_folder_with_nothing_graded(self):
+    def test_the_folder_holding_the_outputs_opens_them(self):
+        self.assertEqual(rm.open_folder(self.out.parent).outdir, self.out)
+
+    def test_an_empty_folder_says_what_it_looked_for(self):
+        empty = self.out.parent / 'empty'
+        empty.mkdir()
+        with self.assertRaises(ValueError) as said:
+            rm.open_folder(empty)
+        self.assertIn('no app_data folder', str(said.exception))
+        # The scan's results gone, the gradebook still there
+        (self.out / outputs.GRADEBOOK).write_bytes(b'')
+        for p in self.csvs:
+            p.unlink()
+        with self.assertRaises(ValueError) as said:
+            rm.open_folder(self.out)
+        msg = str(said.exception)
+        self.assertIn('names results_versionA.csv, results_versionB.csv', msg)
+        self.assertIn('gradebook.xlsx is there', msg)
+        (outputs.app_data(self.out) / outputs.MANIFEST).unlink()
+        with self.assertRaises(ValueError) as said:
+            rm.open_folder(self.out)
+        self.assertIn('looked for app_data/results.csv', str(said.exception))
+
+    # ── Making edits ──────────────────────────────────────────────────────
+
+    def question(self, res, label):
+        return next(q for q in rm.questions(res) if q.label == label)
+
+    def test_adjustments_replace_and_clear(self):
+        res = rm.set_adjustments(self.results(), {'': 1, 'A': 0, 'B': 2}, note='curve')
+        self.assertEqual(res.adjust, {'': 1, 'B': 2})
+        self.assertTrue(res.unexported)
+        res = rm.set_adjustments(res, {'': 1, 'A': 0, 'B': 0})
+        self.assertEqual(res.adjust, {'': 1})
+        self.assertEqual([(e['version'], e['note']) for e in res.edits], [('', 'curve')])
+
+    def test_key_change_by_bank_question(self):
+        res = self.results()
+        q = self.question(res, 'bank.md#2')
+        e = rm.key_edit(res, q, rm.parse_keys('c'), also=True, note='two right answers')
+        self.assertEqual((e['source'], e['keys'], e['also']), ('bank.md#2', ['C'], True))
+        res = rm.add(res, e)
+        self.assertEqual(self.question(res, 'bank.md#2').mean, 1.0)
+        # Changing the key outright makes the also-accept moot
+        res = rm.add(res, rm.key_edit(res, q, ['C'], also=False))
+        self.assertEqual(len(res.edits), 1)
+        self.assertEqual(self.question(res, 'bank.md#2').key, 'C')
+        self.assertEqual(rm.describe(res, res.edits[0]), 'bank.md#2: key changed to C')
+
+    def test_parse_keys(self):
+        self.assertEqual(rm.parse_keys(' c, d or ca '), ['C', 'D', 'AC'])
+        for bad in ('', '1', 'C;D'):
+            with self.assertRaises(ValueError):
+                rm.parse_keys(bad)
+
+    def test_credit_actions(self):
+        res = self.results()
+        q = self.question(res, 'bank.md#3')
+        res = rm.add(res, rm.credit_edit(res, q, 'points', 2))
+        res = rm.add(res, rm.credit_edit(res, q, 'points', 4))
+        self.assertEqual(len(res.edits), 1)
+        self.assertEqual(self.question(res, 'bank.md#3').points, 4)
+        self.assertEqual(rm.describe(res, res.edits[0]), 'bank.md#3: worth 4 points')
+        res = rm.add(res, rm.credit_edit(res, q, 'drop'))
+        self.assertNotIn('bank.md#3', [q.label for q in rm.questions(res)])
+        res = rm.delete(res, [e['id'] for e in res.edits])
+        self.assertEqual(res.edits, [])
         with self.assertRaises(ValueError):
-            rm.open_folder(self.out.parent)
+            rm.credit_edit(res, q, 'points', -1)
+
+    def test_override_one_cell(self):
+        res = self.results()
+        res = rm.add(res, rm.override_edit(res, 'A', '3', 'Q002', 0.5, note='argued well'))
+        res = rm.add(res, rm.override_edit(res, 'A', '3', 'Q002', 1))
+        self.assertEqual(len(res.edits), 1)
+        self.assertEqual(res.edits[0]['student_id'], '3')
+        cole = {a.question: a for a in rm.answers(res, 'A', '3')}
+        self.assertEqual((cole['Q002'].earned, cole['Q002'].overridden), (1, True))
+        self.assertFalse(cole['Q001'].overridden)
+        self.assertEqual(rm.describe(res, res.edits[0]), 'COLE, X, Version A Q002: 1 point')
+        self.assertEqual(len(rm.overrides_on(res, self.question(res, 'bank.md#2'))), 1)
+        res = rm.set_note(res, res.edits[0]['id'], 'checked the sheet')
+        self.assertEqual(res.edits[0]['note'], 'checked the sheet')
+
+    def test_written_keys_are_not_changed_here(self):
+        res = self.results()
+        q = self.question(res, 'bank.md#1')
+        q.written = True
+        with self.assertRaises(ValueError):
+            rm.key_edit(res, q, ['A'], also=False)
 
 
 if __name__ == '__main__':

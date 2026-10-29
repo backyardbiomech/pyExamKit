@@ -117,4 +117,4 @@ Each student's marked pages are saved as `Last_First_ID_p1.jpg`, `_p2.jpg`, and 
 
 ---
 
-Previous: [Outputs](outputs.md) · Next: [FAQ and troubleshooting](faq.md)
+Previous: [The Results tab](results.md) · Next: [FAQ and troubleshooting](faq.md)

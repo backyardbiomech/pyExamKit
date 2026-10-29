@@ -103,6 +103,19 @@ class EditsTest(unittest.TestCase):
         self.assertEqual([g['A'].earned(r, 'Q002') for r in g['A'].students], [1, 1, 1])
         self.assertEqual(g['A'].key_label('Q002'), 'B or C')
 
+    def test_key_by_bank_question_in_each_sheets_letters(self):
+        graded = self.graded()
+        # Version B printed bank.md#2 as its Q003 with the choices shuffled:
+        # its A, B, C are the bank's C, A, B, so the bank's B is its C
+        graded['B'].choices['Q003'] = 'CAB'
+        out, problems = edits.apply(list(graded.values()),
+                                    [edits.make('key', source='bank.md#2', keys=['B'])])
+        g = {g.version: g for g in out}
+        self.assertEqual(problems, [])
+        self.assertEqual(g['A'].key_label('Q002'), 'B')
+        self.assertEqual(g['B'].key_label('Q003'), 'C')
+        self.assertEqual([g['B'].earned(r, 'Q003') for r in g['B'].students], [0, 1])
+
     def test_full_credit_by_bank_question_reaches_every_version(self):
         g, _ = self.applied(edits.make('credit', source='bank.md#3', action='full'))
         self.assertEqual([g['A'].earned(r, 'Q003') for r in g['A'].students], [1, 1, 1])
@@ -180,6 +193,26 @@ class EditsTest(unittest.TestCase):
         row = [c.value for c in wb['Exam stats'][outputs.ADJUST_ROW]][:4]
         self.assertEqual(row, ['Points added', 1, 0, 2])
         self.assertEqual(wb['Version A'].cell(row=1, column=4).value, 'Q001\n(dropped)')
+
+    def test_export_recorded(self):
+        self.assertFalse(edits.unexported(self.out))
+        made = [edits.make('adjust', version='', points=1)]
+        edits.save(self.out, made)
+        self.assertTrue(edits.unexported(self.out))
+        self.assertTrue(quiet(outputs.write, self.out, prefix='L'))
+        self.assertFalse(edits.unexported(self.out))
+        # A note is not something to export; a change is
+        edits.save(self.out, [{**made[0], 'note': 'curve'}])
+        self.assertFalse(edits.unexported(self.out))
+        edits.save(self.out, [])
+        self.assertTrue(edits.unexported(self.out))
+
+    def test_a_file_that_cannot_be_saved_is_not_exported(self):
+        edits.save(self.out, [edits.make('adjust', version='', points=1)])
+        (self.out / outputs.GRADEBOOK).mkdir()      # as if open in Excel
+        self.assertFalse(quiet(outputs.write, self.out, prefix='L'))
+        self.assertTrue(edits.unexported(self.out))
+        self.assertTrue((self.out / outputs.CANVAS).exists())
 
     def test_a_new_scan_sets_old_edits_aside(self):
         edits.save(self.out, [edits.make('adjust', version='', points=1)])

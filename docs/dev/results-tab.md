@@ -1,6 +1,6 @@
 # Results tab
 
-Planned 2026-10-29. Phases 1 (foundations) and 2 (the read-only tab) shipped the same day; see "Phase 1 as built" and "Phase 2 as built" at the end. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
+Planned 2026-10-29. Phases 1 (foundations), 2 (the read-only tab) and 3 (editing) were built the same day; see the "as built" sections at the end. The gradebook's adjustment row (Exam stats, Points added) shipped the same day as `156cb92` and is the starting point: it showed that adjusting scores is worth doing, but in Excel the instructor sees the effect only after typing, can't fix a key, and still has to paste scores into the Canvas file by hand.
 
 ## Settled defaults (Brandon accepted all four, 2026-10-29)
 
@@ -71,7 +71,7 @@ A lab practical (several forms, blanks for questions a form didn't include) goes
 3. **Editing.** Adjustments, question actions, overrides, the edits list, Export.
 4. **Afterward.** Re-marking sheets after a key change: `markSheets` needs the aligned images plus the layout and row areas computed during the scan, which would have to be recorded too. Also folders scanned before phase 1 (default 4).
 
-The user docs (`docs/outputs.md`, and a new page for the tab) follow phases 2 and 3.
+The user docs are `docs/outputs.md` and `docs/results.md`.
 
 ## Phase 1 as built (2026-10-29)
 
@@ -91,10 +91,24 @@ A student's marked pages are found by name and ID. Their filenames also carry th
 
 One layout trap, worth knowing before adding to the tab: a label that sets its own `wraplength` from its own `<Configure>` width changes its size, which sends `<Configure>` again. In the full window that loop ran inside Tk until Python's recursion limit. Wrap to a parent's width or a fixed width instead. `tests/test_results_tab.py` shows every view in a child process with a time limit, which catches a loop that never settles; with the small fixture the old loop settled slowly rather than running away, so the test doesn't reproduce that particular one.
 
+## Phase 3 as built (2026-10-29)
+
+Editing lives in `results_model` as plain functions that save an edit and return the folder opened again (`add`, `delete`, `set_note`, `set_adjustments`), plus builders that turn what the tab knows into an edit (`key_edit`, `credit_edit`, `override_edit`); `results_tab` only reads its entries and calls them. A new edit replaces any earlier one it makes moot (a key change for the same target unless it only also-accepts, an override of the same cell, a point value or adjustment for the same target), so the list holds what is in force rather than every click. An adjustment of 0 removes the earlier one.
+
+Key edits now take `source`, like credit, so a key fix on a matched exam reaches every version. The tab shows keys in the bank's letters, so a source-targeted key edit stores bank letters and `edits._key` puts them into each sheet's letters through `Graded.sheet_letters`, the reverse of `bank_letters`. A version-targeted key edit is translated in the model and stores sheet letters, as phase 1 defined it.
+
+"Edits not yet exported" is a digest of the edit list (notes left out) stored in `edits.json` under `exported`. `outputs.write` records it whenever both files saved and it wrote the listed results, so a scan and a Re-grade count as exports too. File times would have been simpler, but copying a folder changes them. `outputs.write` now returns whether both files saved and wraps each in its own try, because Windows locks a file open in Excel; the Canvas file used to be unguarded.
+
+The tab packs each view's controls from the bottom up and its table last, and each table's scrollbar before the table, so a short or narrow window shrinks the tables rather than hiding buttons. Before this, the answers table's scrollbar was squeezed out at the default size. `tests/test_results_tab.py` checks, at the default size and the window's minimum, that no control is hidden, smaller than it asks to be, or past the window's edge (tables and charts may shrink), and drives one edit of each kind through the tab's own buttons, then Export, and checks the Canvas file.
+
+A folder that opens with nothing now says what it looked for (`results_model.why_empty`): no `app_data`, results files named in `outputs.json` but missing, or none found, and whether a gradebook sits there unused. Choosing the folder that holds `ExamScanner_outputs` opens it.
+
+Not done: written questions' keys stay on Re-grade (the tab has no button that opens the Re-grader yet, which the decisions above allow for); re-marking sheets after a key change is phase 4, and Export warns about it.
+
 ## Where it stands (handoff, 2026-10-29)
 
-Phases 1 and 2 are on main (`6338a0a`, `f67470b`). Brandon looked at the tab on the synthetic demo and was satisfied for now; he had no layout changes. Next is phase 3: the adjustment inputs, the question actions (change key, also accept, full credit, drop, change points), point overrides from the Students view, the edits list with notes and delete, and Export. All of it goes through `edits.make`/`edits.save` and then a reload of `results_model.open_folder`; Export calls `outputs.write`, which already applies the edits. Defaults 1 to 4 at the top of this file are settled. User docs (`docs/outputs.md` and a page for the tab) follow phase 3.
+Phases 1 to 3 are built; phase 3 is not yet committed. User docs: `docs/results.md` (the tab's Help page) and `docs/outputs.md`. Next is phase 4 (re-marking sheets, folders from before phase 1), and a button that opens the Re-grader from Results.
 
-Open item: Brandon's folder `~/Desktop/2nd_exam/ExamScanner_outputs` (scanned 2026-10-28) wouldn't open. It holds `ALERT.txt`, `marked/` and `app_data/aligned` and `scanJPGs`, but no results files, gradebook or Canvas file anywhere, so the tab rightly found nothing to show. Ask him whether he moved those files or the scan stopped partway; if the scan stopped, that's a scanner bug to find. Either way, the tab's message could say what it looked for. Don't open or list `marked/` (its filenames are student names) or read any results file into the conversation (FERPA).
+Settled: the folder `~/Desktop/2nd_exam/ExamScanner_outputs` (scanned 2026-10-28) would not open because Brandon had moved its results files out of `app_data/` after the scan, not a scanner bug. The tab now says what it looked for. Don't open or list `marked/` (its filenames are student names) or read any results file into the conversation (FERPA); the folder holding the scans also has student-named PDFs at its top level.
 
 Running Tk in the agent's shell: the sandbox sometimes can't find Tcl, so export `TCL_LIBRARY` and `TK_LIBRARY` pointing at `lib/tcl8.6` and `lib/tk8.6` of the uv-managed Python. Screen capture isn't permitted there, so layout checks go through Tk geometry (widget boxes, canvas text bounding boxes) rather than screenshots.

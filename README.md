@@ -65,8 +65,9 @@ flowchart TD
 8. [Class rosters](docs/roster.md) — putting names on results by ID, from a Canvas export or your own spreadsheet
 9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading
 10. [Outputs](docs/outputs.md) — every file the app writes and what to do with it
-11. [Lab practicals](docs/lab-practicals.md) — writing a practical's source file, building its sheets and placards, and grading every form in one stack
-12. [FAQ and troubleshooting](docs/faq.md)
+11. [The Results tab](docs/results.md) — statistics, item analysis, fixing a key, crediting or dropping a question, adding points, and exporting to Canvas
+12. [Lab practicals](docs/lab-practicals.md) — writing a practical's source file, building its sheets and placards, and grading every form in one stack
+13. [FAQ and troubleshooting](docs/faq.md)
 
 Design notes and implementation history live in [docs/dev/](docs/dev/). They document why parts of the app are built the way they are, and are aimed at anyone modifying the code rather than at anyone using it.
 

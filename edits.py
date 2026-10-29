@@ -10,7 +10,9 @@ deleting an edit undoes it. docs/dev/results-tab.md has the design.
 Each edit is a dict with an id, a type, an optional note, and the time it
 was made. The types, applied in this order:
 
-  key       version, question, keys [str], also (bool): grade the question
+  key       version and question, keys [str] in the sheet's letters; or
+            source (a bank question, on every version that printed it),
+            keys in the bank's letters. also (bool): grade the question
             against keys, or against its own key and keys when also is set
   credit    source (a bank question, on every version that printed it) or
             version and question; action 'full' (everyone given it earns its
@@ -20,10 +22,14 @@ was made. The types, applied in this order:
             that row), question, points: one student's points on one question
   adjust    version ('' for the whole class), points: added to every total;
             the latest for a version replaces any before it
+
+The file also records which edits the gradebook and Canvas file were last
+written with, so the tab can say when they are out of date.
 """
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import time
 import uuid
@@ -56,8 +62,41 @@ def load(outdir) -> list[dict]:
     return [e for e in data.get('edits', []) if e.get('type') in TYPES]
 
 
+def _read(outdir) -> dict:
+    try:
+        data = json.loads(path(outdir).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def save(outdir, edits: list[dict]) -> None:
-    path(outdir).write_text(json.dumps({'edits': edits}, indent=2), encoding='utf-8')
+    data = {**_read(outdir), 'edits': edits}
+    path(outdir).write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+
+def _digest(edits: list[dict]) -> str:
+    """What the edits do, so a changed note is not a change to export."""
+    bare = [{k: v for k, v in e.items() if k != 'note'} for e in edits]
+    return hashlib.sha1(json.dumps(bare, sort_keys=True).encode()).hexdigest()
+
+
+def mark_exported(outdir, edits: list[dict]) -> None:
+    """Record that the gradebook and Canvas file now carry these edits."""
+    data = _read(outdir)
+    if not data and not edits:
+        return                      # nothing to record, and no file to make
+    data.setdefault('edits', [])
+    data['exported'] = _digest(edits)
+    path(outdir).write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+
+def unexported(outdir) -> bool:
+    """True when the edits differ from those last written to the gradebook
+    and Canvas file. A folder whose files were never written with edits
+    counts as exported only while it has none."""
+    data = _read(outdir)
+    return _digest(load(outdir)) != data.get('exported', _digest([]))
 
 
 def make(type_: str, note: str = '', **fields) -> dict:
@@ -124,21 +163,30 @@ def _rescore(g: outputs.Graded, col: str) -> None:
 
 
 def _key(e, out, by_version) -> bool:
-    g, col = by_version.get(e.get('version', '')), e.get('question')
     keys = [k for k in e.get('keys', []) if k]
-    if g is None or col not in g.df.columns or not keys:
+    if e.get('source'):
+        # Keys in the bank's letters, put into each sheet's own
+        targets = [(g, c, [g.sheet_letters(c, k) for k in keys]) for g in out
+                   for c, src in g.sources.items() if src == e['source'] and c in g.df.columns]
+    else:
+        g, col = by_version.get(e.get('version', '')), e.get('question')
+        targets = [(g, col, keys)] if g is not None and col in g.df.columns else []
+    if not keys:
         return False
-    if g.df.loc['0', col] == 'CC':
-        return False                # written answers are re-graded on Re-grade
-    original = g.accepted.get(col) or [g.df.loc['0', col]]
-    if not grade_functions.graded_key(original[0]):
-        original = []
-    g.accepted[col] = list(dict.fromkeys((original if e.get('also') else []) + keys))
-    g.df.loc['0', col] = g.accepted[col][0]
-    if col not in g.possible:
-        g.possible[col] = float(_settings(g)['bubble_points'])
-    _rescore(g, col)
-    return True
+    done = False
+    for g, col, sheet_keys in targets:
+        if g.df.loc['0', col] == 'CC':
+            continue                # written answers are re-graded on Re-grade
+        original = g.accepted.get(col) or [g.df.loc['0', col]]
+        if not grade_functions.graded_key(original[0]):
+            original = []
+        g.accepted[col] = list(dict.fromkeys((original if e.get('also') else []) + sheet_keys))
+        g.df.loc['0', col] = g.accepted[col][0]
+        if col not in g.possible:
+            g.possible[col] = float(_settings(g)['bubble_points'])
+        _rescore(g, col)
+        done = True
+    return done
 
 
 def _credit(e, out, by_version) -> bool:

@@ -176,6 +176,15 @@ class Graded:
             out.append(order[i] if 0 <= i < len(order) else ch)
         return ''.join(sorted(out))
 
+    def sheet_letters(self, col: str, letters: str) -> str:
+        """The reverse of bank_letters: bank letters as they sat on this sheet.
+        A letter the question did not have is left as it is."""
+        order = self.choices.get(col, '')
+        if not order:
+            return letters
+        return ''.join(sorted(chr(ord('A') + order.index(ch)) if ch in order else ch
+                              for ch in letters))
+
     def points_possible(self) -> float:
         return sum(self.possible.values())
 
@@ -215,14 +224,15 @@ def load(csv_path) -> Graded:
 
 # ── Writing ──────────────────────────────────────────────────────────────────
 
-def write(outdir, prefix: str | None = None, csvs=None) -> None:
+def write(outdir, prefix: str | None = None, csvs=None) -> bool:
     """Write gradebook.xlsx and canvas_upload.csv from the listed results,
-    or from csvs when given."""
+    or from csvs when given. True when both were saved; then the edits they
+    carry are recorded as exported."""
     graded = [load(p) for p in (csvs if csvs is not None else listed(outdir))]
     graded = [g for g in graded if g.students]
     if not graded:
         print('[Outputs] No graded results to write.', flush=True)
-        return
+        return False
     import edits
     made = edits.load(outdir)
     graded, problems = edits.apply(graded, made)
@@ -231,13 +241,19 @@ def write(outdir, prefix: str | None = None, csvs=None) -> None:
     adjust = edits.adjustments(made)
     title = next((g.title for g in graded if g.title), '') or Path(outdir).resolve().parent.name
     prefix = id_prefix() if prefix is None else prefix
-    try:
-        write_gradebook(Path(outdir) / GRADEBOOK, graded, title, prefix, adjust)
-        print(f'Gradebook saved → {Path(outdir) / GRADEBOOK}', flush=True)
-    except Exception as exc:
-        print(f'[Outputs] Could not save the gradebook: {exc}', flush=True)
-    write_canvas(Path(outdir) / CANVAS, graded, title, prefix, adjust)
-    print(f'Canvas file saved → {Path(outdir) / CANVAS}', flush=True)
+    saved = True
+    # Either file fails while it is open in Excel on Windows, which locks it
+    for name, fn in ((GRADEBOOK, write_gradebook), (CANVAS, write_canvas)):
+        try:
+            fn(Path(outdir) / name, graded, title, prefix, adjust)
+            print(f'{"Gradebook" if name == GRADEBOOK else "Canvas file"} saved → '
+                  f'{Path(outdir) / name}', flush=True)
+        except Exception as exc:
+            saved = False
+            print(f'[Outputs] Could not save {name}: {exc}', flush=True)
+    if saved and csvs is None:
+        edits.mark_exported(outdir, made)
+    return saved
 
 
 def _score(x: float) -> str:
@@ -719,6 +735,7 @@ class Item:
     points: float
     written: bool
     text: str = ''
+    cols: list = field(default_factory=list)     # [(version, column)], beside where
     # (student uid, fraction of points earned, points earned, answer in bank letters)
     responses: list = field(default_factory=list)
 
@@ -767,6 +784,7 @@ def item_table(graded: list[Graded]) -> ItemTable:
                     text=g.texts.get(col, ''),
                     key='written' if written else g.key_label(col, bank=True))
             it.where.append(where)
+            it.cols.append((g.version, col))
             for r in g.students:
                 if not g.asked(r, col):
                     continue
