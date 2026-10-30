@@ -39,3 +39,6 @@ bubble_stats.csv
 
 # Synthetic practical scans (tools/make_practical_test_stack.py regenerates them)
 tests/fixtures/practical/generated/
+
+# Built practical output (Build Practical writes <Title>_practical/)
+tests/fixtures/practical/*_practical/
