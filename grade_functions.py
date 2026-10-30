@@ -173,6 +173,7 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
         record['sources'] = key_data.get('sources') or {}
         record['choices'] = key_data.get('choices') or {}
         record['texts'] = key_data.get('texts') or {}
+        record['options'] = key_data.get('options') or {}
     grading_path.write_text(json.dumps(record, indent=2), encoding='utf-8')
     print('Done grading')
 

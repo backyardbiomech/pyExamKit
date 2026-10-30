@@ -41,7 +41,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                    open_coords: dict | None = None) -> dict:
     """Translate an ExamVersion into the generic dict keyformat.py expects:
     bubble_answers, open_questions, metadata, point_values, sources, choices,
-    texts.
+    texts, options.
 
     SA questions produce an 'ignore' bubble placeholder (so gradeResults/
     markSheets skip that slot) plus an open question carrying the answers.
@@ -59,7 +59,9 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     against several versions can be analyzed question by question. texts
     records each row's question as plain text, with the dropdown, item, or
     left it grades when the question takes several rows, so the gradebook
-    can say what each column asked.
+    can say what each column asked. options records the text of the shown
+    choices in bank order (index i is bank letter i), under the same condition
+    as choices, so a bank letter can be shown as the answer it stood for.
     """
     bubble_answers: dict = {}
     open_questions: dict = {}
@@ -67,7 +69,16 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
     sources: dict = {}
     choices: dict = {}
     texts: dict = {}
+    options: dict = {}
     questions_to_skip: list[int] = []
+
+    def note_options(q_label: str, placed: list[tuple[int, str]]) -> None:
+        # The shown choices' text laid out by bank position; a position no
+        # shown choice holds stays empty
+        texts_by_pos = [''] * (max(pos for pos, _ in placed) + 1)
+        for pos, text in placed:
+            texts_by_pos[pos] = ' '.join(_strip_html(text).split())
+        options[q_label] = texts_by_pos
 
     def note_source(q_label: str, q: Question, part: int | None = None,
                     shown: list | None = None) -> None:
@@ -78,6 +89,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
         sources[q_label] = q.source_id if part is None else f'{q.source_id}.{part}'
         if shown and all(c.src >= 0 for c in shown):
             choices[q_label] = ''.join(chr(ord('A') + c.src) for c in shown)
+            note_options(q_label, [(c.src, c.text) for c in shown])
 
     counter = 1
     for q in version.questions:
@@ -109,6 +121,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
                     sources[q_label] = f'{q.source_id}.{i + 1}'
                     choices[q_label] = ''.join(chr(ord('A') + item.rank - 1)
                                                for item in q.order_items)
+                    note_options(q_label, [(item.rank - 1, item.text) for item in q.order_items])
                 ranked = sorted(q.order_items, key=lambda item: item.rank)
                 texts[q_label] = _row_text(q, f'position {i + 1}: {ranked[i].text}')
                 counter += 1
@@ -184,6 +197,7 @@ def build_key_data(version: ExamVersion, default_points: float = 1.0,
         'sources': sources,
         'choices': choices,
         'texts': texts,
+        'options': options,
     }
 
 

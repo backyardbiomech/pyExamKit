@@ -37,7 +37,9 @@ def _tk_root():
 def _squeezed(root, widget) -> bool:
     """True when a widget is hidden, shown smaller than it asks to be, or runs
     past the window's edges. Tables and charts may shrink; controls may not."""
-    if widget.winfo_class() == 'Treeview' or any(
+    # A dropdown's menu is a popup, not part of the layout, so where it sits
+    # says nothing about whether the view fits
+    if widget.winfo_class() in ('Treeview', 'Menu') or any(
             name in str(widget) for name in ('gradechart', 'choicebars')):
         return False
     if not widget.winfo_ismapped():
@@ -132,6 +134,19 @@ class ResultsTabTest(unittest.TestCase):
         self.assertIn('marked', done['notice'])
         self.assertEqual(done['after_delete'], 3)
 
+    def test_a_students_version_changed_through_the_tab(self):
+        run = subprocess.run([sys.executable, __file__, 'version', str(self.out)], cwd=ROOT,
+                             capture_output=True, text=True, timeout=TIME_LIMIT)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        done = json.loads(run.stdout.strip().splitlines()[-1])
+        self.assertEqual(done['errors'], [])
+        self.assertEqual(done['edits'], ['COLE, X: version A scored as version B'])
+        # Scored against B's key, COLE is in B's students and says where they came from
+        self.assertEqual(done['version'], 'B')
+        self.assertEqual(done['read_as'], 'A')
+        self.assertIn('bubbled as A', done['label'])
+        self.assertIn('rescan', done['notice'])
+
     def test_a_folder_without_results(self):
         from results_tab import ResultsUI
         root = _tk_root()
@@ -199,7 +214,35 @@ def edit_through_the_tab(outdir) -> dict:
     return done
 
 
-if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'edit':
+def change_version_through_the_tab(outdir) -> dict:
+    """Move a student to the version their sheet really was with the tab's
+    own control, and report what the tab then shows for them."""
+    import results_model as rm
+    from results_tab import ResultsUI
+    root = _tk_root()
+    errors = []
+    root.report_callback_exception = lambda *exc: errors.append(repr(exc[1]))
+    ui = ResultsUI(root, log_fn=lambda msg: None)
+    ui.pack(fill='both', expand=True)
+    ui.open(outdir)
+    root.update()
+    iid = next(i for i, s in ui._students.items() if s.name.startswith('COLE'))
+    ui.s_tree.selection_set(iid)
+    root.update()
+    ui.version_menu.set('B')
+    ui.version_button.invoke()
+    root.update()
+    moved = next(s for s in ui._students.values() if s.name.startswith('COLE'))
+    done = {'errors': errors, 'edits': [rm.describe(ui.res, e) for e in ui.res.edits],
+            'version': moved.version, 'read_as': moved.read_as,
+            'label': ui.student_label.cget('text'), 'notice': ui.notice.cget('text')}
+    root.destroy()
+    return done
+
+
+if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'version':
+    print(json.dumps(change_version_through_the_tab(sys.argv[2])))
+elif __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'edit':
     print(json.dumps(edit_through_the_tab(sys.argv[2])))
 elif __name__ == '__main__' and len(sys.argv) == 2 and not sys.argv[1].startswith('-'):
     print(json.dumps(show_every_view(sys.argv[1])))

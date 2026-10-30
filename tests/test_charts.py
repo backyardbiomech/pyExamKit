@@ -100,6 +100,28 @@ class TestSmoke(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_named_choices_keep_the_bars_room(self):
+        """A choice given its text is drawn as letter and text, cut to fit,
+        and the bars still have most of the width."""
+        root = tk.Tk()
+        try:
+            root.geometry('520x200')
+            cb = charts.ChoiceBars(root)
+            cb.pack(fill='both', expand=True)
+            long = 'the sarcoplasmic reticulum, which stores calcium ' * 3
+            cb.set_data([('A', 3, 'the T tubule'), ('B', 7, long)], {'B'})
+            root.update()
+            labels = [cb.itemcget(i, 'text') for i in cb.find_all()
+                      if cb.type(i) == 'text']
+            self.assertIn('A  the T tubule', labels)
+            cut = next(t for t in labels if t.startswith('B  the sarcoplasmic'))
+            self.assertTrue(cut.endswith('…'))
+            self.assertLess(len(cut), len(long))
+            bars = [cb.bbox(i) for i in cb.find_all() if cb.type(i) == 'rectangle']
+            self.assertTrue(any(b[2] - b[0] > 80 for b in bars))
+        finally:
+            root.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -102,8 +102,8 @@ def _same_target(a: dict, b: dict) -> bool:
 def add(res: Results, edit: dict) -> Results:
     """Save a new edit. It replaces any earlier edit it makes moot: a key or
     adjustment for the same target, an override of the same cell, a point
-    value for the same question. Earlier edits that still count (also
-    accept, full credit, drop) stay."""
+    value for the same question, a version change for the same student.
+    Earlier edits that still count (also accept, full credit, drop) stay."""
     def moot(old: dict) -> bool:
         if old['type'] != edit['type'] or not _same_target(old, edit):
             return False
@@ -113,8 +113,10 @@ def add(res: Results, edit: dict) -> Results:
             return old.get('action') == edit.get('action')
         return True
     made = [e for e in res.edits if not moot(e)]
-    if not (edit['type'] == 'adjust' and not edit.get('points')):
-        made.append(edit)               # an adjustment of 0 only clears the earlier one
+    clears = (edit['type'] == 'adjust' and not edit.get('points')) or (
+        edit['type'] == 'version' and edit.get('to') == edit.get('version'))
+    if not clears:
+        made.append(edit)               # an adjustment of 0, or a move back, only clears the earlier one
     edits.save(res.outdir, made)
     return open_folder(res.outdir)
 
@@ -197,6 +199,22 @@ def override_edit(res: Results, version: str, row: str, question: str, points: f
                       points=float(points))
 
 
+def version_edit(res: Results, student: Student, to: str, note: str = '') -> dict:
+    """Move a student to the version their sheet really was. The edit aims
+    at where the scanner read them, so a later move of the same student
+    replaces this one, and moving them back to that version clears it."""
+    if to not in {g.version for g in res.graded}:
+        raise ValueError(f'There is no version {to}: the versions are '
+                         f'{", ".join(g.version for g in res.graded)}.')
+    if to == student.version:
+        raise ValueError(f'{student.name} is already scored as version {to}.')
+    version = student.read_as or student.version
+    row = student.row[len(student.read_as):]
+    g = _version(res, student.version)
+    return edits.make('version', note, version=version, row=row,
+                      student_id=_cell(g, student.row, 'studentID'), to=to)
+
+
 def overrides_on(res: Results, q: Question) -> list[dict]:
     """The overrides on a question, which a key change leaves standing."""
     cols = set(q.cols)
@@ -223,6 +241,17 @@ def describe(res: Results, e: dict) -> str:
                 'drop': f'{where()}: dropped',
                 'points': f'{where()}: worth {_points(e.get("points", 0))}'
                 }.get(e.get('action'), f'{where()}: {e.get("action")}')
+    if e['type'] == 'version':
+        # The student is in the version they were moved to, if the edit applied
+        row = str(e.get('row'))
+        who = row
+        for v, r in ((e.get('to'), edits.moved_row(e)), (e.get('version'), row)):
+            g = next((g for g in res.graded if g.version == v), None)
+            if g is not None and r in g.df.index:
+                last, first = _cell(g, r, 'LastName'), _cell(g, r, 'FirstName')
+                who = f'{last}, {first}' if first else last
+                break
+        return f'{who}: version {e.get("version")} scored as version {e.get("to")}'
     if e['type'] == 'override':
         g = next((g for g in res.graded if g.version == e.get('version', '')), None)
         row = str(e.get('row'))
@@ -250,7 +279,7 @@ def _points(x) -> str:
 @dataclass
 class Column:
     label: str                  # 'All students' or 'Version A'
-    possible: float | None      # None when the versions' totals differ
+    possible: float | None      # None when the students' totals differ
     before: dict                # analysis.summary of the totals
     after: dict                 # and of the adjusted totals
     alpha: float | None
@@ -282,7 +311,7 @@ def columns(res: Results) -> list[Column]:
     def column(label, gs, alpha):
         totals = [g.total(r) for g in gs for r in g.students]
         adjusted = [g.total(r) + res.added(g.version) for g in gs for r in g.students]
-        possibles = {g.points_possible() for g in gs}
+        possibles = outputs.all_possible(gs)
         return Column(label, possibles.pop() if len(possibles) == 1 else None,
                       analysis.summary(totals), analysis.summary(adjusted), alpha)
     out = [column('All students', res.graded, _class_alpha(res))]
@@ -292,13 +321,13 @@ def columns(res: Results) -> list[Column]:
 
 
 def grade_counts(res: Results) -> tuple[dict, dict]:
-    """Students per band, unadjusted and adjusted, each student against
-    their own version's points possible."""
+    """Students per band, unadjusted and adjusted, each student against the
+    points possible on their own sheet."""
     before, after = [], []
     for g in res.graded:
         for r in g.students:
-            before.append((g.total(r), g.points_possible()))
-            after.append((g.total(r) + res.added(g.version), g.points_possible()))
+            before.append((g.total(r), g.points_possible(r)))
+            after.append((g.total(r) + res.added(g.version), g.points_possible(r)))
     return analysis.band_counts(before), analysis.band_counts(after)
 
 
@@ -319,6 +348,23 @@ class Question:
     counts: dict                # {choice: students}, in the bank's letters
     flagged: bool
     cols: list = field(default_factory=list)     # [(version, column)] it sat at
+    options: list = field(default_factory=list)  # each choice's text in the bank's order
+
+    def choice_text(self, letter: str) -> str:
+        """What one of the bank's letters said, '' when the key did not record it."""
+        i = ord(letter) - ord('A') if len(letter) == 1 else -1
+        return self.options[i] if 0 <= i < len(self.options) else ''
+
+    def labeled(self, letters: str) -> str:
+        """Bank letters as 'C — the sarcoplasmic reticulum', or bare where the
+        key recorded no text; a select-all answer carries each of its letters."""
+        if self.written or not self.options:
+            return letters
+        return '; '.join(f'{ch} — {t}' if (t := self.choice_text(ch)) else ch for ch in letters)
+
+    @property
+    def labeled_key(self) -> str:
+        return ' or '.join(self.labeled(k) for k in self.key.split(' or '))
 
 
 def questions(res: Results) -> list[Question]:
@@ -333,7 +379,7 @@ def questions(res: Results) -> list[Question]:
                             it.written, st['n'], st['mean'], st['r'], di,
                             _ordered(st['counts']),
                             st['r'] is not None and st['r'] < outputs.FLAG_BELOW,
-                            list(it.cols)))
+                            list(it.cols), list(it.options)))
     return out
 
 
@@ -355,6 +401,7 @@ class Student:
     total: float
     adjusted: float
     possible: float
+    read_as: str = ''           # the version whose sheet the scanner read, if moved from it
 
 
 def _cell(g: outputs.Graded, r: str, c: str) -> str:
@@ -366,12 +413,15 @@ def _cell(g: outputs.Graded, r: str, c: str) -> str:
 def students(res: Results) -> list[Student]:
     """Every student, sorted by name as in the Canvas file."""
     out = []
+    moved = {(e['to'], edits.moved_row(e)): e['version'] for e in res.edits
+             if e['type'] == 'version'}
     for g in res.graded:
         for r in g.students:
             last, first = _cell(g, r, 'LastName'), _cell(g, r, 'FirstName')
             out.append(Student(g.version, r, f'{last}, {first}' if first else last,
                                _cell(g, r, 'studentID'), g.total(r),
-                               g.total(r) + res.added(g.version), g.points_possible()))
+                               g.total(r) + res.added(g.version), g.points_possible(r),
+                               moved.get((g.version, r), '')))
     out.sort(key=lambda s: (s.name.lower(), s.student_id))
     return out
 
@@ -384,20 +434,37 @@ class Answer:
     earned: float | None        # None for a question not on their form
     possible: float | None      # None for an ungraded or dropped question
     overridden: bool = False    # its points set by hand
+    # As printed on this student's version: their answer and the key with the
+    # choice's own words where the key recorded them, and what the question
+    # asked. The letters are the sheet's, not the bank's, which is the other
+    # way round from the Questions view.
+    answer_text: str = ''
+    key_text: str = ''
+    text: str = ''
 
 
 def answers(res: Results, version: str, row: str) -> list[Answer]:
     g = _version(res, version)
+    # An override made before a student was moved names the row they came from
+    scanned = next((e for e in res.edits if e['type'] == 'version' and e.get('to') == version
+                    and edits.moved_row(e) == row), None)
+    here = {(version, row)} | ({(scanned['version'], str(scanned['row']))} if scanned else set())
     set_by_hand = {e.get('question') for e in res.edits if e['type'] == 'override'
-                   and e.get('version') == version and str(e.get('row')) == row}
+                   and (e.get('version'), str(e.get('row'))) in here}
     out = []
     for c in g.q_cols:
         if not _graded(g, c):
             continue
         asked = g.asked(row, c)
-        key = 'written' if str(g.df.loc['0', c]) == 'CC' else g.key_label(c)
-        out.append(Answer(c, _cell(g, row, c), key, g.earned(row, c) if asked else None,
-                          g.possible.get(c), c in set_by_hand and c not in g.dropped))
+        written = str(g.df.loc['0', c]) == 'CC'
+        key = 'written' if written else g.key_label(c)
+        answer = _cell(g, row, c)
+        out.append(Answer(c, answer, key, g.earned(row, c) if asked else None,
+                          g.possible.get(c), c in set_by_hand and c not in g.dropped,
+                          answer if written else g.labeled(c, answer),
+                          key if written else ' or '.join(
+                              g.labeled(c, k) for k in key.split(' or ')),
+                          g.texts.get(c, '')))
     return out
 
 

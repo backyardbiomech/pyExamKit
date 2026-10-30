@@ -29,6 +29,7 @@ import outputs
 import results_model as rm
 
 VIEWS = ('Summary', 'Questions', 'Students', 'Edits')
+FILLER = '_filler'                                      # the column that takes a table's slack
 FLAG_FILL = {'Light': '#F8CBAD', 'Dark': '#6B3A2A'}     # the gradebook's flag color, and a dark one
 PENDING_COLOR = ('#B35C00', '#E8A33D')                  # edits not yet exported
 ERROR_COLOR = ('#C0392B', '#FF7B6B')
@@ -39,6 +40,20 @@ def _fmt(x, digits: int = 2) -> str:
         return ''
     x = round(float(x), digits)
     return f'{int(x)}' if x.is_integer() else f'{x:g}'
+
+
+def _one_line(text, limit: int = 110) -> str:
+    """Text as a single line for a table cell, cut where it runs past what a
+    column can plausibly show; the whole of it is in the view below."""
+    text = ' '.join(str(text or '').split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
+
+
+def _who(s) -> tuple:
+    """Which student a row is, for keeping the selection across an edit. Not
+    their version and row, which both change when their version does: their
+    name and ID, and the row only for two students read as the same person."""
+    return (s.name, s.student_id, '' if s.student_id else s.row)
 
 
 def _number(text: str, what: str = 'Points') -> float:
@@ -132,14 +147,22 @@ class ResultsUI(ctk.CTkFrame):
 
     def _tree(self, parent, columns: list[tuple[str, str, int]], height: int
               ) -> tuple[ttk.Treeview, tk.Frame]:
-        """A sortable table; columns are (id, heading, width), the first left-aligned."""
+        """A sortable table; columns are (id, heading, width), the first left-aligned.
+        None of them stretches: ttk shares out a widening table's slack over its
+        stretchable columns, which both blows up the one column that stretches
+        and undoes the drag of a separator at the next <Configure>. The slack
+        goes to an empty column at the right instead, so a width the user sets
+        by hand stays set."""
         frame = tk.Frame(parent)
-        tree = ttk.Treeview(frame, columns=[c for c, _, _ in columns], show='headings',
-                            height=height, style='Results.Treeview', selectmode='browse')
+        tree = ttk.Treeview(frame, columns=[c for c, _, _ in columns] + [FILLER],
+                            show='headings', height=height, style='Results.Treeview',
+                            selectmode='browse')
         for i, (cid, heading, width) in enumerate(columns):
             tree.heading(cid, text=heading, command=lambda c=cid: self._sort(tree, c))
-            tree.column(cid, width=width, anchor='w' if i == 0 else 'center',
-                        stretch=i == 0)
+            tree.column(cid, width=width, minwidth=min(width, 40),
+                        anchor='w' if i == 0 else 'center', stretch=False)
+        tree.heading(FILLER, text='')
+        tree.column(FILLER, width=0, minwidth=0, stretch=True)
         scroll = ttk.Scrollbar(frame, orient='vertical', command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         # The scrollbar first, so a narrow window narrows the table instead
@@ -186,14 +209,16 @@ class ResultsUI(ctk.CTkFrame):
     def _questions_view(self):
         f = ctk.CTkFrame(self.body, fg_color='transparent')
         self.q_tree, frame = self._tree(f, [
-            ('label', 'Question', 150), ('where', 'On sheet', 90), ('key', 'Key', 70),
+            ('label', 'Question', 300), ('where', 'On sheet', 90), ('key', 'Key', 70),
             ('points', 'Points', 55), ('n', 'Students', 65), ('mean', 'Mean score', 80),
             ('r', 'Discrimination', 95), ('di', 'Canvas DI', 75)], height=9)
         self.q_tree.bind('<<TreeviewSelect>>', lambda e: self._show_question())
         detail = ctk.CTkFrame(f, fg_color='transparent')
         self.q_text = ctk.CTkLabel(detail, text='Select a question to see how it was answered. '
                                                 'Shaded questions have a discrimination below '
-                                                '0.2: worth rereading.',
+                                                '0.2: worth rereading. Answers here are '
+                                                'lettered as the exam file has them, not as any '
+                                                'one version printed them.',
                                    anchor='nw', justify='left', width=300, wraplength=290)
         self.q_text.pack(side='left', fill='y', padx=(0, 8))
         self.choice_bars = charts.ChoiceBars(detail, height=170)
@@ -254,6 +279,16 @@ class ResultsUI(ctk.CTkFrame):
         self.student_label = ctk.CTkLabel(right, text='Select a student.', anchor='w',
                                           font=ctk.CTkFont(weight='bold'))
         self.student_label.pack(fill='x')
+        # A student who bubbled the wrong version in the sheet's header was
+        # graded against the wrong key; this scores their sheet as the version
+        # it really was. Only shown when the scan had several versions.
+        self.version_row = ctk.CTkFrame(right, fg_color='transparent')
+        ctk.CTkLabel(self.version_row, text='Scored as version').pack(side='left', padx=(0, 6))
+        self.version_menu = ctk.CTkOptionMenu(self.version_row, values=[''], width=70)
+        self.version_menu.pack(side='left')
+        self.version_button = ctk.CTkButton(self.version_row, text='Change', width=70,
+                                            command=self._change_version)
+        self.version_button.pack(side='left', padx=(6, 0))
         self.a_tree, frame = self._tree(right, [
             ('q', 'Question', 80), ('ans', 'Answer', 70), ('key', 'Key', 70),
             ('pts', 'Points', 80)], height=13)
@@ -270,9 +305,14 @@ class ResultsUI(ctk.CTkFrame):
                                                    command=self._clear_override)
         self.clear_override_button.pack(side='left', padx=(6, 0))
         self.o_note_entry = ctk.CTkEntry(right, placeholder_text='note, for the edits list')
-        legend = ctk.CTkLabel(right, text='* points set by hand', anchor='w', text_color='gray',
+        legend = ctk.CTkLabel(right, text='* points set by hand. Answers are lettered as this '
+                                          'student\'s version printed them.',
+                              anchor='w', justify='left', wraplength=250, text_color='gray',
                               font=ctk.CTkFont(size=12))
         self._enable((self.override_button, self.clear_override_button), False)
+        self.answer_detail = ctk.CTkLabel(right, text='', anchor='nw', justify='left',
+                                          width=260, wraplength=250, text_color='gray',
+                                          font=ctk.CTkFont(size=12))
         self.marked_button = ctk.CTkButton(right, text='Open marked sheet', width=160,
                                            state='disabled', command=self._open_marked)
         # From the bottom up, the answers table last, as on Questions
@@ -280,6 +320,7 @@ class ResultsUI(ctk.CTkFrame):
         legend.pack(side='bottom', fill='x')
         self.o_note_entry.pack(side='bottom', fill='x', pady=(6, 0))
         row.pack(side='bottom', fill='x')
+        self.answer_detail.pack(side='bottom', fill='x', pady=(4, 2))
         answers.pack(fill='both', expand=True, pady=(4, 6))
         return f
 
@@ -347,7 +388,7 @@ class ResultsUI(ctk.CTkFrame):
         when it is the same folder again."""
         same = self.res is not None and self.res.outdir == res.outdir
         keep = (self._selected(self.q_tree, '_questions', lambda q: q.label),
-                self._selected(self.s_tree, '_students', lambda s: (s.version, s.row)),
+                self._selected(self.s_tree, '_students', _who),
                 self._selected(self.a_tree, '_answers', lambda a: a.question),
                 self._selected(self.e_tree, '_edits', lambda e: e['id'])) if same else (None,) * 4
         self.res = res
@@ -362,8 +403,7 @@ class ResultsUI(ctk.CTkFrame):
         self.export_button.configure(state='normal')
         q, s, a, e = keep
         self._reselect(self.q_tree, '_questions', lambda x: x.label, q, self._show_question)
-        if self._reselect(self.s_tree, '_students', lambda x: (x.version, x.row), s,
-                          self._show_student):
+        if self._reselect(self.s_tree, '_students', _who, s, self._show_student):
             self._reselect(self.a_tree, '_answers', lambda x: x.question, a, self._show_answer)
         self._reselect(self.e_tree, '_edits', lambda x: x['id'], e, self._show_edit)
 
@@ -506,9 +546,12 @@ class ResultsUI(ctk.CTkFrame):
         for i, q in enumerate(rm.questions(self.res)):
             iid = str(i)
             self._questions[iid] = q
+            # The number the question was on the sheet, then as much of what it
+            # asked as fits: a list of identifiers alone says nothing
+            asked = _one_line(q.text)
             self.q_tree.insert('', 'end', iid=iid, tags=('flag',) if q.flagged else (), values=(
-                q.label, q.where, q.key, _fmt(q.points), q.n, _fmt(q.mean), _fmt(q.r),
-                _fmt(q.di)))
+                f'{q.label}   {asked}'.rstrip(), q.where, q.key, _fmt(q.points), q.n,
+                _fmt(q.mean), _fmt(q.r), _fmt(q.di)))
         self.choice_bars.set_data([], set())
         self._enable(self._question_buttons, False)
 
@@ -529,9 +572,12 @@ class ResultsUI(ctk.CTkFrame):
         lines = [f'{q.label}  ({q.where})']
         if q.text:
             lines.append(q.text)
-        lines.append(f'Key: {q.key}')
+        lines.append(f'Key: {q.labeled_key}')
         if q.written:
             lines.append('Written: its acceptable answers change on the Re-grade tab.')
+        elif not q.options:
+            lines.append('The key recorded no answer text for this question, so its choices '
+                         'are shown as letters.')
         self.q_text.configure(text='\n'.join(lines))
         if q.written:
             # A written answer's 'choices' are the grader's CC, CX, and the rest
@@ -543,7 +589,8 @@ class ResultsUI(ctk.CTkFrame):
             self.choice_bars.set_data(list(merged.items()), {'Full credit'})
         else:
             keys = {ch for k in q.key.split(' or ') for ch in k}
-            self.choice_bars.set_data(list(q.counts.items()), keys)
+            self.choice_bars.set_data([(ch, n, q.choice_text(ch))
+                                       for ch, n in q.counts.items()], keys)
 
     def _fill_students(self):
         self.s_tree.delete(*self.s_tree.get_children())
@@ -552,14 +599,22 @@ class ResultsUI(ctk.CTkFrame):
             iid = str(i)
             self._students[iid] = s
             pct = s.adjusted / s.possible if s.possible else None
+            version = s.version + (f' (read {s.read_as})' if s.read_as else '')
             self.s_tree.insert('', 'end', iid=iid, values=(
-                s.name, s.student_id, s.version, _fmt(s.total), _fmt(s.adjusted),
+                s.name, s.student_id, version, _fmt(s.total), _fmt(s.adjusted),
                 f'{pct:.1%}' if pct is not None else ''))
         self.a_tree.delete(*self.a_tree.get_children())
         self._answers = {}
         self.student_label.configure(text='Select a student.')
+        self.answer_detail.configure(text='')
         self.marked_button.configure(state='disabled')
         self._enable((self.override_button, self.clear_override_button), False)
+        # The version control is only of use when the scan had several
+        if self.res.multi:
+            self.version_menu.configure(values=[g.version for g in self.res.graded])
+            self.version_row.pack(after=self.student_label, fill='x', pady=(4, 0))
+        else:
+            self.version_row.pack_forget()
 
     def _student(self) -> rm.Student | None:
         sel = self.s_tree.selection()
@@ -570,10 +625,17 @@ class ResultsUI(ctk.CTkFrame):
         if not sel:
             return
         s = self._students[sel[0]]
-        self.student_label.configure(
-            text=s.name + (f'  ·  Version {s.version}' if self.res.multi else ''))
+        where = ''
+        if self.res.multi:
+            where = f'  ·  Version {s.version}'
+            if s.read_as:
+                where += f', bubbled as {s.read_as}'
+        self.student_label.configure(text=s.name + where)
+        if self.res.multi:
+            self.version_menu.set(s.version)
         self.a_tree.delete(*self.a_tree.get_children())
         self._answers = {}
+        self.answer_detail.configure(text='')
         self._enable((self.override_button, self.clear_override_button), False)
         for i, a in enumerate(rm.answers(self.res, s.version, s.row)):
             if a.possible is None:
@@ -598,6 +660,10 @@ class ResultsUI(ctk.CTkFrame):
         a = self._answer()
         if a is None:
             return
+        lines = [f'{a.question}  {a.text}'.rstrip()] if a.text else [a.question]
+        lines.append(f'Answered: {a.answer_text or "blank"}')
+        lines.append(f'Key: {a.key_text}')
+        self.answer_detail.configure(text='\n'.join(lines))
         # Not on the student's form, or dropped: there are no points to set
         settable = a.earned is not None and a.possible is not None
         self._enable((self.override_button,), settable)
@@ -676,6 +742,19 @@ class ResultsUI(ctk.CTkFrame):
         self._edit(lambda: rm.add(self.res, rm.override_edit(
             self.res, s.version, s.row, a.question, points, note)),
                    f'{s.name}, {a.question}: {_fmt(points)} points.', self.o_note_entry)
+
+    def _change_version(self):
+        """Score the selected student's sheet as the version it really was."""
+        s = self._student()
+        if s is None:
+            return
+        to = self.version_menu.get()
+        note = self._note(self.o_note_entry)
+        done = (f'{s.name} scored as version {to}. Their answers are as the scan read them, so '
+                'if the two versions group their answer rows differently, rescan that sheet '
+                'instead.')
+        self._edit(lambda: rm.add(self.res, rm.version_edit(self.res, s, to, note)), done,
+                   self.o_note_entry)
 
     def _clear_override(self):
         s, a = self._student(), self._answer()

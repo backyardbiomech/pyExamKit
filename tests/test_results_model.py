@@ -99,6 +99,45 @@ class ResultsModelTest(unittest.TestCase):
         rec_path.write_text(json.dumps(rec))
         self.assertTrue(rm.open_folder(self.out).legacy)
 
+    def _record_choices(self, csv_path, choices: dict, options: dict) -> None:
+        """Give one version's grading record the shuffle order and the choice
+        text that a key from Build Exam carries."""
+        rec_path = outputs.grading_json(csv_path)
+        rec = json.loads(rec_path.read_text())
+        rec['choices'], rec['options'] = choices, options
+        rec_path.write_text(json.dumps(rec))
+
+    def test_a_question_names_its_choices(self):
+        """With the choice text recorded, the Questions view gives the key and
+        each choice as the words the exam file had, in the bank's letters."""
+        self._record_choices(self.csvs[0], {'Q001': 'CADB'},
+                             {'Q001': ['the T tubule', 'the sarcolemma',
+                                       'the sarcoplasmic reticulum', 'the myofibril']})
+        q = next(q for q in rm.questions(rm.open_folder(self.out))
+                 if q.label == 'bank.md#1')
+        # Version A printed the bank's C first, so its key A is the bank's C
+        self.assertEqual(q.key, 'C')
+        self.assertEqual(q.labeled_key, 'C — the sarcoplasmic reticulum')
+        self.assertEqual(q.choice_text('A'), 'the T tubule')
+        self.assertEqual(q.labeled('AC'), 'A — the T tubule; C — the sarcoplasmic reticulum')
+
+    def test_a_question_without_recorded_choices_stays_lettered(self):
+        q = next(q for q in rm.questions(rm.open_folder(self.out)) if q.label == 'bank.md#1')
+        self.assertEqual(q.options, [])
+        self.assertEqual(q.labeled_key, q.key)
+
+    def test_a_students_answer_names_the_choice_their_sheet_printed(self):
+        self._record_choices(self.csvs[0], {'Q001': 'CADB'},
+                             {'Q001': ['the T tubule', 'the sarcolemma',
+                                       'the sarcoplasmic reticulum', 'the myofibril']})
+        res = rm.open_folder(self.out)
+        cole = next(s for s in rm.students(res) if s.name.startswith('COLE'))
+        a = next(a for a in rm.answers(res, cole.version, cole.row) if a.question == 'Q001')
+        # COLE bubbled B on a sheet whose B is the bank's A
+        self.assertEqual(a.answer, 'B')
+        self.assertEqual(a.answer_text, 'B — the T tubule')
+        self.assertEqual(a.key_text, 'A — the sarcoplasmic reticulum')
+
     def test_the_folder_holding_the_outputs_opens_them(self):
         self.assertEqual(rm.open_folder(self.out.parent).outdir, self.out)
 
@@ -189,6 +228,60 @@ class ResultsModelTest(unittest.TestCase):
         q.written = True
         with self.assertRaises(ValueError):
             rm.key_edit(res, q, ['A'], also=False)
+
+    # ── a student who bubbled the wrong version ────────────────────────────
+
+    def student(self, res, last):
+        return next(s for s in rm.students(res) if s.name.startswith(last))
+
+    def test_version_edit_moves_a_student_and_everything_counts_them_there(self):
+        res = self.results()
+        ames = self.student(res, 'AMES')
+        self.assertEqual((ames.version, ames.row, ames.total, ames.read_as), ('A', '1', 3, ''))
+        # An override made first still applies once they have moved
+        res = rm.add(res, rm.override_edit(res, 'A', '1', 'Q002', 0.5))
+        res = rm.add(res, rm.version_edit(res, ames, 'B', note='bubbled A on a B sheet'))
+        ames = self.student(res, 'AMES')
+        # Scored on version B's key (C A B), with the override on top
+        self.assertEqual((ames.version, ames.row, ames.read_as), ('B', 'A1', 'A'))
+        self.assertEqual((ames.total, ames.possible), (0.5, 3))
+        self.assertEqual(sorted(s.row for s in rm.students(res) if s.version == 'B'),
+                         ['1', '2', 'A1'])
+        self.assertEqual([a.earned for a in rm.answers(res, 'B', 'A1')], [0, 0.5, 0])
+        self.assertTrue(rm.answers(res, 'B', 'A1')[1].overridden)
+        # Item analysis counts five students, three of them on version B
+        self.assertEqual({q.n for q in rm.questions(res)}, {5})
+        cols = {c.label: c for c in rm.columns(res)}
+        self.assertEqual((cols['Version A'].before['n'], cols['Version B'].before['n']), (2, 3))
+        self.assertEqual(rm.describe(res, res.edits[-1]),
+                         'AMES, X: version A scored as version B')
+        self.assertEqual(res.problems, [])
+
+    def test_deleting_the_version_edit_puts_them_back_as_scanned(self):
+        was = self.results()
+        res = rm.add(was, rm.version_edit(was, self.student(was, 'AMES'), 'B'))
+        res = rm.delete(res, [e['id'] for e in res.edits])
+        self.assertEqual(rm.students(res), rm.students(was))
+        self.assertEqual(self.student(res, 'AMES').total, 3)
+
+    def test_a_later_move_replaces_the_earlier_one(self):
+        res = self.results()
+        res = rm.add(res, rm.version_edit(res, self.student(res, 'AMES'), 'B'))
+        # Asked from where they now are; the edit still aims at where they were read
+        res = rm.add(res, rm.version_edit(res, self.student(res, 'AMES'), 'A'))
+        self.assertEqual(res.edits, [])
+        self.assertEqual(self.student(res, 'AMES').version, 'A')
+        res = rm.add(res, rm.version_edit(res, self.student(res, 'AMES'), 'B'))
+        res = rm.add(res, rm.version_edit(res, self.student(res, 'COLE'), 'B'))
+        self.assertEqual(len(res.edits), 2)
+
+    def test_a_bad_target_version_is_refused(self):
+        res = self.results()
+        ames = self.student(res, 'AMES')
+        with self.assertRaisesRegex(ValueError, 'no version C'):
+            rm.version_edit(res, ames, 'C')
+        with self.assertRaisesRegex(ValueError, 'already scored as version A'):
+            rm.version_edit(res, ames, 'A')
 
 
 if __name__ == '__main__':

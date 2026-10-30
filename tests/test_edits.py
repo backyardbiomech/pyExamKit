@@ -171,6 +171,101 @@ class EditsTest(unittest.TestCase):
         g, _ = self.applied(edits.make('key', version='A', question='Q002', keys=['C']))
         self.assertEqual([g['A'].earned(r, 'Q002') for r in g['A'].students], [0, 1, 1])
 
+    # ── version ────────────────────────────────────────────────────────────
+
+    def move(self, version='A', row='1', sid='1', to='B', **kw):
+        return edits.make('version', version=version, row=row, student_id=sid, to=to, **kw)
+
+    def test_version_moves_the_student_and_rescores_against_the_new_key(self):
+        # AMES bubbled A B C: all right on version A, none on version B (C A B)
+        g, problems = self.applied(self.move())
+        self.assertEqual(problems, [])
+        self.assertEqual(g['A'].students, ['2', '3'])
+        self.assertEqual(g['B'].students, ['1', '2', 'A1'])
+        self.assertEqual(g['B'].df.loc['A1', 'LastName'], 'AMES')
+        self.assertEqual(g['B'].df.loc['A1', 'Q001'], 'A')          # the bubbles as read
+        self.assertEqual(g['B'].total('A1'), 0)
+        self.assertEqual(g['B'].points_possible(), 3)
+        self.assertEqual(g['A'].points_possible(), 3)
+
+    def test_version_follows_an_earlier_override(self):
+        g, problems = self.applied(
+            edits.make('override', version='A', row='1', student_id='1', question='Q002',
+                       points=0.5),
+            self.move())
+        self.assertEqual(problems, [])
+        self.assertEqual(g['B'].earned('A1', 'Q002'), 0.5)
+        self.assertEqual(g['B'].total('A1'), 0.5)
+
+    def test_override_after_the_move_aims_at_the_new_row(self):
+        g, problems = self.applied(
+            self.move(),
+            edits.make('override', version='B', row='A1', student_id='1', question='Q001',
+                       points=0.25))
+        self.assertEqual((problems, g['B'].earned('A1', 'Q001')), ([], 0.25))
+
+    def test_override_still_checks_the_student_after_a_move(self):
+        g, problems = self.applied(
+            self.move(),
+            edits.make('override', version='A', row='1', student_id='99', question='Q002',
+                       points=1))
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(g['B'].earned('A1', 'Q002'), 0)
+
+    def test_version_runs_before_key_and_credit(self):
+        # The key change names version B's Q003, which the moved student sat in
+        g, _ = self.applied(
+            edits.make('key', version='B', question='Q003', keys=['A']),
+            self.move(version='B', row='1', sid='4', to='A'))
+        self.assertEqual(g['A'].earned('B1', 'Q003'), 0)            # DART bubbled B
+        g, _ = self.applied(
+            edits.make('key', version='A', question='Q003', keys=['B']),
+            self.move(version='B', row='1', sid='4', to='A'))
+        self.assertEqual(g['A'].earned('B1', 'Q003'), 1)            # the new key reaches them
+
+    def test_version_that_matches_nothing(self):
+        for bad in (self.move(to='C'), self.move(version='C'), self.move(row='9'),
+                    self.move(sid='99'), self.move(to='A')):
+            g, problems = self.applied(bad)
+            self.assertEqual(len(problems), 1, bad)
+            self.assertEqual(g['A'].students, ['1', '2', '3'])
+
+    def test_version_with_different_question_columns(self):
+        graded = self.graded()
+        graded['B'].df = graded['B'].df.drop(columns='Q003')
+        graded['B'].pts = graded['B'].pts.drop(columns='Q003')
+        del graded['B'].possible['Q003']
+        out, problems = edits.apply(list(graded.values()), [self.move(version='A', row='1',
+                                                                      sid='1', to='B')])
+        b = {g.version: g for g in out}['B']
+        self.assertEqual(problems, [])
+        self.assertNotIn('Q003', b.df.columns)
+        out, _ = edits.apply(list(graded.values()), [self.move(version='B', row='1',
+                                                               sid='4', to='A')])
+        a = {g.version: g for g in out}['A']
+        self.assertFalse(a.asked('B1', 'Q003'))
+        self.assertEqual(a.total('B1'), 0)
+
+    def test_version_does_not_change_the_results(self):
+        before = {v: (p.read_text(), outputs.points_csv(p).read_text())
+                  for v, p in zip('AB', self.csvs)}
+        self.canvas(self.move())
+        self.assertEqual({v: (p.read_text(), outputs.points_csv(p).read_text())
+                          for v, p in zip('AB', self.csvs)}, before)
+
+    def test_version_in_the_gradebook_and_canvas_file(self):
+        import openpyxl
+        scores, possible = self.canvas(self.move(), self.move(version='B', row='2', sid='5',
+                                                               to='A'))
+        # AMES 3 -> 0 on version B's key; EGAN (C A C) 2 -> 1 on version A's
+        self.assertEqual(scores, {'L1': 0, 'L2': 2, 'L3': 0, 'L4': 3, 'L5': 1})
+        wb = openpyxl.load_workbook(self.out / outputs.GRADEBOOK)
+        names = {v: [r[0].value for r in wb[f'Version {v}'].iter_rows(min_row=2)] for v in 'AB'}
+        cell = lambda v: ' '.join(str(x) for x in names[v] if x)
+        self.assertNotIn('AMES', cell('A'))
+        self.assertIn('AMES', cell('B'))
+        self.assertIn('EGAN', cell('A'))
+
     # ── the files written ─────────────────────────────────────────────────
 
     def test_canvas_file_carries_every_edit(self):

@@ -10,6 +10,12 @@ deleting an edit undoes it. docs/dev/results-tab.md has the design.
 Each edit is a dict with an id, a type, an optional note, and the time it
 was made. The types, applied in this order:
 
+  version   version and row (the student, as override identifies them, with
+            student_id checked against that row), to: the version their sheet
+            actually was, for a student who bubbled the wrong one. They move
+            into that version's results, rescored against its key, as row
+            '<version><row>' (B3 in version A), so the edits below that name
+            the old row still find them
   key       version and question, keys [str] in the sheet's letters; or
             source (a bank question, on every version that printed it),
             keys in the bank's letters. also (bool): grade the question
@@ -42,7 +48,7 @@ import grade_functions
 import outputs
 
 EDITS = 'edits.json'
-TYPES = ('key', 'credit', 'override', 'adjust')
+TYPES = ('version', 'key', 'credit', 'override', 'adjust')
 
 # Scoring for results graded before the grading record kept its settings:
 # the Scan tab's defaults (docs/dev/results-tab.md, default 4)
@@ -128,14 +134,23 @@ def adjustments(edits: list[dict]) -> dict:
 
 def apply(graded: list[outputs.Graded], edits: list[dict]
           ) -> tuple[list[outputs.Graded], list[str]]:
-    """Copies of graded with the key, credit, and override edits in, and a
-    note for every edit that matched nothing. The inputs are left alone."""
+    """Copies of graded with the version, key, credit, and override edits in,
+    and a note for every edit that matched nothing. The inputs are left
+    alone."""
     out = [copy.deepcopy(g) for g in graded]
     by_version = {g.version: g for g in out}
     problems = []
-    for kind in ('key', 'credit', 'override'):
+    moved = {}                      # {(version, row) as scanned: (version, row) now}
+    for kind in ('version', 'key', 'credit', 'override'):
         for e in (e for e in edits if e['type'] == kind):
-            ok = {'key': _key, 'credit': _credit, 'override': _override}[kind](e, out, by_version)
+            if kind == 'version':
+                ok = _version(e, out, by_version)
+                if ok:
+                    moved[(e['version'], str(e['row']))] = (e['to'], moved_row(e))
+            elif kind == 'override':
+                ok = _override(e, out, by_version, moved)
+            else:
+                ok = {'key': _key, 'credit': _credit}[kind](e, out, by_version)
             if not ok:
                 problems.append(f'{kind} edit {e["id"]} matched nothing: {_describe(e)}')
     return out, problems
@@ -149,17 +164,52 @@ def _settings(g: outputs.Graded) -> dict:
     return {**DEFAULT_SETTINGS, **(g.settings or {})}
 
 
-def _rescore(g: outputs.Graded, col: str) -> None:
-    """Score every student given col again, against its accepted keys."""
+def _rescore(g: outputs.Graded, col: str, rows=None) -> None:
+    """Score every student given col again (or just rows), against its
+    accepted keys."""
     s = _settings(g)
     keys = g.accepted.get(col) or [g.df.loc['0', col]]
     pts = g.possible.get(col)
     if pts is None:
         pts = s['written_points'] if keys[0] == 'CC' else s['bubble_points']
-    for r in g.students:
+    for r in g.students if rows is None else rows:
         if g.asked(r, col):
             g.pts.loc[r, col] = grade_functions.score_answer(
                 g.df.loc[r, col], keys, pts, s['partial'], s['strictness'])[0]
+
+
+def moved_row(e: dict) -> str:
+    """The row a version edit gives the student in the version they move to:
+    the version they were read in and their old row, which cannot collide
+    with the target's own rows (those are plain numbers)."""
+    return f'{e["version"]}{e["row"]}'
+
+
+def _student_matches(g: outputs.Graded, row: str, e: dict) -> bool:
+    """False when the edit names a student ID that is not the row's."""
+    sid = g.df.loc[row, 'studentID'] if 'studentID' in g.df.columns else None
+    return not e.get('student_id') or str(e['student_id']) == ('' if pd.isna(sid) else str(sid))
+
+
+def _version(e, out, by_version) -> bool:
+    src, dst = by_version.get(e.get('version', '')), by_version.get(e.get('to', ''))
+    row = str(e.get('row'))
+    if src is None or dst is None or src is dst or row not in src.students:
+        return False
+    new = moved_row(e)
+    if new in dst.df.index or not _student_matches(src, row, e):
+        return False
+    # The versions' results normally share their question columns; where
+    # they do not, a column the source lacked is left empty (not asked)
+    for name in ('df', 'pts'):
+        mine, theirs = getattr(src, name), getattr(dst, name)
+        moving = mine.loc[[row]].reindex(columns=theirs.columns)
+        moving.index = [new]
+        setattr(dst, name, pd.concat([theirs, moving]))
+        setattr(src, name, mine.drop(index=row))
+    for col in dst.possible:
+        _rescore(dst, col, [new])
+    return True
 
 
 def _key(e, out, by_version) -> bool:
@@ -222,13 +272,14 @@ def _credit(e, out, by_version) -> bool:
     return bool(targets)
 
 
-def _override(e, out, by_version) -> bool:
-    g, col, row = by_version.get(e.get('version', '')), e.get('question'), str(e.get('row'))
+def _override(e, out, by_version, moved=None) -> bool:
+    version, row = (moved or {}).get((e.get('version', ''), str(e.get('row'))),
+                                     (e.get('version', ''), str(e.get('row'))))
+    g, col = by_version.get(version), e.get('question')
     if (g is None or col not in g.df.columns or col in g.dropped
             or row not in g.students or not g.asked(row, col)):
         return False
-    sid = g.df.loc[row, 'studentID'] if 'studentID' in g.df.columns else None
-    if e.get('student_id') and str(e['student_id']) != ('' if pd.isna(sid) else str(sid)):
+    if not _student_matches(g, row, e):
         return False
     g.pts.loc[row, col] = float(e.get('points', 0))
     return True

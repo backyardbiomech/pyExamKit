@@ -128,6 +128,7 @@ class Graded:
     sources: dict = field(default_factory=dict)
     choices: dict = field(default_factory=dict)
     texts: dict = field(default_factory=dict)            # {question column: question text}
+    options: dict = field(default_factory=dict)          # {question column: [choice text], index = bank letter}
     open_answers: dict = field(default_factory=dict)   # {openQ_N: [accepted answers]}
     settings: dict = field(default_factory=dict)       # how it was scored (grading record)
     accepted: dict = field(default_factory=dict)       # {column: [keys]} after a key edit
@@ -162,8 +163,9 @@ class Graded:
         return 0.0 if math.isnan(v) else v
 
     def asked(self, row: str, col: str) -> bool:
-        """False for a question not on this student's sheet (a practical form)."""
-        return not pd.isna(self.df.loc[row, col])
+        """False for a question not on this student's sheet (a practical form),
+        and for one the results file does not carry at all."""
+        return col in self.df.columns and not pd.isna(self.df.loc[row, col])
 
     def bank_letters(self, col: str, letters: str) -> str:
         """A bubbled answer in the bank's lettering, through the key's choices."""
@@ -185,8 +187,42 @@ class Graded:
         return ''.join(sorted(chr(ord('A') + order.index(ch)) if ch in order else ch
                               for ch in letters))
 
-    def points_possible(self) -> float:
-        return sum(self.possible.values())
+    def option_text(self, col: str, letter: str) -> str:
+        """The text of one bank letter for a column, '' when it is not known."""
+        opts = self.options.get(col) or []
+        i = ord(letter) - ord('A') if len(letter) == 1 else -1
+        return opts[i] if 0 <= i < len(opts) else ''
+
+    def labeled(self, col: str, letters: str, bank: bool = False) -> str:
+        """An answer as 'C — the sarcoplasmic reticulum', or plain 'C' where the
+        text is not known. letters arrive in the sheet's lettering unless bank
+        is set, and are shown as they came, since that is the letter the
+        student bubbled or the key printed; only the text behind them is looked
+        up in the bank's order. Several letters each carry their text, joined
+        by '; ', and anything that is not a letter (a written answer's grader
+        code) is returned as it came."""
+        written = col.startswith('openQ_') or (col in self.df.columns
+                                              and str(self.df.loc['0', col]) == 'CC')
+        if written or not letters or not letters.isalpha() or not letters.isupper():
+            return letters      # a written answer carries the grader's judgment
+        parts = []
+        for ch in letters:
+            text = self.option_text(col, ch if bank else self.bank_letters(col, ch))
+            parts.append(f'{ch} — {text}' if text else ch)
+        return '; '.join(parts)
+
+    def points_possible(self, row: str | None = None) -> float:
+        """The points the key carries, or the points on one student's sheet
+        when row is given. A lab practical's forms each hold half the
+        questions, so the key's total is not what a student could earn."""
+        if row is None:
+            return sum(self.possible.values())
+        return sum(p for c, p in self.possible.items() if self.asked(row, c))
+
+    def student_possibles(self) -> set[float]:
+        """What each student could earn. More than one value means the
+        students are not all out of the same total, as on a practical."""
+        return {self.points_possible(r) for r in self.students}
 
 
 def _read_indexed(path) -> pd.DataFrame:
@@ -218,7 +254,8 @@ def load(csv_path) -> Graded:
     return Graded(version=version_of(csv_path), df=df, pts=pts,
                   possible=rec.get('possible', {}), title=rec.get('title', ''),
                   sources=rec.get('sources', {}), choices=rec.get('choices', {}),
-                  texts=rec.get('texts', {}), open_answers=open_answers,
+                  texts=rec.get('texts', {}), options=rec.get('options', {}),
+                  open_answers=open_answers,
                   settings=rec.get('settings', {}))
 
 
@@ -283,15 +320,24 @@ def adjustment(adjust: dict, version: str) -> float:
     return (adjust or {}).get('', 0) + ((adjust or {}).get(version, 0) if version else 0)
 
 
+def all_possible(graded: list[Graded]) -> set[float]:
+    """What a student could earn, over every version and form; the key's
+    total stands in for a version nobody sat."""
+    out = set()
+    for g in graded:
+        out |= g.student_possibles() or {g.points_possible()}
+    return out
+
+
 def write_canvas(path, graded: list[Graded], title: str, prefix: str,
                  adjust: dict | None = None) -> None:
     """A file Canvas's gradebook import takes as is: its own header, a Points
     Possible row, then one row per student, sorted by name. Canvas matches
     students on SIS User ID and asks which assignment the column is. The
     scores carry the adjustments ({version: points}, '' the class)."""
-    possible = {g.points_possible() for g in graded}
+    possible = all_possible(graded)
     if len(possible) > 1:
-        print('[Outputs] The versions are worth different totals ('
+        print('[Outputs] The students are not all out of the same total ('
               + ', '.join(_score(p) for p in sorted(possible))
               + '); Points Possible uses the largest.', flush=True)
     with open(path, 'w', newline='', encoding='utf-8') as f:
@@ -424,7 +470,10 @@ def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
         else:
             label = f'{qc}\n(Key: {g.key_label(qc)})'
         header += [label, f'{qc} Pts']
-    header += ['Total', 'Adjusted']
+    # A practical's forms hold different questions, so each student's points
+    # possible is their own and gets a column of its own
+    varies = len(g.student_possibles()) > 1
+    header += ['Total', 'Adjusted'] + (['Possible'] if varies else [])
     _header(ws, header)
     has_text = any(g.texts.get(qc) for qc in qs)
     if has_text:
@@ -460,6 +509,9 @@ def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
         total = f'{get_column_letter(n_id + 1 + 2 * len(qs))}{ws.max_row}'
         ws.cell(row=ws.max_row, column=n_id + 2 + 2 * len(qs)).value = (
             '=' + '+'.join([total] + [f'N({a})' for a in adjust]))
+        if varies:
+            ws.cell(row=ws.max_row, column=n_id + 3 + 2 * len(qs)).value = (
+                _num(g.points_possible(r)))
     if g.students:
         _summary_rows(ws, first, ws.max_row,
                       [(n_id + 2 + 2 * i, g.possible.get(qc, 0)) for i, qc in enumerate(qs)],
@@ -471,16 +523,17 @@ def _gradebook_sheet(ws, g: Graded, adjust: list[str] = ()):
     for i in range(len(qs)):
         ws.column_dimensions[get_column_letter(n_id + 1 + 2 * i)].width = 18
         ws.column_dimensions[get_column_letter(n_id + 2 + 2 * i)].width = 8
-    ws.column_dimensions[get_column_letter(n_id + 1 + 2 * len(qs))].width = 10
-    ws.column_dimensions[get_column_letter(n_id + 2 + 2 * len(qs))].width = 10
+    for i in range(1, 4 if varies else 3):
+        ws.column_dimensions[get_column_letter(n_id + i + 2 * len(qs))].width = 10
     if not g.students:
         return None
     # Where the totals are, for the Exam stats and Canvas scores tabs
     return TotalRange(g.version, ws.title, get_column_letter(n_id + 1 + 2 * len(qs)),
-                      first, first + len(g.students) - 1, g.points_possible(),
+                      first, first + len(g.students) - 1, max(g.student_possibles()),
                       [get_column_letter(n_id + 2 + 2 * i) for i, qc in enumerate(qs)
                        if g.possible.get(qc, 0) > 0],
-                      get_column_letter(n_id + 2 + 2 * len(qs)))
+                      get_column_letter(n_id + 2 + 2 * len(qs)),
+                      get_column_letter(n_id + 3 + 2 * len(qs)) if varies else '')
 
 
 # ── Exam stats ───────────────────────────────────────────────────────────────
@@ -495,6 +548,7 @@ class TotalRange:
     possible: float
     items: list = field(default_factory=list)    # each graded question's points column
     adj_col: str = ''                            # the Adjusted column, if any
+    poss_col: str = ''      # a per-student Possible column, where students differ
 
     def adjusted(self) -> TotalRange:
         """The same students' adjusted totals."""
@@ -594,7 +648,14 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
     for label, rs in groups:
         cols += [(label, rs, False), ('Adjusted', [r.adjusted() for r in rs], True)]
     _header(ws, ['Scores'] + [label for label, _, _ in cols], height=20)
-    same_possible = len({r.possible for r in ranges}) == 1
+
+    def one_possible(rs):
+        """The points possible these students share, or None when they are
+        not all out of the same total (several versions, or a practical's
+        forms)."""
+        if any(r.poss_col for r in rs) or len({r.possible for r in rs}) != 1:
+            return None
+        return rs[0].possible
 
     def union(rs):
         return ','.join(r.ref for r in rs)
@@ -603,7 +664,7 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
              ('Median', 'ROUND(MEDIAN({}),2)', True),
              ('Standard deviation', 'ROUND(STDEV({}),2)', False),
              ('Highest', 'MAX({})', True), ('Lowest', 'MIN({})', True)]
-    ws.append(['Points possible'] + [_num(rs[0].possible) if same_possible or len(rs) == 1
+    ws.append(['Points possible'] + [_num(p) if (p := one_possible(rs)) is not None
                                      else 'varies' for _, rs, _ in cols])
     pct_rows = []
     for label, f, as_pct in stats:
@@ -623,11 +684,12 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
         if as_pct:
             row = [f'{label} (% of possible)']
             for i, (_, rs, _) in enumerate(cols):
-                if same_possible or len(rs) == 1:
-                    ref = f'{get_column_letter(2 + i)}{ws.max_row}'
-                    row.append(f'=IFERROR({ref}/{rs[0].possible},"")')
-                else:
+                p = one_possible(rs)
+                if p is None:
                     row.append(None)
+                else:
+                    ref = f'{get_column_letter(2 + i)}{ws.max_row}'
+                    row.append(f'=IFERROR({ref}/{p},"")')
             ws.append(row)
             pct_rows.append(ws.max_row)
     for r in pct_rows:
@@ -646,6 +708,16 @@ def _stats_sheet(ws, ranges: list[TotalRange], combined: TotalRange | None,
     def count(rs, lo, hi):
         terms = []
         for r in rs:
+            if r.poss_col:
+                # Each student against their own total, from the Possible column
+                poss = r.col_ref(r.poss_col)
+                tests = []
+                if lo is not None:
+                    tests.append(f'({r.ref}>={lo / 100}*{poss})')
+                if hi is not None:
+                    tests.append(f'({r.ref}<{hi / 100}*{poss})')
+                terms.append(f'SUMPRODUCT({"*".join(tests)})')
+                continue
             conds = []
             if lo is not None:
                 conds.append(f'{r.ref},">="&{lo / 100}*{r.possible}')
@@ -704,7 +776,7 @@ def _canvas_sheet(ws, graded: list[Graded], ranges: list, title: str, prefix: st
     file's scores. ranges[i] locates graded[i]'s totals. The unadjusted
     scores sit to the right, past a blank column, for checking."""
     from openpyxl.styles import Font
-    possible = max(g.points_possible() for g in graded)
+    possible = max(all_possible(graded))
     _header(ws, ['Student', 'SIS User ID', title, None, 'Unadjusted'], height=20)
     ws.append(['    Points Possible', '', _num(possible)])
     for name, sis, i, r in _canvas_rows(graded, prefix):
@@ -735,6 +807,7 @@ class Item:
     points: float
     written: bool
     text: str = ''
+    options: list = field(default_factory=list)   # choice text in bank order, when the key recorded it
     cols: list = field(default_factory=list)     # [(version, column)], beside where
     # (student uid, fraction of points earned, points earned, answer in bank letters)
     responses: list = field(default_factory=list)
@@ -781,7 +854,7 @@ def item_table(graded: list[Graded]) -> ItemTable:
             if it is None:
                 it = items[ident] = Item(
                     label=ident, where=[], points=pts, written=written,
-                    text=g.texts.get(col, ''),
+                    text=g.texts.get(col, ''), options=g.options.get(col, []),
                     key='written' if written else g.key_label(col, bank=True))
             it.where.append(where)
             it.cols.append((g.version, col))
@@ -905,5 +978,5 @@ def _by_question_sheet(ws, graded: list[Graded], t: ItemTable) -> TotalRange | N
     if not rows:
         return None
     return TotalRange('', ws.title, get_column_letter(5 + 2 * len(t.items)), first,
-                      first + len(rows) - 1, max(g.points_possible() for g in graded),
+                      first + len(rows) - 1, max(all_possible(graded)),
                       [get_column_letter(6 + 2 * i) for i in range(len(t.items))])

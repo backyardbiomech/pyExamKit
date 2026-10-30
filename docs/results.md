@@ -6,11 +6,13 @@ The tab reads the scan's results files in `app_data/`, never the gradebook. It i
 
 ## The four views
 
-**Summary** shows the Exam stats figures ([Outputs](outputs.md#the-results) defines each one): the number of students, points possible, mean, median, standard deviation, highest and lowest score, and Cronbach's alpha, for the whole class and, with several versions, for each version. Once points have been added, each column has an **Adjusted** column beside it. The chart counts students in each letter grade, unadjusted in gray behind adjusted in blue.
+**Summary** shows the Exam stats figures ([Outputs](outputs.md#the-results) defines each one): the number of students, points possible, mean, median, standard deviation, highest and lowest score, and Cronbach's alpha, for the whole class and, with several versions, for each version. Points possible is what a student could earn rather than what the key carries, so a [lab practical](lab-practicals.md) is scored out of one form; when the students in a column are not all out of the same total it reads **varies**, and the percents beside the figures are left out. Once points have been added, each column has an **Adjusted** column beside it. The chart counts students in each letter grade, unadjusted in gray behind adjusted in blue.
 
-**Questions** lists every question with where it sat on each version's sheet (`A3, B17`), its key, its points, the number of students who answered it, its mean score, its discrimination, and Canvas's discrimination index. Questions with a discrimination below 0.2 are shaded. Click a column heading to sort by it. Selecting a question shows its text and how many students chose each answer, with the key's bars in green; a wrong answer that drew more students than the key is the thing to look for. With keys made by Build Exam, the versions are matched by bank question, so each question is listed once, in the bank's letters.
+**Questions** lists every question, each with as much of what it asked as the column shows, where it sat on each version's sheet (`A3, B17`), its key, its points, the number of students who answered it, its mean score, its discrimination, and Canvas's discrimination index. Questions with a discrimination below 0.2 are shaded. Click a column heading to sort by it; drag a heading's edge to widen a column, and it stays where you put it. Selecting a question shows its whole text and how many students chose each answer, with the key's bars in green; a wrong answer that drew more students than the key is the thing to look for. With keys made by Build Exam, the versions are matched by bank question, so each question is listed once.
 
-**Students** lists every student with their version, total, and adjusted total. Selecting one shows their answer, the key, and their points on each question, and **Open marked sheet** opens their marked page.
+The letters here are the exam file's, not any one sheet's: a shuffled version printed its choices in another order, and the view maps them back, so one question's answers can be read across every version at once. The Students view does the opposite and shows each sheet as it was printed. Where the key recorded what the choices said, each answer is given as its letter and its text (`C — the sarcoplasmic reticulum`); a key written before the app recorded that shows letters alone, and the view says so when you select such a question. Only Build Exam writes the text, and only into keys built after it learned to, so an exam already built keeps its letters until its key is built again.
+
+**Students** lists every student with their version, total, and adjusted total. Selecting one shows their answer, the key, and their points on each question, and **Open marked sheet** opens their marked page. Selecting one of those questions shows what it asked and what their answer and the key said, in the letters their own version printed.
 
 **Edits** lists every change made to these results, in the order they apply, each with its note and when it was made.
 
@@ -30,11 +32,13 @@ Every change is saved to `app_data/edits.json` the moment you make it, and every
 
 A written question's acceptable answers are changed on the [Re-grade](open-ended-questions.md#re-grading-afterward) tab, so **Change key** and **Also accept** are off for it; the credit actions work as for any question.
 
+**Scored as version** (Students) is for a student who filled in the wrong version bubble and was graded against the wrong key. Select them, pick the version their sheet really was, and click **Change**. They move into that version: scored against its key, counted in its statistics and its points possible, and listed under it in the gradebook and the Canvas file, with the version they bubbled shown beside their name. Points you had already set by hand for them follow the move. Their answers are the ones the scan read, so this fixes the key and not the reading: if the two versions group their answer rows differently on the sheet, those bubbles were read against the wrong grid and the sheet has to be scanned again. Delete the edit to put them back where the scan had them.
+
 **One student's points** (Students), for a regrade request: select the student, then the question in their answers, type the points, and click **Set**. Points set this way are marked with `*`, and **Clear** returns the question to its graded score. They hold even when the key changes afterward, and the tab points this out when you change a key on a question that has some.
 
 **Undoing a change**: select it on the Edits view and click **Delete edit**. The results are recalculated as if it had never been made. **Save note** changes its note. A change made again replaces the earlier one (a second key change, new points for the same student and question, a new amount added), so the list holds what is in force. A change that no longer matches anything in the results, such as one made for a version that a later scan did not have, is shaded.
 
-The changes apply in a fixed order whatever order they were made in: key changes, then credit (full credit, drop, points), then points set by hand, then points added.
+The changes apply in a fixed order whatever order they were made in: version changes, then key changes, then credit (full credit, drop, points), then points set by hand, then points added.
 
 ## Exporting
 

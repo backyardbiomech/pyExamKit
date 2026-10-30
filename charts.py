@@ -302,17 +302,28 @@ class ChoiceBars(tk.Canvas):
         super().__init__(master, width=width, height=height,
                          highlightthickness=0, bd=0,
                          bg=frame_background(self._appearance), **kw)
-        self._rows: list[tuple[str, int]] = []
+        self._rows: list[tuple[str, int, str]] = []
         self._highlight: set[str] = set()
         self.bind('<Configure>', lambda _e: self.redraw())
 
-    def set_data(self, rows: list[tuple[str, int]], highlight: set[str]) -> None:
-        self._rows = list(rows)
+    def set_data(self, rows, highlight: set[str]) -> None:
+        """Rows are (label, count), or (label, count, text) to name the choice
+        beside its letter. highlight holds labels, the letters, either way."""
+        self._rows = [(r[0], r[1], r[2] if len(r) > 2 else '') for r in rows]
         self._highlight = set(highlight)
         self.redraw()
 
     def _measure(self, text: str, size: int, bold: bool = False) -> float:
         return _measuring_font(size, bold).measure(text)
+
+    def _fit(self, text: str, size: int, bold: bool, max_w: float) -> str:
+        """text cut to max_w, with an ellipsis when it had to be cut."""
+        if self._measure(text, size, bold) <= max_w:
+            return text
+        kept = text
+        while kept and self._measure(kept + '…', size, bold) > max_w:
+            kept = kept[:-1]
+        return kept.rstrip() + '…' if kept else ''
 
     def redraw(self) -> None:
         self._appearance = mode()
@@ -322,21 +333,28 @@ class ChoiceBars(tk.Canvas):
         w, h = self.winfo_width(), self.winfo_height()
         if w < 40 or h < 20:
             return
-        if not self._rows or not any(c for _, c in self._rows):
+        if not self._rows or not any(c for _, c, _ in self._rows):
             self.create_text(w / 2, h / 2, text='No answers',
                              fill=pal['muted'], font=_font(11))
             return
-        total = sum(c for _, c in self._rows)
-        peak = max(c for _, c in self._rows)
+        total = sum(c for _, c, _ in self._rows)
+        peak = max(c for _, c, _ in self._rows)
         size = 10
-        label_w = max(self._measure(lbl, size, True) for lbl, _ in self._rows)
+        # A choice named as well as lettered takes the room a letter alone
+        # does not, so the names are cut to a share of the width and the bars
+        # keep the rest
+        shown = {}
+        for label, _, text in self._rows:
+            shown[label] = self._fit(f'{label}  {text}' if text else label,
+                                     size, True, w * 0.45)
+        label_w = max(self._measure(s, size, True) for s in shown.values())
         text_w = max(self._measure(choice_label(c, total), size)
-                     for _, c in self._rows)
+                     for _, c, _ in self._rows)
         g = choice_rows(w, h, len(self._rows), label_w, text_w)
-        for i, (label, count) in enumerate(self._rows):
+        for i, (label, count, _) in enumerate(self._rows):
             yc = g['y0'] + (i + 0.5) * g['row_h']
             key = label in self._highlight
-            self.create_text(g['x0'] - 6, yc, text=label, anchor='e',
+            self.create_text(g['x0'] - 6, yc, text=shown[label], anchor='e',
                              fill=pal['text'],
                              font=_font(size, bold=key))
             length = g['full'] * count / peak if peak else 0
@@ -370,7 +388,8 @@ def _demo(auto_close_ms: int | None = None) -> None:
                        ('Adjusted', adj, ADJUSTED_COLOR)])
     cb = ChoiceBars(frame, height=150)
     cb.pack(fill='x', padx=8, pady=8)
-    cb.set_data([('A', 3), ('B', 7), ('C', 6), ('D', 2), ('Blank', 2)], {'B'})
+    cb.set_data([('A', 3, 'the T tubule'), ('B', 7, 'the sarcoplasmic reticulum'),
+                 ('C', 6, 'the sarcolemma'), ('D', 2, 'the myofibril'), ('Blank', 2)], {'B'})
     ctk.CTkSwitch(root, text='Dark', command=lambda: ctk.set_appearance_mode(
         'Dark' if ctk.get_appearance_mode() == 'Light' else 'Light')
     ).pack(pady=(0, 8))

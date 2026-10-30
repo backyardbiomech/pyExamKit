@@ -113,6 +113,8 @@ The grading window works as described in [Open-ended questions](open-ended-quest
 
 The outputs are the ones described in [Outputs](outputs.md), with a few differences. The gradebook has a `form` column, and a column for each question, `openQ_1A` through the last station's D. A question not on a student's form is left blank, not zero. Scores and the Canvas upload file come from the questions each student answered.
 
+**Points possible is one form's, not the key's.** The key carries every letter at every station, but a student answers half of them, so the percent on the Results tab, the figures on Exam stats, the grade distribution, and the `Points Possible` row of `canvas_upload.csv` all count the points on that student's own sheet. Where a `(2 pts)` line leaves the forms out of different totals, each student's own appears in a **Possible** column in the gradebook, the summary's points possible reads **varies**, and Canvas gets the largest, which is the reason to give the extra points to all four questions at a station or none.
+
 Each student's marked pages are saved as `Last_First_ID_p1.jpg`, `_p2.jpg`, and so on, with the points each graded box earned just right of it, clear of the writing (green for full credit, orange for partial, a red 0 for none), and the form and score (such as "Score 44 / 50") on page 1.
 
 ---

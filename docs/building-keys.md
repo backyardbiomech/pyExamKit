@@ -41,7 +41,7 @@ Note that acceptable answers also get written back to the key file *during* grad
 The key is an ordinary CSV with a header row, so it can be opened and edited in any spreadsheet app. It has thirteen columns:
 
 ```
-type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, choices, text
+type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, choices, text, options
 ```
 
 **`type`** is `metadata`, `bubble`, or `open`. A row with a blank type, or a type starting with `#`, is ignored, which makes comment rows possible.
@@ -52,9 +52,9 @@ type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, c
 
 **Open rows** name the question as `openQ_1` (or just `1`) and carry the crop rectangle in `page`, `x1`, `y1`, `x2`, `y2`. The `answer` column holds the full-credit answers and `partial_answers` holds the partial-credit ones, **each pipe-separated**: `stratum basale|basal layer`. That is the layout to use if you would rather type a key in a spreadsheet than draw it in the builder.
 
-**`source`, `choices`, and `text`** are written by Build Exam and can be left blank in a key made any other way. `source` names the bank question the row came from, as the bank file and question block number (`bank.md#12`, or `bank.md#12.3` for the third row of a question that takes several). `choices` says where each printed choice sat in the bank, as letters: `CADB` means the sheet's A is the bank's C. `text` is the question as plain text, with the dropdown, ordering position, or matching item a row grades in brackets after it, and it labels the question's columns in the gradebook. `source` and `choices` are what lets several shuffled versions be analyzed question by question ([Outputs](outputs.md#multiple-versions)). Grading uses none of the three.
+**`source`, `choices`, `text`, and `options`** are written by Build Exam and can be left blank in a key made any other way. `source` names the bank question the row came from, as the bank file and question block number (`bank.md#12`, or `bank.md#12.3` for the third row of a question that takes several). `choices` says where each printed choice sat in the bank, as letters: `CADB` means the sheet's A is the bank's C. `text` is the question as plain text, with the dropdown, ordering position, or matching item a row grades in brackets after it, and it labels the question's columns in the gradebook. `options` is what each choice said, pipe-separated and in the bank's order, so the first is the bank's A whatever the sheet printed; the Results tab reads it to name an answer instead of lettering it ([Results](results.md#the-four-views)). `source` and `choices` are what lets several shuffled versions be analyzed question by question ([Outputs](outputs.md#multiple-versions)). Grading uses none of the four.
 
-Files are written as plain UTF-8 without a byte-order mark, and read tolerantly: an older key without the `points`, `source`, `choices`, or `text` columns still loads, and simply has nothing for them.
+Files are written as plain UTF-8 without a byte-order mark, and read tolerantly: an older key without the `points`, `source`, `choices`, `text`, or `options` columns still loads, and simply has nothing for them.
 
 ---
 

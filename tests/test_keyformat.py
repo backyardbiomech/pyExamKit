@@ -188,5 +188,27 @@ class DialogRoundTripSimulation(unittest.TestCase):
         self.assertEqual(reloaded['point_values'], original['point_values'])
 
 
+class OptionsColumn(unittest.TestCase):
+    """The fourteenth column: the shown choices' text in bank order."""
+
+    def test_round_trip_and_pipe_in_text(self):
+        data = {'bubble_answers': {'Q001': 'B'}, 'open_questions': {},
+                'choices': {'Q001': 'CADB'},
+                'options': {'Q001': ['alpha', 'beta | gamma', 'delta', 'epsilon']}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'k.csv'
+            keyformat.save_key_csv(str(path), data)
+            reloaded = keyformat.load_key_csv(str(path))
+            header = next(csv.reader(path.open(encoding='utf-8')))
+        self.assertEqual(header[-1], 'options')
+        self.assertEqual(reloaded['options']['Q001'],
+                         ['alpha', 'beta / gamma', 'delta', 'epsilon'])
+
+    def test_older_key_loads_without_options(self):
+        for fixture in (NINE_COL_FIXTURE, TEN_COL_FIXTURE):
+            data = keyformat.load_key_csv(str(fixture))
+            self.assertNotIn('options', data)
+
+
 if __name__ == '__main__':
     unittest.main()

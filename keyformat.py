@@ -7,14 +7,14 @@ either codebase should read or write a key CSV directly.
 
 Canonical columns, always written in this order:
     type, question, page, x1, y1, x2, y2, answer, partial_answers, points,
-    source, choices, text
+    source, choices, text, options
 
 Older layouts are accepted on read: nine columns (no ``points``, written by
 this scanner before this module existed) and ten (no ``source`` or
-``choices``), and twelve (no ``text``). csv.DictReader keys off the header
-row, so a missing column simply yields nothing for it. Only the
-thirteen-column layout is written, so a
-key that round-trips through this module keeps what it had.
+``choices``), twelve (no ``text``), and thirteen (no ``options``).
+csv.DictReader keys off the header row, so a missing column simply yields
+nothing for it. Only the fourteen-column layout is written, so a key that
+round-trips through this module keeps what it had.
 
 ``source`` names the bank question a row came from (``bank.md#12``, with a
 part for questions spread over several rows, ``bank.md#12.3``) and
@@ -22,6 +22,9 @@ part for questions spread over several rows, ``bank.md#12.3``) and
 the sheet's A is the bank's C). ``text`` is the question as plain text, for
 reading the gradebook. Build Exam writes all three; they are what lets
 several versions be combined question by question (docs/dev/outputs-cleanup.md).
+``options`` is the shown choices' own text, pipe-separated in bank order, so
+position i is bank letter i and ``choices`` maps a sheet letter onto it; a
+``|`` inside a choice's text is written as ``/`` to keep the field parseable.
 
 Encoding: written as plain UTF-8, no byte-order mark, matching
 key_generator.py. Read as utf-8-sig, which transparently strips a BOM
@@ -33,7 +36,8 @@ import json
 from pathlib import Path
 
 KEY_CSV_HEADER = ['type', 'question', 'page', 'x1', 'y1', 'x2', 'y2',
-                   'answer', 'partial_answers', 'points', 'source', 'choices', 'text']
+                   'answer', 'partial_answers', 'points', 'source', 'choices', 'text',
+                  'options']
 # Metadata fields a key may carry, written in this order
 METADATA_FIELDS = ('num_questions', 'questions_to_skip', 'sheet_rows', 'version',
                    'answer_boxes', 'title')
@@ -171,6 +175,7 @@ def load_key_csv(path: str) -> dict | None:
     sources: dict = {}
     choices: dict = {}
     texts: dict = {}
+    options: dict = {}
 
     def _note_source(qk: str, row: dict) -> None:
         src = (row.get('source') or '').strip()
@@ -182,6 +187,9 @@ def load_key_csv(path: str) -> dict | None:
             choices[qk] = order
         if text:
             texts[qk] = text
+        if (row.get('options') or '').strip():
+            # Not stripped per part: a blank part is a gap in the bank's positions
+            options[qk] = [o.strip() for o in row['options'].split('|')]
 
     try:
         with open(p, newline='', encoding='utf-8-sig') as fh:
@@ -317,21 +325,24 @@ def load_key_csv(path: str) -> dict | None:
         result['choices'] = choices
     if texts:
         result['texts'] = texts
+    if options:
+        result['options'] = options
     return result
 
 
 def save_key_csv(path: str, data: dict) -> None:
     """
-    Write a CSV exam key file in the canonical wide, thirteen-column format.
+    Write a CSV exam key file in the canonical wide, fourteen-column format.
     Columns: type, question, page, x1, y1, x2, y2, answer, partial_answers, points,
-    source, choices, text
+    source, choices, text, options
       metadata rows: type=metadata, question=field_name, answer=value
       bubble rows:   type=bubble, answer=letter(s), all coordinate columns blank
       open rows:     type=open, answer=pipe-separated full-credit answers,
                      partial_answers=pipe-separated partial-credit answers
       points         — data['point_values'][question], blank when not known
-      source, choices, text — data['sources'], data['choices'], and data['texts'][question],
-                     blank when not known
+      source, choices, text, options — data['sources'], data['choices'],
+                     data['texts'][question], and data['options'][question] (a list,
+                     joined with '|'), blank when not known
 
     Always writes plain UTF-8 with no byte-order mark.
     """
@@ -342,6 +353,11 @@ def save_key_csv(path: str, data: dict) -> None:
     sources = data.get('sources', {})
     choices = data.get('choices', {})
     texts = data.get('texts', {})
+    options = data.get('options', {})
+
+    def options_cell(qk: str) -> str:
+        # A '|' inside a choice would split it in two on the way back in
+        return '|'.join(str(o).replace('|', '/') for o in options.get(qk, []))
 
     with open(path, 'w', newline='', encoding='utf-8') as fh:
         writer = csv.writer(fh)
@@ -356,13 +372,13 @@ def save_key_csv(path: str, data: dict) -> None:
         for field in METADATA_FIELDS:
             if meta.get(field):
                 writer.writerow(['metadata', field, '', '', '', '', '',
-                                 meta[field], '', '', '', '', ''])
+                                 meta[field], '', '', '', '', '', ''])
 
         # Bubble answers (sorted by question key)
         for qk in sorted(bubble.keys()):
             writer.writerow(['bubble', qk, '', '', '', '', '', bubble[qk], '',
                              points.get(qk, ''), sources.get(qk, ''), choices.get(qk, ''),
-                             texts.get(qk, '')])
+                             texts.get(qk, ''), options_cell(qk)])
 
         # Open-ended questions (sorted numerically so openQ_2 precedes openQ_10)
         for qk in sorted(open_qs.keys(), key=_openq_sort_key):
@@ -377,7 +393,7 @@ def save_key_csv(path: str, data: dict) -> None:
             partial_ans = '|'.join(qdata.get('partial', []))
             writer.writerow(['open', qk, page, x1, y1, x2, y2, full_ans, partial_ans,
                              points.get(qk, ''), sources.get(qk, ''), choices.get(qk, ''),
-                             texts.get(qk, '')])
+                             texts.get(qk, ''), options_cell(qk)])
 
 
 def save_key_file(path: str, data: dict) -> None:
