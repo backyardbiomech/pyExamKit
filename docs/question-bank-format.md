@@ -60,6 +60,8 @@ C. gas exchange
 *D. protection from abrasion
 ```
 
+A select-all may star one choice, or none at all. With one star it is still a select-all rather than a multiple choice question, so a student who adds a second mark loses the points. With no star the correct answer is to mark nothing, and the key records that as `none` ([Building keys](building-keys.md)); a student earns the points by leaving the row blank, and any mark at all loses them.
+
 If the stem opens with "select all that apply," in any capitalization and with any trailing punctuation, that phrase is stripped — the printed exam labels the question type itself, so the phrase would be printed twice.
 
 An answer choice can be an image instead of text, written as `A. image: filename.png`.

@@ -14,7 +14,8 @@ from PIL import Image as PILImage, ImageDraw as PILImageDraw
 from ocr import attempt_ocr, exact_grade, explain_suggestion, suggest_grade
 import ai_ocr as _ai_ocr_mod
 import outputs
-from keyformat import (load_key_file, load_key_csv, save_key_csv, save_key_file,
+from keyformat import (load_key_file, load_key_csv, normalize_answer,
+                       save_key_csv, save_key_file,
                        _openq_sort_key)
 
 
@@ -1880,7 +1881,7 @@ class KeyFileEditorDialog:
         def _do_add():
             raw = num_var.get().strip()
             _raw_ans = ans_var.get().strip()
-            ans = _raw_ans.lower() if _raw_ans.lower() == 'ignore' else _raw_ans.upper()
+            ans = normalize_answer(_raw_ans)
             if not raw:
                 status.config(text='Enter a question number.')
                 return
@@ -2260,7 +2261,7 @@ class KeyFileEditorDialog:
         if self._current_q['type'] == 'bubble':
             if hasattr(self, '_bubble_ans_var') and qk in self._bubble:
                 _raw = self._bubble_ans_var.get().strip()
-                self._bubble[qk] = _raw.lower() if _raw.lower() == 'ignore' else (_raw.upper() or '-')
+                self._bubble[qk] = normalize_answer(_raw) or '-'
         elif self._current_q['type'] == 'open':
             if qk not in self._open_qs:
                 return
@@ -3159,7 +3160,7 @@ class KeyBuilderDialog:
         def _do_add():
             raw = num_var.get().strip()
             _raw_ans = ans_var.get().strip()
-            ans = _raw_ans.lower() if _raw_ans.lower() == 'ignore' else _raw_ans.upper()
+            ans = normalize_answer(_raw_ans)
             if not raw:
                 status_lbl.config(text='Enter a question number.')
                 return

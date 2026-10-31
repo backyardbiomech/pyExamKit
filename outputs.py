@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 import analysis
+import keyformat
 
 APP_DATA = 'app_data'
 GRADEBOOK = 'gradebook.xlsx'
@@ -136,9 +137,12 @@ class Graded:
 
     def key_label(self, col: str, bank: bool = False) -> str:
         """The key as shown: every accepted answer, in the bank's letters
-        when bank is set."""
+        when bank is set. A key asking for an unmarked row has no letters to
+        show, so it is named in words instead."""
         keys = self.accepted.get(col) or [str(self.df.loc['0', col])]
-        return ' or '.join(self.bank_letters(col, k) if bank else k for k in keys)
+        return ' or '.join('no marks' if k == keyformat.NO_SELECTION
+                           else self.bank_letters(col, k) if bank else k
+                           for k in keys)
 
     @property
     def students(self) -> list[str]:
@@ -170,7 +174,7 @@ class Graded:
     def bank_letters(self, col: str, letters: str) -> str:
         """A bubbled answer in the bank's lettering, through the key's choices."""
         order = self.choices.get(col, '')
-        if not order:
+        if not order or letters in keyformat.ANSWER_SENTINELS:
             return letters
         out = []
         for ch in letters:
@@ -182,7 +186,7 @@ class Graded:
         """The reverse of bank_letters: bank letters as they sat on this sheet.
         A letter the question did not have is left as it is."""
         order = self.choices.get(col, '')
-        if not order:
+        if not order or letters in keyformat.ANSWER_SENTINELS:
             return letters
         return ''.join(sorted(chr(ord('A') + order.index(ch)) if ch in order else ch
                               for ch in letters))

@@ -38,7 +38,7 @@ Note that acceptable answers also get written back to the key file *during* grad
 
 ## The key CSV format
 
-The key is an ordinary CSV with a header row, so it can be opened and edited in any spreadsheet app. It has thirteen columns:
+The key is an ordinary CSV with a header row, so it can be opened and edited in any spreadsheet app. It has fourteen columns:
 
 ```
 type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, choices, text, options
@@ -49,6 +49,8 @@ type, question, page, x1, y1, x2, y2, answer, partial_answers, points, source, c
 **Metadata rows** carry the settings the Scan Exams tab fills in for you. `num_questions` holds the bubble question count and `questions_to_skip` holds the comma-separated skip list, each with its value in the `answer` column. A key built with an exam whose sheet groups rows by question also has `sheet_rows`, which says where the rows are printed: the number of rows in each run between gaps, comma-separated, with columns separated by a slash (`5,4,3,5/2,5`). Keep it when editing a key by hand, since that sheet cannot be read without it. A key from Build Exam also has `title`, the exam's title, which names the grade column in the [Canvas upload file](outputs.md#the-results).
 
 **Bubble rows** name the question in `question` — `Q001`, or just `1`, which is normalized on read — and put the correct letters in `answer`. Multiple letters run together with no separator: `ABD`. The coordinate columns stay empty. `points` is the value of that question, and it is what the grader uses; leave it blank and the question falls back to the exam-wide points-per-bubble-question setting.
+
+Two lowercase words stand in `answer` where letters would otherwise go. `ignore` means the row is not graded at all, which is what a written question's untouched bubble row and a skipped question both get. `none` means the correct answer is to mark nothing, which is what a select-all with no correct choice asks for; the row is graded, all or nothing, and a student earns the points by leaving it blank. Because both are lowercase and real answers are capital letters, neither can be mistaken for one. An `answer` left genuinely empty is a mistake rather than a third option, and the scanner warns about it when the key loads.
 
 **Open rows** name the question as `openQ_1` (or just `1`) and carry the crop rectangle in `page`, `x1`, `y1`, `x2`, `y2`. The `answer` column holds the full-credit answers and `partial_answers` holds the partial-credit ones, **each pipe-separated**: `stratum basale|basal layer`. That is the layout to use if you would rather type a key in a spreadsheet than draw it in the builder.
 

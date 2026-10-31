@@ -20,7 +20,7 @@ from pathlib import Path
 import sheet_layout
 from exam_builder import row_runs
 from models import ExamVersion, Question
-from keyformat import save_key_file
+from keyformat import NO_SELECTION, save_key_file
 from renderer import _strip_html
 
 
@@ -238,7 +238,9 @@ def _mc_answer(q: Question) -> str:
     """Answer string for MC or MA questions.
 
     MC: single letter for the correct answer.
-    MA: concatenated sorted letters for all correct answers (e.g. 'AC').
+    MA: concatenated sorted letters for all correct answers (e.g. 'AC'), or
+    the 'none' sentinel when no choice is correct, since the right answer is
+    then an unmarked row rather than an unscored question.
     """
     if q.q_type == 'MC':
         for i, ans in enumerate(q.answers):
@@ -252,7 +254,7 @@ def _mc_answer(q: Question) -> str:
             for i, ans in enumerate(q.answers)
             if ans.is_correct
         )
-        return ''.join(letters)
+        return ''.join(letters) or NO_SELECTION
 
     return ''
 

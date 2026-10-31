@@ -7,6 +7,7 @@ import difflib
 import os
 from pathlib import Path
 
+import keyformat
 import outputs
 from PIL import Image as PILImage, ImageDraw, ImageFont
 
@@ -38,8 +39,16 @@ def _get_font(size=28):
 
     
 def graded_key(key) -> bool:
-    """False for a question the key leaves ungraded."""
-    return not (pd.isna(key) or key in ('ignore', ''))
+    """False for a question the key leaves ungraded. The 'none' sentinel is
+    graded: it asks for an unmarked row rather than for no grading."""
+    return not (pd.isna(key) or key in (keyformat.IGNORE, ''))
+
+
+def unmarked(ans) -> bool:
+    """True when a bubble row carries no marks. The scanner writes '-' for a
+    row with nothing in it (bubbles.read_row); a key or results file edited
+    by hand may hold a blank cell instead."""
+    return bool(pd.isna(ans)) or str(ans).strip() in ('', '-')
 
 
 def score_answer(ans, keys, q_pts: float, partial: bool, strictness: float = 0.5
@@ -51,7 +60,9 @@ def score_answer(ans, keys, q_pts: float, partial: bool, strictness: float = 0.5
     written-answers grading, where a bubble answer close enough to the key
     (difflib ratio at or above strictness) earns a share of the points: each
     bubble is worth points / bubbles on the key, gained if on the key and
-    lost if not, never below zero."""
+    lost if not, never below zero. A key of 'none' names no bubbles at all,
+    so it is all or nothing: the points go to an unmarked row and any mark
+    loses them."""
     if isinstance(keys, str):
         keys = [keys]
     best = (0.0, False)
@@ -59,6 +70,8 @@ def score_answer(ans, keys, q_pts: float, partial: bool, strictness: float = 0.5
         if key == 'CC':
             grade = str(ans)[:2]
             got = (q_pts, True) if grade == 'CC' else (q_pts / 2, False) if grade == 'CX' else (0.0, False)
+        elif key == keyformat.NO_SELECTION:
+            got = (q_pts, True) if unmarked(ans) else (0.0, False)
         elif pd.isna(ans):
             got = (0.0, False)
         elif not partial:
@@ -122,8 +135,9 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
                 q_pts = point_values.get(col, bubbleVal) if point_values else bubbleVal
             possible[col] = float(q_pts)
             ans = df.loc[row, col]
-            # catch when ans is '-' meaning no answer was scanned
-            if key != 'CC' and ans == '-':
+            # catch when ans is '-' meaning no answer was scanned, which is
+            # the correct answer when the key asks for an unmarked row
+            if key not in ('CC', keyformat.NO_SELECTION) and ans == '-':
                     # get scan number (index), name, and L number
                     alertStr = 'Name: {},{}, Lnumber: {} had no answer scanned for question {}'.format(
                                 df.loc[row, 'LastName'],
@@ -334,8 +348,18 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
             if key == 'ignore':
                 continue
 
-            key = list(key)
-            ans = list(df.loc[row_str, col])
+            blank_key = key == keyformat.NO_SELECTION
+            raw = df.loc[row_str, col]
+            # An unmarked row is what a sentinel key asks for, and the key's
+            # own row carries the sentinel itself
+            right_blank = blank_key and (unmarked(raw) or raw == keyformat.NO_SELECTION)
+            if blank_key:
+                # The sentinel names no bubbles, on either side: there is no
+                # letter to mark correct, nothing missing from a blank row,
+                # and no letter for qDict to look up on the key's own row.
+                key, ans = [], [] if raw == keyformat.NO_SELECTION else list(raw)
+            else:
+                key, ans = list(key), list(raw)
 
             # Determine which page image to draw on (1-based page → 0-based index)
             page_idx = max(0, q_pages.get(col, 1) - 1)
@@ -371,6 +395,9 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                     elif lett != '-':
                         draw.text((markX, markY - TEXT_Y_OFFSET), 'X', fill=RED, font=font)
 
+                if right_blank:
+                    markX = qAreas[col][0][0] - 26
+                    draw.text((markX, markY - TEXT_Y_OFFSET), 'C', fill=GREEN, font=font)
                 if markmissing and len(key) > 0:
                     markX = qAreas[col][0][0] - 26
                     draw.text((markX, markY - TEXT_Y_OFFSET), 'M', fill=RED, font=font)

@@ -26,6 +26,17 @@ several versions be combined question by question (docs/dev/outputs-cleanup.md).
 position i is bank letter i and ``choices`` maps a sheet letter onto it; a
 ``|`` inside a choice's text is written as ``/`` to keep the field parseable.
 
+The ``answer`` column normally holds the bubble letters a row's correct
+answer needs, but two lowercase sentinels stand in its place. ``ignore``
+means the row is not graded at all: a short-answer row graded by hand, or a
+question the build was told to skip. ``none`` means the correct answer is to
+mark no bubble at all, which is what a select-all with no correct choice
+asks for; it is graded, all or nothing, and the student earns the points by
+leaving the row blank. The sentinels are lowercase and real bubble answers
+are uppercase letters, so the two never collide. An ``answer`` that is
+genuinely empty is a broken key rather than a third sentinel, and
+``load_key_csv`` warns about it.
+
 Encoding: written as plain UTF-8, no byte-order mark, matching
 key_generator.py. Read as utf-8-sig, which transparently strips a BOM
 when one is present (files written by the old nine-column scanner code)
@@ -38,9 +49,22 @@ from pathlib import Path
 KEY_CSV_HEADER = ['type', 'question', 'page', 'x1', 'y1', 'x2', 'y2',
                    'answer', 'partial_answers', 'points', 'source', 'choices', 'text',
                   'options']
+# Sentinels the 'answer' column may hold in place of bubble letters. Both are
+# lowercase, which is what keeps them apart from real answers (A-F).
+IGNORE = 'ignore'        # not graded at all
+NO_SELECTION = 'none'    # graded, and the correct answer is an unmarked row
+ANSWER_SENTINELS = (IGNORE, NO_SELECTION)
+
 # Metadata fields a key may carry, written in this order
 METADATA_FIELDS = ('num_questions', 'questions_to_skip', 'sheet_rows', 'version',
                    'answer_boxes', 'title')
+
+
+def normalize_answer(raw) -> str:
+    """A typed key cell as it should be stored: a sentinel in the lowercase
+    the key format gives it, anything else as uppercase bubble letters."""
+    text = str(raw).strip()
+    return text.lower() if text.lower() in ANSWER_SENTINELS else text.upper()
 
 
 def _openq_sort_key(k: str) -> tuple:
