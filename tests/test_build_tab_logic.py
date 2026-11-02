@@ -93,7 +93,8 @@ class ValidateBuildFields(unittest.TestCase):
         self.addCleanup(shutil.rmtree, out, ignore_errors=True)
         folder = Path(out) / 'Exam_1'
         (folder / 'images').mkdir(parents=True)
-        written = ['Exam_1_vA.html', 'Exam_1_vA_large.html', 'Exam_1_vA.md',
+        written = ['Exam_1_vA.html', 'Exam_1_vA_large.html', 'Exam_1_vA.pdf',
+                   'Exam_1_vA_large.pdf', 'Exam_1_answer_sheet.pdf', 'Exam_1_vA.md',
                    'Exam_1_vA_key.csv', 'Exam_1_vC_key.csv', 'Exam_1.exam.json']
         kept = ['bank.txt', 'Exam_1_notes.md', 'images/cell.png']
         for name in written + kept:

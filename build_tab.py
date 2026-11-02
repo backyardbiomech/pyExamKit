@@ -30,6 +30,7 @@ from exam_builder import (FONT_SIZES, BuildConfig, ExamBuilder, PoolConfig,
 from exam_config import load_config, load_versions, save_config
 from exam_key_writer import answer_rows, save_key, sheet_columns
 import answer_sheet
+import browser_pdf
 import sheet_layout
 from models import ExamVersion
 from parser import parse_file
@@ -90,7 +91,7 @@ def config_file(output_folder: str, title: str) -> Path:
 
 
 def previous_build_files(output_folder: str, title: str) -> list[Path]:
-    """The files an earlier build under this title left: exams, markdown, keys, config.
+    """The files an earlier build under this title left: exams, PDFs, markdown, keys, config.
 
     Removed before a replacing build, so a version the new build doesn't
     make (a vC key from a three-version build, now two) can't be scanned
@@ -99,12 +100,13 @@ def previous_build_files(output_folder: str, title: str) -> list[Path]:
     """
     folder = build_folder(output_folder, title)
     stem = safe_name(title.strip())
-    found = [p for pattern in (f'{stem}_v?.html', f'{stem}_v?_*.html',
+    found = {p for pattern in (f'{stem}_v?.html', f'{stem}_v?_*.html',
+                               f'{stem}_v?.pdf', f'{stem}_v?_*.pdf',
                                f'{stem}_v?.md', f'{stem}_v?_key.csv',
                                f'{stem}_answer_sheet.pdf', f'{stem}_v?_answer_sheet.pdf')
-             for p in folder.glob(pattern)]
+             for p in folder.glob(pattern)}
     config = config_file(output_folder, title)
-    return sorted(found + ([config] if config.exists() else []))
+    return sorted(found | ({config} if config.exists() else set()))
 
 
 def write_answer_sheets(versions: list[ExamVersion], output_path: Path,
@@ -806,6 +808,7 @@ class BuildExamUI(ctk.CTkFrame):
             sheet_crops, sheet_log = write_answer_sheets(versions, output_path, heading)
             for line in sheet_log:
                 self.log_fn(line)
+            html_paths = []
             for version in versions:
                 v_letter = version.version_letter
                 slots = sum(slot_count(q) for q in version.questions)
@@ -827,6 +830,14 @@ class BuildExamUI(ctk.CTkFrame):
                 save_key(version, key_path, config.default_points,
                          open_coords=sheet_crops.get(v_letter))
                 self.log_fn(f'    Key   → {key_path.name}')
+                html_paths.append(html_path)
+
+            self.log_fn('\nPrinting the exam to PDF…')
+            pdfs, pdf_warnings = browser_pdf.print_all(html_paths)
+            for pdf in pdfs:
+                self.log_fn(f'    PDF   → {pdf.name}')
+            for w in pdf_warnings:
+                self.log_fn(f'    WARNING: {w}')
 
             # The config records the exam as printed, which is the only way to
             # reprint it later with the same keys, so a failed save is logged.

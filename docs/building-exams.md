@@ -1,6 +1,6 @@
 # Building an exam
 
-The **Build Exam** tab turns one or more [question bank files](question-bank-format.md) into a printable exam and the answer key CSV that [Scan Exams](scanning-and-grading.md) grades against. It writes an HTML version to print and a Markdown version to keep or post.
+The **Build Exam** tab turns one or more [question bank files](question-bank-format.md) into a printable exam and the answer key CSV that [Scan Exams](scanning-and-grading.md) grades against. It writes an HTML version to print, a PDF of it to send, and a Markdown version to keep or post.
 
 ## Where the questions come from
 
@@ -38,6 +38,7 @@ The exam asks the browser never to split a question across two pages when it pri
 Choose an **Output folder**, then click **Generate Exam**. Each build goes in its own folder inside the one you chose, named after the exam title (an exam titled `Title` lands in `Title/`), so the output folder can safely be the folder your banks live in. If an exam was already built under the same title, the app asks before replacing it. **Yes** deletes the old exam files, keys, and config and builds a new exam in their place; **No** leaves the old exam alone. A new build draws new questions and new keys, so if the old exam has been handed out, answer No and give the new one a different title. Reprinting a saved exam (below) doesn't ask, because it prints the same exam again. For each version the app writes:
 
 - `Title_vA.html` — the exam laid out for printing, with MathJax for any equations (at a size other than medium, the size is added to the name, as in `Title_vA_large.html`)
+- `Title_vA.pdf` — the same exam printed to PDF, ready to send to the accommodations office or anyone else who needs a file (named like the HTML, so `Title_vA_large.pdf` beside `Title_vA_large.html`)
 - `Title_vA.md` — the same exam as Markdown - you probably won't use this
 - `Title_vA_key.csv` — the answer key, in the format [Scan Exams](scanning-and-grading.md) reads
 
@@ -51,7 +52,7 @@ Equations are drawn by MathJax, which loads from the internet when the exam is o
 
 Every printed page has a footer with its page number, so a dropped stack can be put back in order. The version letter appears nowhere on the first page or in the footer, so students cannot compare versions with a neighbor; when more than one version is built, it is printed once, at the end of the exam. Chrome and Edge print this footer; Safari and Firefox leave it off. Leave the print dialog's own **Headers and footers** option unchecked, since it adds the file path and date.
 
-Print the HTML from a browser (or print to PDF). The students bubble their answers on the separate [answer sheet](answer-sheets.md) written with the build, not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
+The PDF is printed by Chrome or Edge, run in the background, so it matches what the browser's own print dialog gives, footer and equations included; it takes a few seconds per build. If neither browser is installed, the log says so and only the HTML is written. Print the PDF, or the HTML from a browser. The students bubble their answers on the separate [answer sheet](answer-sheets.md) written with the build, not on the exam pages, so the exam itself can be printed double-sided and collected without being marked up.
 
 ## Saving and reprinting an exam
 
