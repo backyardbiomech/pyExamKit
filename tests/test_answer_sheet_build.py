@@ -145,6 +145,18 @@ class TestWrittenRowsMatchAcrossVersions(unittest.TestCase):
         self.assertEqual(len(list(self.out.glob('*_answer_sheet.pdf'))), 1, log)
         self.assertEqual(len({tuple(sorted(c.items())) for c in crops.values()}), 1)
 
+    def test_exact_file_shares_rows_without_the_checkbox(self):
+        # An exact file is the same questions in every version, so it gets
+        # one sheet even when "same questions" was left off.
+        for seed in range(25):
+            versions = self.build(seed, same_questions=False)
+            cols = [sheet_columns(v) for v in versions]
+            rows = [answer_rows(v) for v in versions]
+            self.assertTrue(all(c == cols[0] for c in cols), f'seed {seed}: {cols}')
+            self.assertTrue(all(r == rows[0] for r in rows), f'seed {seed}: {rows}')
+        crops, log = write_answer_sheets(self.build(7, same_questions=False), self.out, 'Pinned')
+        self.assertEqual(len(list(self.out.glob('*_answer_sheet.pdf'))), 1, log)
+
 
 def grouped_rows(version) -> list[range]:
     """The answer-sheet rows of each ordering, matching, or dropdown question."""

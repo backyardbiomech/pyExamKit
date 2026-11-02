@@ -146,8 +146,11 @@ class ExamBuilder:
         versions: list[ExamVersion] = []
 
         # When same_questions is requested, sample once and reuse across versions.
+        # An exact file, or pools that each give every question they have,
+        # mean the same questions in every version whether or not it was asked.
+        takes_all = all(count is None or count >= len(qs) for qs, count, _, _ in pool_sources)
         shared_sample: list[Question] | None = None
-        if config.same_questions:
+        if config.same_questions or takes_all:
             shared_sample = []
             for (pool_qs, count, folder, pool_pts) in pool_sources:
                 pool_copy = copy.deepcopy(pool_qs)
