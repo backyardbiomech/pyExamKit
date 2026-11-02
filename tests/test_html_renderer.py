@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 from exam_builder import FONT_SIZES
-from models import Answer, ExamVersion, Question
+from models import Answer, ExamVersion, OrderItem, Question
 from parser import parse_file
 from renderer import ExamRenderer
 
@@ -59,6 +59,16 @@ class HtmlOutput(unittest.TestCase):
     def test_page_margins_are_three_quarters_of_an_inch_top_and_bottom(self):
         text, _, _ = self._render(_exam([_mc('one')]))
         self.assertIn('margin: 0.75in 0.5in;', text)
+
+    def test_grouped_questions_always_show_their_total(self):
+        # Their points are split across rows, so the header's "each question
+        # is worth" would read as per row; the total is printed even then.
+        order = Question(q_type='OR', text='Put these in order.', source_folder=FIXTURE_INPUT,
+                         order_items=[OrderItem(t, i + 1) for i, t in enumerate('wxyz')])
+        text, _, _ = self._render(_exam([_mc('one'), order, _mc('two')]), default_points=2)
+        self.assertIn('Each question is worth 2 pts', text)
+        self.assertEqual(text.count('points-label">'), 1)
+        self.assertRegex(text, r'Questions 2&ndash;5\.\s*</span>\s*<span class="points-label">\(2 pts total\)')
 
     def test_every_question_asks_not_to_be_split_across_pages(self):
         text, _, _ = self._render(_exam([_mc('one')]))

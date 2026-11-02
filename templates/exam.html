@@ -232,7 +232,7 @@
         {% if q.start_num == q.end_num %}{{ q.start_num }}.{% else %}Questions {{ q.start_num }}&ndash;{{ q.end_num }}.{% endif %}
       </span>
       {% if q.show_pts %}
-      <span class="points-label">({{ q.show_pts }} pts each)</span>
+      <span class="points-label">({{ q.show_pts }} pts total)</span>
       {% endif %}
       {{ q.text | math_safe }}
     </p>

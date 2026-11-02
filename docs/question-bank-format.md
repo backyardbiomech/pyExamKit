@@ -45,7 +45,7 @@ The printed answer sheet gives every question **six choices, A through F**, and 
 
 A multiple choice or multiple answer question with more than six choices is **trimmed at load time**: every correct answer is kept, and wrong answers are randomly sampled to fill what is left. The trim happens once per build, so all versions of one exam see the same subset of choices even when the answer order differs between them.
 
-Ordering, matching, and multiple dropdown questions each consume one slot per item, so the slot count runs ahead of the question count. Five of these questions with four items each fill twenty slots. The builder warns when an exam needs more than 150 slots; questions past that point still print, but there is nowhere on the sheet to bubble them, so they cannot be graded.
+Ordering, matching, and multiple dropdown questions each consume one slot per item, so the slot count runs ahead of the question count. Their points are the question's total, split across those slots, so the printed exam always shows the total after the question numbers ("Questions 1–4. (2 pts total)"), even when it matches the exam's usual value. Five of these questions with four items each fill twenty slots. The builder warns when an exam needs more than 150 slots; questions past that point still print, but there is nowhere on the sheet to bubble them, so they cannot be graded.
 
 ## Multiple choice and multiple answer
 

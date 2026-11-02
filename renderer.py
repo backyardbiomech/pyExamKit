@@ -243,6 +243,17 @@ def _pts_label(pts_str: str | None, build_default: float, mode_pts: float | None
     return _fmt_pts(effective)
 
 
+def _group_pts_label(pts_str: str | None, build_default: float, mode_pts: float | None,
+                     rows: int) -> str | None:
+    """Points label for an ordering, matching, or dropdown question.
+
+    Its points are split across its rows (see exam_key_writer), so a
+    question taking several rows always shows its total, even when that
+    total matches the header note, which a student could read as per row.
+    """
+    return _pts_label(pts_str, build_default, None if rows > 1 else mode_pts)
+
+
 def _prepare_questions(questions: list[Question], build_default: float, mode_pts: float | None) -> list[dict]:
     """Convert Question objects into render-ready dicts, one per question, in order.
 
@@ -279,7 +290,7 @@ def _prepare_questions(questions: list[Question], build_default: float, mode_pts
                 'q_type': 'MD',
                 'text': stem,
                 'image_paths': q.image_paths,
-                'show_pts': _pts_label(q.points, build_default, mode_pts),
+                'show_pts': _group_pts_label(q.points, build_default, mode_pts, n),
                 'start_num': start,
                 'end_num': end,
                 'selections': selections,
@@ -310,7 +321,7 @@ def _prepare_questions(questions: list[Question], build_default: float, mode_pts
                 'q_type': 'OR',
                 'text': q.text,
                 'image_paths': q.image_paths,
-                'show_pts': _pts_label(q.points, build_default, mode_pts),
+                'show_pts': _group_pts_label(q.points, build_default, mode_pts, n),
                 'start_num': start,
                 'end_num': end,
                 'display_items': display_items,
@@ -336,7 +347,7 @@ def _prepare_questions(questions: list[Question], build_default: float, mode_pts
                 'q_type': 'MT',
                 'text': q.text,
                 'image_paths': q.image_paths,
-                'show_pts': _pts_label(q.points, build_default, mode_pts),
+                'show_pts': _group_pts_label(q.points, build_default, mode_pts, n),
                 'start_num': start,
                 'end_num': end,
                 'display_rights': display_rights,
