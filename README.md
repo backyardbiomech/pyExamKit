@@ -68,6 +68,7 @@ flowchart TD
 11. [The Results tab](docs/results.md) — statistics, item analysis, fixing a key, crediting or dropping a question, adding points, and exporting to Canvas
 12. [Lab practicals](docs/lab-practicals.md) — writing a practical's source file, building its sheets and placards, and grading every form in one stack
 13. [FAQ and troubleshooting](docs/faq.md)
+14. [History](docs/history.md) — why a biology professor wrote a Scantron replacement, and how it became pyExamKit
 
 Design notes and implementation history live in [docs/dev/](docs/dev/). They document why parts of the app are built the way they are, and are aimed at anyone modifying the code rather than at anyone using it.
 
