@@ -44,6 +44,34 @@ BOX_MAX_W = 620
 AREA_TOP = L.V2_Q_TOP - 20
 AREA_BOTTOM = 1490
 
+# Sheets are drawn at full size in the canonical frame, then shrunk about the
+# page center, so a printer with wide margins prints the whole sheet without
+# "scale to fit". The scanner corrects for scale from the corner circles, so
+# the layout and the box crops stay in the canonical frame.
+PRINT_SCALE = 0.9
+
+
+def shrink(doc: fitz.Document, scale: float | None = None) -> fitz.Document:
+    '''
+    A copy of doc with each page shrunk to `scale` (PRINT_SCALE by default)
+    about its center, on a page of the same size. The exam pages printed
+    beside the sheet use it too, so both print whole on the same printer.
+    '''
+    scale = PRINT_SCALE if scale is None else scale
+    if scale == 1:
+        return doc
+    out = fitz.open()
+    for page in doc:
+        r = page.rect
+        dx, dy = r.width * (1 - scale) / 2, r.height * (1 - scale) / 2
+        out.new_page(width=r.width, height=r.height).show_pdf_page(
+            fitz.Rect(dx, dy, r.width - dx, r.height - dy), doc, page.number)
+    return out
+
+
+def _to_pdf(doc, scale: float | None) -> bytes:
+    return shrink(doc, scale).tobytes(garbage=4, deflate=True)
+
 
 class SheetError(ValueError):
     '''A sheet that cannot be drawn as asked; the message is shown to the user.'''
@@ -243,13 +271,15 @@ def _place_boxes(written: list[int], first_free_col: int) -> dict[int, tuple]:
 
 
 def build_sheet(questions: int = 150, written=(), title: str = '', version_letter: str = '',
-                logo=DEFAULT_LOGO, columns: list[list[int]] | None = None) -> SheetResult:
+                logo=DEFAULT_LOGO, columns: list[list[int]] | None = None,
+                scale: float | None = None) -> SheetResult:
     '''
     Draw a sheet with `questions` answer rows. Question numbers in `written`
     get writing boxes instead of bubbles. `columns` gives the row runs of a
     sheet grouped by question (sheet_layout.keyed_layout); without it the
-    rows fall in the standard groups of five. Returns the PDF and the box
-    crops.
+    rows fall in the standard groups of five. The page prints at `scale`
+    (PRINT_SCALE by default).
+    Returns the PDF and the box crops.
     '''
     if columns:
         layout = L.keyed_layout(columns)
@@ -304,7 +334,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
 
     # Crops sit just inside each box, so the printed border is not transcribed.
     crops = {q: (x0 + 4, y0 + 4, x1 - 4, y1 - 4) for q, (x0, y0, x1, y1) in boxes.items()}
-    return SheetResult(doc.tobytes(garbage=4, deflate=True), crops)
+    return SheetResult(_to_pdf(doc, scale), crops)
 
 
 # ── Lab practical form sheets ──────────────────────────────────────────────
@@ -324,7 +354,8 @@ def _form_code(page, form):
 
 
 def build_practical_sheet(stations: int, form: str, title: str = '',
-                          logo=DEFAULT_LOGO, double_sided: bool = False) -> bytes:
+                          logo=DEFAULT_LOGO, double_sided: bool = False,
+                          scale: float | None = None) -> bytes:
     '''
     A lab practical form sheet: two writing boxes per station, labeled with
     the form's two letters, on as many pages as the stations need. The form
@@ -333,7 +364,8 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
 
     double_sided adds a blank back to a sheet with an odd number of pages,
     so each student's sheet starts on a fresh piece of paper when printed
-    on both sides. The scanner skips blank pages.
+    on both sides. The scanner skips blank pages. Pages print at `scale`
+    (PRINT_SCALE by default).
     '''
     form = ''.join(sorted(form.upper()))
     if len(form) != 2 or any(c not in L.FORM_LETTERS for c in form) or form[0] == form[1]:
@@ -376,7 +408,7 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
         page = doc.new_page(width=L.PAGE_W * PT, height=L.PAGE_H * PT)
         _text(page, L.PAGE_W / 2, L.PAGE_H / 2, 'This side is intentionally blank.',
               size=9, color=RING, align='center')
-    return doc.tobytes(garbage=4, deflate=True)
+    return _to_pdf(doc, scale)
 
 
 def main():
@@ -385,11 +417,13 @@ def main():
     ap.add_argument('--written', default='', help='comma-separated written-answer question numbers')
     ap.add_argument('--title', default='', help='printed under the logo, e.g. "BIOL 206 Exam 2"')
     ap.add_argument('--no-logo', action='store_true')
+    ap.add_argument('--scale', type=float, default=PRINT_SCALE,
+                    help=f'printed size, as a fraction of full size (default {PRINT_SCALE})')
     ap.add_argument('-o', '--out', default='answer_sheet.pdf')
     args = ap.parse_args()
     written = [int(x) for x in args.written.split(',') if x.strip()]
     res = build_sheet(args.questions, written, args.title,
-                      logo=None if args.no_logo else DEFAULT_LOGO)
+                      logo=None if args.no_logo else DEFAULT_LOGO, scale=args.scale)
     Path(args.out).write_bytes(res.pdf)
     print(f'Wrote {args.out}')
     for q, c in res.boxes.items():

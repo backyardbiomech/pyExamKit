@@ -275,7 +275,7 @@ def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207
     outdir.mkdir(parents=True, exist_ok=True)
     boxes = L.practical_boxes(len(p.stations))
     sheets = {f: fitz.open(stream=answer_sheet.build_practical_sheet(
-                               len(p.stations), f, p.title, double_sided=True),
+                               len(p.stations), f, p.title, double_sided=True, scale=1),
                            filetype='pdf') for f in p.forms}
     n_pages = L.practical_pages(len(p.stations))
     students = make_students(rng, p, n_students)

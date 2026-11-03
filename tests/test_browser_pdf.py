@@ -17,6 +17,7 @@ import fitz
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import answer_sheet  # noqa: E402
 import browser_pdf  # noqa: E402
 from exam_builder import BuildConfig, ExamBuilder  # noqa: E402
 from renderer import ExamRenderer  # noqa: E402
@@ -56,6 +57,9 @@ class TestPrint(unittest.TestCase):
         self.assertEqual((doc[0].rect.width, doc[0].rect.height), (612, 792))
         text = ''.join(page.get_text() for page in doc)
         self.assertIn(f'Page 1 of {doc.page_count}', text)
+        # Shrunk like the answer sheet, so the footer clears a wide printer margin
+        footer = doc[0].search_for('Page 1 of')[0]
+        self.assertLess(footer.y1, 792 * (1 + answer_sheet.PRINT_SCALE) / 2)
         self.assertIn(versions[0].questions[0].text.split('<')[0][:30], text)
 
 

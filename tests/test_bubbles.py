@@ -6,6 +6,7 @@ images/, with marks painted in at chosen gray levels.
 '''
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import fitz
@@ -16,6 +17,15 @@ sys.path.insert(0, str(ROOT))
 
 import bubbles  # noqa: E402
 import sheet_layout  # noqa: E402
+import answer_sheet  # noqa: E402
+
+
+def setUpModule():
+    # The renders below stand in for scans the aligner has already corrected
+    # for print scale, so the sheets are drawn at full size.
+    mock.patch.object(answer_sheet, 'PRINT_SCALE', 1).start()
+    unittest.addModuleCleanup(mock.patch.stopall)
+
 
 BLANK = ROOT / 'images' / 'pyExamScan AnswerSheet 150questions.pdf'
 

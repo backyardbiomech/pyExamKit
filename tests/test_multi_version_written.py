@@ -35,6 +35,15 @@ from build_tab import write_answer_sheets  # noqa: E402
 from exam_builder import BuildConfig, ExamBuilder  # noqa: E402
 from exam_key_writer import save_key  # noqa: E402
 from test_bubbles import paint, paint_version  # noqa: E402
+import answer_sheet  # noqa: E402
+
+
+def setUpModule():
+    # The renders below stand in for scans the aligner has already corrected
+    # for print scale, so the sheets are drawn at full size.
+    mock.patch.object(answer_sheet, 'PRINT_SCALE', 1).start()
+    unittest.addModuleCleanup(mock.patch.stopall)
+
 
 BANK = ROOT / 'tests' / 'fixtures' / 'build_migration' / 'input' / 'bank1.txt'
 

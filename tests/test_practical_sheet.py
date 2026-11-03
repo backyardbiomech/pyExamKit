@@ -6,6 +6,7 @@ reads the ID from page 1, and crops land inside the printed boxes.
 '''
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import fitz
@@ -17,6 +18,13 @@ import answer_sheet  # noqa: E402
 import bubbles  # noqa: E402
 import practical  # noqa: E402
 import sheet_layout as L  # noqa: E402
+
+
+def setUpModule():
+    # The renders below stand in for scans the aligner has already corrected
+    # for print scale, so the sheets are drawn at full size.
+    mock.patch.object(answer_sheet, 'PRINT_SCALE', 1).start()
+    unittest.addModuleCleanup(mock.patch.stopall)
 
 
 def render(pdf: bytes) -> list[np.ndarray]:

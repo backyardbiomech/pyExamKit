@@ -45,8 +45,9 @@ def expected(scale: float) -> np.ndarray:
 class TestRegistration(unittest.TestCase):
     SHEETS = {
         'classic': lambda: fitz.open(ROOT / 'images' / 'pyExamScan AnswerSheet 150questions.pdf'),
-        'v2': lambda: fitz.open(stream=answer_sheet.build_sheet(60).pdf),
-        'practical': lambda: fitz.open(stream=answer_sheet.build_practical_sheet(25, 'AC')),
+        'v2': lambda: fitz.open(stream=answer_sheet.build_sheet(60, scale=1).pdf),
+        'practical': lambda: fitz.open(stream=answer_sheet.build_practical_sheet(25, 'AC',
+                                                                               scale=1)),
     }
 
     def test_every_design_at_every_scale(self):
@@ -57,6 +58,18 @@ class TestRegistration(unittest.TestCase):
                     pts = scan_functions.getRegPts(page_at(page, scale), Settings())
                     # Within 2 px of the right circle, in the right order
                     self.assertLess(np.abs(pts - expected(scale)).max(), 2.0)
+
+    def test_sheets_as_built(self):
+        # Built already shrunk for wide printer margins, then printed at full
+        # size or shrunk again by a printer that also scales to fit
+        for name, pdf in (('v2', answer_sheet.build_sheet(60).pdf),
+                          ('practical', answer_sheet.build_practical_sheet(25, 'AC'))):
+            page = fitz.open(stream=pdf)[0]
+            for scale in (0.85, 1.0):
+                with self.subTest(sheet=name, scale=scale):
+                    pts = scan_functions.getRegPts(page_at(page, scale), Settings())
+                    want = expected(answer_sheet.PRINT_SCALE * scale)
+                    self.assertLess(np.abs(pts - want).max(), 2.0)
 
     def test_blank_page_raises(self):
         with self.assertRaises(scan_functions.RegistrationError):

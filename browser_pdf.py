@@ -4,7 +4,9 @@ browser_pdf.py
 Prints a built exam's HTML to PDF with a headless Chrome or Edge, so there
 is a PDF to send without opening each version in a browser. A browser is
 used because the exam's equations need MathJax (see renderer.py); the PDF
-matches what the browser's own print dialog gives, footer included.
+matches what the browser's own print dialog gives, footer included, then
+shrunk to the answer sheet's print scale so a printer with wide margins
+does not cut off the footer.
 """
 from __future__ import annotations
 
@@ -15,6 +17,10 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import fitz
+
+import answer_sheet
 
 # Long enough for MathJax to load from its CDN and typeset; virtual time
 # runs fast when the page is idle, so a page without math does not wait it out.
@@ -53,6 +59,9 @@ def print_one(browser: str, html_path: Path) -> Path:
             capture_output=True, timeout=_TIMEOUT_S, check=False)
     if not pdf_path.is_file() or pdf_path.stat().st_size == 0:
         raise RuntimeError(f'the browser wrote no PDF for {html_path.name}')
+    with fitz.open(pdf_path) as doc:
+        data = answer_sheet.shrink(doc).tobytes(garbage=4, deflate=True)
+    pdf_path.write_bytes(data)
     return pdf_path
 
 
