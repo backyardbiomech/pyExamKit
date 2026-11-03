@@ -34,7 +34,7 @@ With no key file, the first page of the stack is read as the key (see above). Gi
 
 **Pages per student** matters for a multi-page exam, where each student's sheets have to be grouped together. It is filled in from the key when the key's written answers are on a later page.
 
-The **version question number** is only for older sheets without version bubbles in the header, graded with several versions' keys; give the question where students bubbled their version letter.
+The **version question number** is rarely needed. When the exam was built with **Add version identifier question**, the scanner finds that question in the keys on its own; give the number only for keys that do not mark one (written by hand, or by an older build), graded with several versions' keys.
 
 ## Select all that apply
 
@@ -56,7 +56,7 @@ Written answers are graded one version at a time, each against its own key's box
 
 A lab practical's forms are not versions: every form is graded against the one key, the practical's source file, in a single pass. See [Lab practicals](lab-practicals.md).
 
-When a student's version bubble cannot be read — left blank, or two letters filled — a dialog shows that student's sheet and asks you to assign a version by hand, or to skip the student. Skipped students are named in the log and appear in no version's results, so they have to be dealt with separately.
+Each student's version comes from the version bubbles in the header and, when the exam has one, the version question. Either is enough on its own: a student who left the header blank but answered the version question is graded against that version, and the log names them. When neither can be read, or the two name different versions, a dialog shows that student's sheet with both readings and asks you to assign a version by hand, or to skip the student. Skipped students are named in the log and appear in no version's results, so they have to be dealt with separately.
 
 ## Written answers
 

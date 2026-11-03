@@ -324,8 +324,8 @@ class pyScanUI(ctk.CTkFrame):
         self.pagesPerStudentEntry.insert(0, '1')
         self.pagesPerStudentEntry.grid(row=5, column=1, padx=10, pady=2, sticky='w')
 
-        ctk.CTkLabel(mf, text="Older sheets without version bubbles: question where\n"
-                              "students bubbled their version (several versions only):",
+        ctk.CTkLabel(mf, text="Version question, for keys that do not mark one\n"
+                              "(several versions only; blank finds it in the keys):",
                      justify='left').grid(row=6, column=0, pady=2, sticky='w')
         self.versionQEntry = ctk.CTkEntry(mf, width=60, placeholder_text="blank")
         self.versionQEntry.grid(row=6, column=1, padx=10, pady=2, sticky='w')

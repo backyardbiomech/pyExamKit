@@ -61,8 +61,9 @@ class Scanner(object):
         strictness is a float (0-1) controlling how strict partial credit is for bubble questions.
         thresh is the fill cutoff: the fraction of each student's own typical
         mark a bubble must reach to count as filled (see bubbles.py)
-        version_question is the question row holding the version letter; 0
-        reads the version bubbles printed in the header of a v2 sheet
+        version_question is the question row holding the version letter, for
+        keys that do not mark one; 0 finds it in the keys (see
+        _find_version_questions). The header's version bubbles are read too
         roster_path is an optional class roster CSV used to fill in names by ID
         '''
         self.input_file = input_file
@@ -97,6 +98,7 @@ class Scanner(object):
                     else:
                         print(f'[Scanner] Warning: could not load key for version {_ver}: {_vpath}',
                               flush=True)
+        self.version_qks = self._find_version_questions()
         self._key_data = None
         if key_file_path:
             self._key_data = load_key_file(key_file_path)
@@ -393,6 +395,23 @@ class Scanner(object):
         else:
             self._run_scan_key()
 
+    def _find_version_questions(self) -> dict[str, str]:
+        """The question where each version's students bubble their version
+        letter. Build Exam's version question is worth nothing, starts EXAM
+        VERSION, and has the version's own letter as its answer; a question
+        number typed on the Scan tab is used for every version instead."""
+        if self.version_question:
+            qk = 'Q' + format(self.version_question, '03d')
+            return {ver: qk for ver in self.version_keys}
+        found = {}
+        for ver, kd in self.version_keys.items():
+            for qk, text in kd.get('texts', {}).items():
+                if (text.upper().startswith('EXAM VERSION')
+                        and kd.get('bubble_answers', {}).get(qk, '').upper() == ver):
+                    found[ver] = qk
+                    break
+        return found
+
     def _version_problem(self, raw_ver: str) -> str:
         """Why a student's version could not be used. A letter read cleanly
         but missing from the keys means the key set is short, not the sheet."""
@@ -402,8 +421,45 @@ class Scanner(object):
                     f'was loaded (keys: {", ".join(sorted(self.version_keys))}).')
         return f'Version bubble not detected  (scanned: "{raw_ver}")'
 
+    def _resolve_version(self, row_idx: int) -> tuple[str | None, str]:
+        """A student's version, from the header's version bubbles and the
+        version question, with a note on how it was decided. Either one
+        alone is enough; when both are read and disagree, or neither is,
+        the version is None and the note says why, for the person choosing."""
+        _r = self.reads.get(row_idx)
+        header_raw = _r.version if _r is not None else '-'
+        header = header_raw if header_raw in self.version_keys else ''
+
+        # With several versions' questions at different numbers, a student
+        # answers only their own; a content answer that happens to match
+        # another version's letter makes the question unreadable, not a vote
+        answered = set()
+        q_raw = {}
+        for ver, qk in self.version_qks.items():
+            if qk not in self.resdf.columns:
+                continue
+            raw = str(self.resdf.loc[row_idx, qk]).strip().upper()
+            q_raw[qk] = raw
+            if raw == ver:
+                answered.add((ver, qk))
+        question = next(iter(answered)) if len(answered) == 1 else None
+
+        if header and question and header != question[0]:
+            return None, (f'The version bubble reads {header}, but question '
+                          f'{int(question[1][1:])} reads version {question[0]}.')
+        if header:
+            return header, ''
+        if question:
+            return question[0], (f'{self._version_problem(header_raw)}; question '
+                                 f'{int(question[1][1:])} reads version {question[0]}.')
+        problem = self._version_problem(header_raw)
+        if q_raw:
+            problem += '; ' + ', '.join(f'question {int(qk[1:])}: "{raw}"'
+                                        for qk, raw in sorted(q_raw.items()))
+        return None, problem
+
     def _ask_version_for_student(self, row_idx: int, name: str,
-                                   raw_ver: str, img_path: str | None) -> str | None:
+                                   problem: str, img_path: str | None) -> str | None:
         """Show a dialog with the student's aligned scan and ask the user to
         manually select an exam version.  Returns a version letter (e.g. 'A')
         from self.version_keys, or None to skip the student."""
@@ -422,7 +478,7 @@ class Scanner(object):
                  text=f'Student row {row_idx}:  {name}',
                  font=('Arial', 13, 'bold')).pack(pady=(10, 2))
         tk.Label(win,
-                 text=self._version_problem(raw_ver) + '\n'
+                 text=problem + '\n'
                       'Select the correct version or click Skip to exclude this student:',
                  font=('Arial', 11), justify='center').pack(pady=(0, 8))
 
@@ -475,11 +531,10 @@ class Scanner(object):
     def _run_multi_version(self):
         """
         Scan all student sheets, detect each student's exam version from the
-        version question bubble, then grade (and optionally mark) each version
+        version bubbles and version question, then grade (and optionally mark) each version
         group against its own key file. Outputs are separated by version.
         """
         pps = self.pages_per_student
-        ver_qk = 'Q' + format(self.version_question, '03d')
 
         # 1. Scan all pages (no key row — all rows are students)
         for i in range(len(self.image_list)):
@@ -510,54 +565,47 @@ class Scanner(object):
 
         version_groups: dict[str, list[int]] = {}
         for row_idx in student_rows:
-            if not self.version_question:
-                # v2 sheets print their own version bubbles in the header
-                _r = self.reads.get(row_idx)
-                raw_ver = _r.version if _r is not None else '-'
-            elif ver_qk in self.resdf.columns:
-                raw_ver = str(self.resdf.loc[row_idx, ver_qk]).strip()
+            ver_letter, note = self._resolve_version(row_idx)
+            name = self.resdf.loc[row_idx, 'LastName']
+            img_idx = (row_idx - 1) * pps
+            img_path = (self.aligned_image_list[img_idx]
+                        if 0 <= img_idx < len(self.aligned_image_list) else None)
+            if ver_letter:
+                if note:
+                    print(f'[MultiVersion] Student row {row_idx} ({name}): {note}',
+                          flush=True)
             else:
-                raw_ver = '-'
-            ver_letter = raw_ver[0].upper() if raw_ver and raw_ver != '-' else None
-            if ver_letter and ver_letter in self.version_keys:
-                version_groups.setdefault(ver_letter, []).append(row_idx)
-            else:
-                name = self.resdf.loc[row_idx, 'LastName']
                 print(f'[MultiVersion] WARNING — Student row {row_idx} ({name}): '
-                      f'{self._version_problem(raw_ver)}', flush=True)
-                # Try to get the aligned image for this student
-                img_idx = (row_idx - 1) * pps
-                img_path = (self.aligned_image_list[img_idx]
-                            if 0 <= img_idx < len(self.aligned_image_list) else None)
-                chosen = None
+                      f'{note}', flush=True)
                 if self.parent is not None:
-                    chosen = self._ask_version_for_student(row_idx, name, raw_ver, img_path)
-                if chosen:
+                    ver_letter = self._ask_version_for_student(row_idx, name, note, img_path)
+                if ver_letter:
                     print(f'[MultiVersion] Student row {row_idx} ({name}) manually '
-                          f'assigned to version {chosen}.', flush=True)
-                    version_groups.setdefault(chosen, []).append(row_idx)
-                    # A grouped-row sheet was read with a guessed grid; read
-                    # it again with the grid of the version now known.
-                    _r = self.reads.get(row_idx)
-                    _grid = self._keyed.get(chosen)
-                    if (_r is not None and _grid is not None and img_path
-                            and _r.layout.code == _grid.code
-                            and _r.layout.columns != _grid.columns):
-                        self._read(row_idx, self._load_aligned(img_path), layout=_grid,
-                                   answers_only=True)
+                          f'assigned to version {ver_letter}.', flush=True)
                 else:
                     print(f'[MultiVersion] Student row {row_idx} ({name}) skipped — '
                           'will NOT appear in any output.', flush=True)
                     alert_path = self.outdir / 'ALERT.txt'
                     alert_line = (f'MISSING VERSION: Student row {row_idx} ({name}) '
-                                  f'— version bubble not detected (raw: "{raw_ver}") '
-                                  f'— excluded from all results.')
+                                  f'— {note} — excluded from all results.')
                     if not alert_path.exists():
                         alert_path.write_text(alert_line)
                     else:
                         with open(alert_path, 'a') as _af:
                             _af.write('\n')
                             _af.write(alert_line)
+                    continue
+            version_groups.setdefault(ver_letter, []).append(row_idx)
+            # A grouped-row sheet is read with the grid of the version its
+            # header bubble names, or the first; read it again with the grid
+            # of the version now known.
+            _r = self.reads.get(row_idx)
+            _grid = self._keyed.get(ver_letter)
+            if (_r is not None and _grid is not None and img_path
+                    and _r.layout.code == _grid.code
+                    and _r.layout.columns != _grid.columns):
+                self._read(row_idx, self._load_aligned(img_path), layout=_grid,
+                           answers_only=True)
 
         if not version_groups:
             print('[MultiVersion] No students matched any loaded version key. '
