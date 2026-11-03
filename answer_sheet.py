@@ -23,10 +23,11 @@ from pathlib import Path
 import fitz
 
 import bubbles
+import school
 import sheet_layout as L
 
-HERE = Path(__file__).resolve().parent
-DEFAULT_LOGO = HERE / 'images' / 'longwood_logo.pdf'
+# Pass as `logo` to print the logo set in the school settings
+SCHOOL_LOGO = 'school'
 
 PT = 1 / L.PX_PER_PT            # canonical px -> PDF points
 BLACK = (0, 0, 0)
@@ -132,13 +133,29 @@ def _written_row(page, q, row):
                        color=BLACK, fill=BLACK, closePath=True)
 
 
+# The logo fits this box, keeping its shape: a wide logo fills its width
+# (2.5 in, Longwood's brand guide minimum), a square one its height, which
+# stops above the title.
+LOGO_BOX = (60, 42, 420, 115)
+
+
+def _resolve_logo(logo):
+    return school.logo() if logo == SCHOOL_LOGO else logo
+
+
 def _header(page, logo, title):
+    logo = _resolve_logo(logo)
     if logo and Path(logo).exists():
+        x0, y0, x1, y1 = LOGO_BOX
+        pdf = Path(logo).suffix.lower() == '.pdf'
         src = fitz.open(logo)
         r = src[0].rect
-        w = 360                                   # 2.5 in, the brand guide's minimum
-        h = w * r.height / r.width
-        page.show_pdf_page(_rect(60, 42, 60 + w, 42 + h), src, 0)
+        s = min((x1 - x0) / r.width, (y1 - y0) / r.height)
+        box = _rect(x0, y0, x0 + r.width * s, y0 + r.height * s)
+        if pdf:
+            page.show_pdf_page(box, src, 0)
+        else:
+            page.insert_image(box, filename=str(logo))
     if title:
         _text(page, 60, 132, title, size=10, bold=True)
     _text(page, 470, 58, 'Name (print clearly)', size=8, color=GUIDE)
@@ -195,19 +212,39 @@ def _guide(page, top=170):
           align='center')
 
 
-def _id_block(page):
+def _id_block(page, digits):
     top = L.V2_ID_TOP
-    x0 = L.V2_ID_X
-    xs = [x0 + L.V2_ID_COL * c for c in range(8)]
-    _text(page, xs[0] - 32, top - 122, 'Longwood ID number', size=10, bold=True)
+    x0 = L.v2_id_x(digits)
+    xs = [x0 + L.V2_ID_COL * c for c in range(digits)]
+    _text(page, xs[0] - 32, top - 122, school.id_label(), size=10, bold=True)
     _text(page, xs[0] - 32, top - 104, 'Write it in the boxes, then fill',
           size=7, color=GUIDE)
     _text(page, xs[0] - 32, top - 90, 'one bubble under each digit.', size=7, color=GUIDE)
-    _text(page, xs[0] - 22, top - 42, 'L', size=14, bold=True, align='center')
+    prefix = school.id_prefix()
+    if len(prefix) == 1:
+        _text(page, xs[0] - 22, top - 42, prefix, size=14, bold=True, align='center')
+    elif prefix:
+        _text(page, xs[0] - 20, top - 42, prefix, size=10, bold=True, align='right')
     for x in xs:
         page.draw_rect(_rect(x - 13, top - 70, x + 13, top - 30), color=BLACK, width=0.8)
-    for row in sheet_layout_rows(L.V2.id_digits):
+    for row in sheet_layout_rows(L.v2_id_rows(digits)):
         _grid_row(page, row)
+    _id_length_code(page, digits)
+
+
+def _id_length_code(page, digits):
+    h = L.LAYOUT_CODE_SIZE / 2
+    for (cx, cy), on in zip(L.ID_LENGTH_CELLS, L.id_length_bits(digits)):
+        if on:
+            page.draw_rect(_rect(cx - h, cy - h, cx + h, cy + h), color=None, fill=BLACK)
+
+
+def _digits(id_digits):
+    n = school.id_digits() if id_digits is None else id_digits
+    if n not in L.ID_LENGTHS:
+        raise SheetError(f'A sheet prints an ID of {min(L.ID_LENGTHS)} to '
+                         f'{max(L.ID_LENGTHS)} digits, not {n}.')
+    return n
 
 
 def sheet_layout_rows(rows: dict):
@@ -271,16 +308,18 @@ def _place_boxes(written: list[int], first_free_col: int) -> dict[int, tuple]:
 
 
 def build_sheet(questions: int = 150, written=(), title: str = '', version_letter: str = '',
-                logo=DEFAULT_LOGO, columns: list[list[int]] | None = None,
-                scale: float | None = None) -> SheetResult:
+                logo=SCHOOL_LOGO, columns: list[list[int]] | None = None,
+                scale: float | None = None, id_digits: int | None = None) -> SheetResult:
     '''
     Draw a sheet with `questions` answer rows. Question numbers in `written`
     get writing boxes instead of bubbles. `columns` gives the row runs of a
     sheet grouped by question (sheet_layout.keyed_layout); without it the
     rows fall in the standard groups of five. The page prints at `scale`
-    (PRINT_SCALE by default).
+    (PRINT_SCALE by default). `logo` is a file, None for none, or
+    SCHOOL_LOGO; `id_digits` defaults to the school setting.
     Returns the PDF and the box crops.
     '''
+    digits = _digits(id_digits)
     if columns:
         layout = L.keyed_layout(columns)
         if layout.max_questions != questions:
@@ -304,7 +343,7 @@ def build_sheet(questions: int = 150, written=(), title: str = '', version_lette
     _layout_code(page, layout.code)
     _header(page, logo, title)
     _guide(page)
-    _id_block(page)
+    _id_block(page, digits)
     _version(page, version_letter)
 
     _text(page, 60, L.V2_Q_TOP - 42, 'Answers', size=11, bold=True)
@@ -354,8 +393,8 @@ def _form_code(page, form):
 
 
 def build_practical_sheet(stations: int, form: str, title: str = '',
-                          logo=DEFAULT_LOGO, double_sided: bool = False,
-                          scale: float | None = None) -> bytes:
+                          logo=SCHOOL_LOGO, double_sided: bool = False,
+                          scale: float | None = None, id_digits: int | None = None) -> bytes:
     '''
     A lab practical form sheet: two writing boxes per station, labeled with
     the form's two letters, on as many pages as the stations need. The form
@@ -367,6 +406,7 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
     on both sides. The scanner skips blank pages. Pages print at `scale`
     (PRINT_SCALE by default).
     '''
+    digits = _digits(id_digits)
     form = ''.join(sorted(form.upper()))
     if len(form) != 2 or any(c not in L.FORM_LETTERS for c in form) or form[0] == form[1]:
         raise SheetError(f'A form is two different letters from A to D, not "{form}".')
@@ -386,7 +426,7 @@ def build_practical_sheet(stations: int, form: str, title: str = '',
         _text(page, 440, 1537, f'Form {form}, page {n} of {pages}', size=7, color=GUIDE)
         if n == 1:
             _header(page, logo, title)
-            _id_block(page)
+            _id_block(page, digits)
             y = 190
             for i, line in enumerate(PRACTICAL_NOTE):
                 _text(page, 60, y, line, size=11, bold=i > 0)
@@ -416,14 +456,18 @@ def main():
     ap.add_argument('-n', '--questions', type=int, default=150)
     ap.add_argument('--written', default='', help='comma-separated written-answer question numbers')
     ap.add_argument('--title', default='', help='printed under the logo, e.g. "BIOL 206 Exam 2"')
-    ap.add_argument('--no-logo', action='store_true')
+    ap.add_argument('--no-logo', action='store_true',
+                    help='leave off the logo set in the school settings')
+    ap.add_argument('--id-digits', type=int, default=None,
+                    help='ID length (default: the school setting)')
     ap.add_argument('--scale', type=float, default=PRINT_SCALE,
                     help=f'printed size, as a fraction of full size (default {PRINT_SCALE})')
     ap.add_argument('-o', '--out', default='answer_sheet.pdf')
     args = ap.parse_args()
     written = [int(x) for x in args.written.split(',') if x.strip()]
     res = build_sheet(args.questions, written, args.title,
-                      logo=None if args.no_logo else DEFAULT_LOGO, scale=args.scale)
+                      logo=None if args.no_logo else SCHOOL_LOGO, scale=args.scale,
+                      id_digits=args.id_digits)
     Path(args.out).write_bytes(res.pdf)
     print(f'Wrote {args.out}')
     for q, c in res.boxes.items():

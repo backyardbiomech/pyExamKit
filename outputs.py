@@ -36,9 +36,6 @@ ID_COLS = ('LastName', 'FirstName', 'studentID', 'form')
 SCORE_COLS = ('score', 'partialscore')
 NOT_STUDENTS = ('0', 'numb_correct')
 
-DEFAULT_ID_PREFIX = 'L'
-_PREFIX_SETTING = 'canvas_id_prefix'
-
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -107,14 +104,15 @@ def listed(outdir) -> list[Path]:
 
 
 def id_prefix() -> str:
-    """What goes in front of a student ID in the Canvas file ('L' at Longwood)."""
-    import ai_ocr
-    return str(ai_ocr.load_config().get(_PREFIX_SETTING, DEFAULT_ID_PREFIX))
+    """What goes in front of a student ID in the Canvas file ('L' at Longwood);
+    the same letters are printed before the ID on the sheet."""
+    import school
+    return school.id_prefix()
 
 
 def set_id_prefix(prefix: str) -> None:
-    import ai_ocr
-    ai_ocr.save_config({_PREFIX_SETTING: prefix.strip()})
+    import school
+    school.save(prefix=prefix)
 
 
 # ── One graded results file ─────────────────────────────────────────────────

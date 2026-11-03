@@ -164,7 +164,7 @@ def fill_page(page_img, n, s, p, boxes, rng, answers, print_scale=1.0):
         pen.write(480, 88, name)
         top = L.V2_ID_TOP
         for c, (want, bub) in enumerate(zip(s.id, s.bubbled)):
-            cx = L.V2_ID_X + L.V2_ID_COL * c
+            cx = L.v2_id_x(len(s.id)) + L.V2_ID_COL * c
             pen.write(cx - 8, top - 50, want)            # the boxes show what they meant
             for lab, bx, by in L.V2.id_digits[f'ID{c + 1:02d}']:
                 if lab == bub:
@@ -275,7 +275,8 @@ def make_stack(source: Path, outdir: Path, n_students: int = 12, seed: int = 207
     outdir.mkdir(parents=True, exist_ok=True)
     boxes = L.practical_boxes(len(p.stations))
     sheets = {f: fitz.open(stream=answer_sheet.build_practical_sheet(
-                               len(p.stations), f, p.title, double_sided=True, scale=1),
+                               len(p.stations), f, p.title, double_sided=True, scale=1,
+                               id_digits=8),
                            filetype='pdf') for f in p.forms}
     n_pages = L.practical_pages(len(p.stations))
     students = make_students(rng, p, n_students)

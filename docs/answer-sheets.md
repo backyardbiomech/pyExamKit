@@ -16,6 +16,12 @@ From the top: the logo and a line for the student's printed name; a picture of h
 
 There are no name bubbles. Names come from a [class roster](roster.md) matched to the bubbled ID, and the printed name is there for a person to read when the ID does not match.
 
+## Your school's logo and ID
+
+**Sheet settings…**, in the top-left corner of the window, sets four things every sheet printed afterward uses: the logo (Longwood's, a PDF or image file of your own, or none), the heading over the ID boxes, the letters printed before the ID boxes (`L` at Longwood; leave it blank if your IDs are only digits), and how many digits the ID has, from 4 to 10. The same letters go in front of each ID in the [Canvas upload](outputs.md), and are stripped from IDs in a [roster](roster.md). A wide logo prints 2.5 inches wide and a taller one is shrunk to fit the space beside the name line; a PDF logo prints sharpest.
+
+Each sheet records its own ID length in small squares at the bottom right, so the scanner reads a 6-digit sheet as 6 digits whatever the setting is when you scan. The ready-made sheets in `images/` carry the Longwood logo and an 8-digit ID; make your own with **Make Answer Sheet…** once the settings are yours.
+
 ## Written answers on the sheet
 
 A question answered in writing (a short-answer `SA` question, or any row you choose in **Make Answer Sheet…**) keeps its number in the grid, but its bubbles are replaced by an arrow pointing to a numbered writing box in the space to the right. The boxes use the columns the exam does not need, so a sheet with written questions holds at most 90 answer rows. It fits 7 boxes, or 14 when the exam has 30 or fewer answer rows.
@@ -34,7 +40,7 @@ When every version uses the same questions, the builder keeps each grouped quest
 
 ## What the scanner depends on
 
-The scanner locates everything on the page by geometry. It finds the **three large black circles** in the corners, uses them to correct for skew and scale, and then reads bubbles at fixed positions relative to them. The **small black squares** at the bottom left tell it which sheet design it is reading, including whether its rows are grouped by question, in which case the positions come from the key. Students must not write on the circles or the squares.
+The scanner locates everything on the page by geometry. It finds the **three large black circles** in the corners, uses them to correct for skew and scale, and then reads bubbles at fixed positions relative to them. The **small black squares** at the bottom left tell it which sheet design it is reading, including whether its rows are grouped by question, in which case the positions come from the key; any at the bottom right give the ID length, and none there means 8 digits. Students must not write on the circles or the squares.
 
 **Print at 100%.** Answer sheets built by pyExamKit, like the exam PDFs built with them, are laid out with safe printing margins: the sheet is shrunk to 90% of full size and centered on the page, so printing at 100% (actual size) is safe for most printers, with no need for "scale to fit." Choosing "scale to fit" anyway is harmless; it shrinks the whole page again, margins included, to about 81%, and the sheet still scans. Printing at reduced size is fine in general. The scanner corrects for it, and finds the circles on sheets printed anywhere from about 70% to 120% of full size; it tells them from other dark marks by their shape, their matching size, and their arrangement in three corners.
 

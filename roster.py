@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-ID_DIGITS = 8
+import school
 
 # Header names recognized for each role, compared lowercased with spaces,
 # underscores, hyphens and periods removed. Earlier entries win, which is
@@ -34,15 +34,19 @@ class Student:
     id: str
 
 
-def normalize_id(raw) -> str | None:
+def normalize_id(raw, digits: int | None = None, prefix: str | None = None) -> str | None:
     '''
-    Strips a leading 'L' and restores leading zeros a spreadsheet dropped,
-    so '123456' becomes '00123456'. Returns None for anything not an ID.
+    Strips the school's ID prefix ('L' at Longwood) and restores leading
+    zeros a spreadsheet dropped, so '123456' becomes '00123456' for an
+    8-digit ID. Returns None for anything not an ID. `digits` and `prefix`
+    default to the school settings.
     '''
+    digits = school.id_digits() if digits is None else digits
+    prefix = school.id_prefix() if prefix is None else prefix
     s = str(raw or '').strip().upper()
-    if not re.fullmatch(r'L?\s*\d{1,%d}' % ID_DIGITS, s):
-        return None
-    return re.sub(r'\D', '', s).zfill(ID_DIGITS)
+    lead = r'(?:%s)?\s*' % re.escape(prefix.upper()) if prefix else ''
+    m = re.fullmatch(lead + r'(\d{1,%d})' % digits, s)
+    return m.group(1).zfill(digits) if m else None
 
 
 def _key(header: str) -> str:
@@ -150,7 +154,11 @@ def match_id(scanned: str, roster: dict[str, Student]) -> tuple[Student | None, 
     '''
     if scanned in roster:
         return roster[scanned], ''
-    if len(scanned) != ID_DIGITS or scanned.count('-') > 1:
+    width = len(next(iter(roster), scanned))
+    if len(scanned) != width:
+        return None, (f'the sheet has a {len(scanned)}-digit ID and the roster '
+                      f'{width}-digit IDs; set the ID length in Sheet settings')
+    if scanned.count('-') > 1:
         return None, 'not on the roster'
     near = [s for sid, s in roster.items()
             if sum(a != b for a, b in zip(scanned, sid)) == 1]
@@ -198,7 +206,7 @@ def suggest(typed: str, roster: dict[str, Student], limit: int = 6) -> list[tupl
 
 def match_typed(typed: str, roster: dict[str, Student] | None) -> tuple[Student, str]:
     '''
-    Who a sheet belongs to, from an L number or name typed by hand when the
+    Who a sheet belongs to, from an ID or name typed by hand when the
     bubbled ID named no one. A name matches a roster student when every word
     typed starts their last or first name. Without a unique roster match the
     typed name or ID is used as given, with a note saying why; '-' stands for

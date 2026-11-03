@@ -18,7 +18,7 @@ boxes and the form it was printed for. All share the three registration circles,
 one alignment step serves any of them, and the layout is identified after
 alignment by a printed code (see LAYOUT_CODE_CELLS).
 '''
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # Canonical frame shared by every layout
 PAGE_W, PAGE_H = 1224, 1584
@@ -39,6 +39,13 @@ BUBBLE_PITCH = 26          # center-to-center along a row
 # binary, least significant bit first.
 LAYOUT_CODE_SIZE = 16
 LAYOUT_CODE_CELLS = [(160 + 28 * i, 1532) for i in range(4)]
+
+# ID length: three more squares at the right end of the bottom margin, on
+# any generated sheet. Their value indexes ID_LENGTHS, least significant bit
+# first; all blank is 8 digits, so sheets printed before the squares existed
+# read as they always did. See docs/dev/school-settings.md.
+ID_LENGTH_CELLS = [(1040 + 28 * i, 1532) for i in range(3)]
+ID_LENGTHS = (8, 9, 10, 7, 6, 5, 4)
 
 LETTERS = 'ABCDEF'
 DIGITS = '0123456789'
@@ -107,7 +114,7 @@ V2_Q_COL_X = [126, 346, 566, 786, 1006]     # bubble A centers
 V2_Q_TOP = 580                              # row 1 center
 V2_Q_ROW = 28                               # row pitch
 V2_Q_GROUP_GAP = 14                         # extra space after every 5 rows
-V2_ID_X = 890                               # first ID column center
+V2_ID_RIGHT = 1100                          # last ID column center, at any length
 V2_ID_TOP = 250                             # digit 0 center
 V2_ID_COL = 30
 V2_VERSION_Y = 420
@@ -119,13 +126,23 @@ def v2_question_y(within: int) -> float:
     return V2_Q_TOP + V2_Q_ROW * within + V2_Q_GROUP_GAP * (within // 5)
 
 
+def v2_id_x(digits: int) -> float:
+    '''Center of the first ID column. The block is right-aligned, so an
+    8-digit sheet's columns sit where they always have.'''
+    return V2_ID_RIGHT - V2_ID_COL * (digits - 1)
+
+
+def v2_id_rows(digits: int = 8) -> dict[str, Row]:
+    x0 = v2_id_x(digits)
+    return {f'ID{c + 1:02d}': _row(DIGITS, x0 + V2_ID_COL * c, V2_ID_TOP, 0, BUBBLE_PITCH)
+            for c in range(digits)}
+
+
 def _v2_header() -> tuple[dict[str, Row], dict[str, Row]]:
-    '''ID digits and version row, the same on every v2 sheet.'''
-    id_digits = {f'ID{c + 1:02d}': _row(DIGITS, V2_ID_X + V2_ID_COL * c, V2_ID_TOP,
-                                        0, BUBBLE_PITCH)
-                 for c in range(8)}
+    '''ID digits and version row, the same on every v2 sheet. The ID is
+    8 digits here; read_id_length gives a sheet's own.'''
     version = {'V': _row('ABCDEF', V2_VERSION_X, V2_VERSION_Y, BUBBLE_PITCH + 8, 0)}
-    return id_digits, version
+    return v2_id_rows(8), version
 
 
 def _v2() -> Layout:
@@ -294,6 +311,36 @@ def _inked(gray, cells) -> list[bool]:
         patch = gray[cy - half:cy + half, cx - half:cx + half]
         inked.append(patch.size > 0 and float(patch.mean()) < 110)
     return inked
+
+
+def id_length_bits(digits: int) -> list[bool]:
+    '''Which ID length squares a sheet with this many ID digits inks.'''
+    if digits not in ID_LENGTHS:
+        raise ValueError(f'A sheet prints an ID of {min(ID_LENGTHS)} to '
+                         f'{max(ID_LENGTHS)} digits, not {digits}.')
+    v = ID_LENGTHS.index(digits)
+    return [bool((v >> i) & 1) for i in range(len(ID_LENGTH_CELLS))]
+
+
+def read_id_length(gray) -> int:
+    '''The ID length printed on an aligned generated sheet; 8 when its
+    squares are blank or unreadable.'''
+    v = sum(1 << i for i, on in enumerate(_inked(gray, ID_LENGTH_CELLS)) if on)
+    return ID_LENGTHS[v] if v < len(ID_LENGTHS) else 8
+
+
+def with_id_length(layout: Layout, gray) -> Layout:
+    '''
+    The layout with the ID rows this sheet printed. The classic sheet is
+    always 8 digits, and a page with no ID (practical pages 2 and 3) keeps
+    none.
+    '''
+    if layout.code == 0 or not layout.id_digits:
+        return layout
+    n = read_id_length(gray)
+    if n == len(layout.id_digits):
+        return layout
+    return replace(layout, id_digits=v2_id_rows(n))
 
 
 def read_form(gray) -> str:

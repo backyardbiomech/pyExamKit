@@ -189,6 +189,8 @@ def read_sheet(aligned, quests: int, ignores=None, cutoff: float = CUTOFF,
 
 
 def _read_gray(gray, quests, ignores, cutoff, layout) -> SheetRead:
+    # Every generated sheet prints its own ID length, whatever grid it uses
+    layout = sheet_layout.with_id_length(layout, gray)
     ignores = set(int(i) for i in (ignores or []))
     # The paper level: the page is mostly blank, so a high percentile is paper.
     paper = max(float(np.percentile(gray, 95)), 1.0)
@@ -199,7 +201,7 @@ def _read_gray(gray, quests, ignores, cutoff, layout) -> SheetRead:
     F = fill_level({k: v for k, v in q_scores.items() if k not in ignored})
     if not q_rows and layout.id_digits:
         # A page with no answer bubbles (a practical form sheet): the ID's
-        # eight marks are the only ones, so they set the student's level.
+        # marks are the only ones, so they set the student's level.
         F = fill_level(fill_scores(darkness(gray, layout.id_digits, paper)))
     cut = max(FLOOR, cutoff * F)
 

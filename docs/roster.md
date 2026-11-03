@@ -10,7 +10,7 @@ This needs no editing. In your Canvas course, open **Grades**, click **Export**,
 
 The app takes names from the **Student** column (Canvas writes it "Last, First") and IDs from the **SIS User ID** column. The first row below the header in a Canvas export holds points possible rather than a student, and Canvas adds a "Student, Test" row; both are skipped automatically because they have no ID.
 
-Before you rely on it, open the file once and check that the **SIS User ID** column holds Longwood L numbers. If it holds something else, make your own file as in option 2.
+Before you rely on it, open the file once and check that the **SIS User ID** column holds the IDs students bubble (L numbers at Longwood), with the prefix and length set in **Sheet settings…** (see [Answer sheets](answer-sheets.md)). If it holds something else, make your own file as in option 2.
 
 ## Option 2: make your own in Excel
 

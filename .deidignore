@@ -11,3 +11,5 @@ docs/answer-sheets.md: headerish
 docs/dev/outputs-cleanup.md: headerish
 outputs.py: headerish
 tests/test_multi_version_written.py: headerish
+school.py: headerish
+docs/dev/school-settings.md: headerish

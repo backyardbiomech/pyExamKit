@@ -305,7 +305,7 @@ def open_sheet_dialog(parent, log_fn):
     h_entry.grid(row=3, column=1, **pad)
 
     logo_var = ctk.BooleanVar(value=True)
-    ctk.CTkCheckBox(win, text='Longwood logo', variable=logo_var).grid(
+    ctk.CTkCheckBox(win, text='Logo (set in Sheet settings)', variable=logo_var).grid(
         row=4, column=0, columnspan=2, **pad)
 
     def save():
@@ -314,7 +314,7 @@ def open_sheet_dialog(parent, log_fn):
             written = parse_question_list(w_entry.get())
             res = answer_sheet.build_sheet(
                 n, written, h_entry.get().strip(),
-                logo=answer_sheet.DEFAULT_LOGO if logo_var.get() else None)
+                logo=answer_sheet.SCHOOL_LOGO if logo_var.get() else None)
         except ValueError as exc:     # SheetError is a ValueError
             messagebox.showerror('Make Answer Sheet', str(exc), parent=win)
             return

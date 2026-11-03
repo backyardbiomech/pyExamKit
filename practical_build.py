@@ -396,7 +396,7 @@ class _Flow:
 # ── Writing the folder ─────────────────────────────────────────────────────
 
 def write_form_sheets(p: practical.Practical, outdir: Path, students: int = 0,
-                      logo=answer_sheet.DEFAULT_LOGO) -> list[Path]:
+                      logo=answer_sheet.SCHOOL_LOGO) -> list[Path]:
     '''
     One PDF per form, named after the practical, plus a combined PDF of
     `students` sheets in dealing order when `students` is given. Returns the
@@ -426,7 +426,7 @@ def write_form_sheets(p: practical.Practical, outdir: Path, students: int = 0,
 
 
 def build(p: practical.Practical, outdir: Path, students: int = 0,
-          logo=answer_sheet.DEFAULT_LOGO) -> tuple[list[Path], list[str]]:
+          logo=answer_sheet.SCHOOL_LOGO) -> tuple[list[Path], list[str]]:
     '''Write every printed material into `outdir`. Returns the paths written
     and any warnings about the build (missing images, crowded placards).'''
     written = write_form_sheets(p, outdir, students, logo)
@@ -461,7 +461,7 @@ def main():
     for w in p.warnings:
         print(f'warning: {w}')
     written, warnings = build(p, args.outdir or default_outdir(p), args.students,
-                              logo=None if args.no_logo else answer_sheet.DEFAULT_LOGO)
+                              logo=None if args.no_logo else answer_sheet.SCHOOL_LOGO)
     for w in warnings:
         print(f'warning: {w}')
     for path in written:

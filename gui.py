@@ -14,6 +14,7 @@ import sheet_layout
 from build_tab import BuildExamUI, open_sheet_dialog
 from practical_tab import BuildPracticalUI
 from results_tab import ResultsUI
+from school_dialog import open_school_dialog
 import help_links
 import outputs
 
@@ -70,8 +71,21 @@ class pyScanUI(ctk.CTkFrame):
                                     border_width=1, text_color=('gray20', 'gray85'))
         # Level with the tab buttons, whenever they are laid out. Tk's own bind:
         # customtkinter's refuses <Configure> on a segmented button.
-        tk.Misc.bind(tabs._segmented_button, '<Configure>', lambda e: help_button.place(
-            in_=tabs, relx=1.0, x=-2, y=tabs._segmented_button.winfo_y(), anchor='ne'), '+')
+        # Sheet settings (logo, ID heading, prefix, length) sit in the other
+        # corner, since every tab that prints or scans a sheet uses them
+        def refresh_prefix():
+            if hasattr(self, 'idPrefixVar'):
+                self.idPrefixVar.set(outputs.id_prefix())
+        settings_button = ctk.CTkButton(
+            self, text='Sheet settings…', width=110, height=26, fg_color='transparent',
+            border_width=1, text_color=('gray20', 'gray85'),
+            command=lambda: open_school_dialog(self, self._log, refresh_prefix))
+
+        def place_corners(e):
+            y = tabs._segmented_button.winfo_y()
+            help_button.place(in_=tabs, relx=1.0, x=-2, y=y, anchor='ne')
+            settings_button.place(in_=tabs, relx=0.0, x=2, y=y, anchor='nw')
+        tk.Misc.bind(tabs._segmented_button, '<Configure>', place_corners, '+')
 
         build_tab  = tabs.add("Build Exam")
         practical_tab = tabs.add("Build Practical")

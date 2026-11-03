@@ -224,7 +224,7 @@ class Scanner(object):
 
     def _apply_roster(self, skip_rows=()):
         """Replace bubbled names with roster names, matched by ID. A sheet
-        whose ID names no one is shown to the user, who types the L number
+        whose ID names no one is shown to the user, who types the ID
         or name the student wrote at the top."""
         seen: dict[str, int] = {}
         for row in sorted(self.reads):
@@ -273,7 +273,7 @@ class Scanner(object):
         return True
 
     def _ask_identity(self, row: int, scanned: str, why: str) -> str:
-        """Show the top of the sheet and ask for the student's L number or
+        """Show the top of the sheet and ask for the student's ID or
         name. Returns what was typed, or '' to skip."""
         import tkinter as tk
         from openQ import _pil_to_tkphoto
@@ -289,7 +289,7 @@ class Scanner(object):
         tk.Label(win, text=f'Scan {row}: the ID does not name a student',
                  font=('Arial', 13, 'bold')).pack(pady=(10, 2))
         tk.Label(win, text=f'ID read as "{scanned}" ({why}).\n'
-                           'Type the L number or the name the student wrote, '
+                           'Type the student ID or the name the student wrote, '
                            'or click Skip:',
                  font=('Arial', 11), justify='center').pack(pady=(0, 8))
         header = self._headers.get(row)
