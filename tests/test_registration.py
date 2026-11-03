@@ -18,9 +18,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import answer_sheet  # noqa: E402
+import bubbles  # noqa: E402
 import scan_functions  # noqa: E402
+import sheet_layout  # noqa: E402
 import scanner  # noqa: E402
 from settings import Settings  # noqa: E402
+
+sys.path.insert(0, str(ROOT / 'tests'))
+from test_bubbles import ANSWERS, paint  # noqa: E402
 
 
 def page_at(page: fitz.Page, scale: float) -> np.ndarray:
@@ -70,6 +75,32 @@ class TestRegistration(unittest.TestCase):
                     pts = scan_functions.getRegPts(page_at(page, scale), Settings())
                     want = expected(answer_sheet.PRINT_SCALE * scale)
                     self.assertLess(np.abs(pts - want).max(), 2.0)
+
+    def test_scale_to_fit_on_a_built_sheet_still_reads(self):
+        # "Scale to fit" shrinks the whole page, margins and all, so a sheet
+        # built at PRINT_SCALE printed that way comes out at about 81%. A
+        # filled sheet at that size must align and read every bubble.
+        pdf = answer_sheet.build_sheet(150, scale=1).pdf
+        pix = fitz.open(stream=pdf)[0].get_pixmap(matrix=fitz.Matrix(2, 2),
+                                                  colorspace=fitz.csRGB)
+        img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3).copy()
+        for i, a in enumerate(ANSWERS, 1):
+            paint(img, sheet_layout.V2, f'Q{i:03d}', a, 110)
+        for c, d in enumerate('00123456', 1):
+            paint(img, sheet_layout.V2, f'ID{c:02d}', d, 110)
+        filled = fitz.open()
+        page = filled.new_page(width=612, height=792)
+        page.insert_image(page.rect, stream=Image.fromarray(img)._repr_png_())
+        printed = answer_sheet.shrink(filled)[0]
+        for fit in (0.9, 0.85):
+            with self.subTest(scale_to_fit=fit):
+                scan = page_at(printed, fit)
+                s = Settings()
+                aligned = scan_functions.imgReg(scan, scan_functions.getRegPts(scan, s), s)
+                r = bubbles.read_sheet(aligned, len(ANSWERS),
+                                       layout=sheet_layout.detect_layout(bubbles.to_gray(aligned)))
+                self.assertEqual(''.join(r.answers[f'Q{i:03d}'] for i in range(1, 21)), ANSWERS)
+                self.assertEqual(r.answers['studentID'], '00123456')
 
     def test_blank_page_raises(self):
         with self.assertRaises(scan_functions.RegistrationError):

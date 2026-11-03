@@ -91,7 +91,7 @@ The form is printed on every page as small black squares in the bottom margin, n
 
 ## Printing and handing out
 
-Print the combined sheet PDF **double-sided, and do not staple it**: the stack has to go through the scanner's document feeder afterward, and a staple stops it. With 26 stations or fewer, each student's sheet is a single piece of paper, so there is nothing to hold together. With more, each student has two pieces; hand them out together, and if you clip them, take the clips off before scanning. Printing at a reduced scale to fit a printer's margins is fine; the sheets scan correctly down to at least 80%.
+Print the combined sheet PDF **double-sided, and do not staple it**: the stack has to go through the scanner's document feeder afterward, and a staple stops it. With 26 stations or fewer, each student's sheet is a single piece of paper, so there is nothing to hold together. With more, each student has two pieces; hand them out together, and if you clip them, take the clips off before scanning. The form sheets are laid out with safe printing margins (shrunk to 90% and centered), so printing at 100% is safe for most printers. Printing at a reduced scale is fine too; the sheets scan correctly down to at least 80%.
 
 Hand the stack down each row in order. Because the forms are dealt in the order the source file lists them, neighbors get different forms, and with the default order, a student's neighbors share no question with them.
 
