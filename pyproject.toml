@@ -23,6 +23,12 @@ build-backend = "hatchling.build"
 source = "vcs"
 raw-options = { version_scheme = "no-guess-dev", local_scheme = "no-local-version" }
 
+# The version comes from the git tag, so uv reinstalls the project (and
+# the window title's version) when the commit or tags change, not only
+# when this file does.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
 [tool.hatch.build.targets.wheel]
 packages = ["."]
 
