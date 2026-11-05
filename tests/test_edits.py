@@ -82,7 +82,7 @@ class EditsTest(unittest.TestCase):
         edits.save(self.out, list(made))
         quiet(outputs.write, self.out, prefix='L')
         rows = list(csv.reader((self.out / outputs.CANVAS).open()))
-        return {r[1]: float(r[2]) for r in rows[2:]}, rows[1][2]
+        return {r[2]: float(r[5]) for r in rows[2:]}, rows[1][5]
 
     # ── apply ──────────────────────────────────────────────────────────────
 

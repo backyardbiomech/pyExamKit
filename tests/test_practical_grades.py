@@ -141,8 +141,8 @@ class PracticalPointsTest(unittest.TestCase):
         quiet(outputs.write, self.out, prefix='L')
         with (self.out / outputs.CANVAS).open() as f:
             rows = list(csv.reader(f))
-        self.assertEqual(rows[1], ['    Points Possible', '', '4'])
-        self.assertEqual([(r[1], r[2]) for r in rows[2:]], [('L1', '2'), ('L2', '3')])
+        self.assertEqual(rows[1], ['    Points Possible', '', '', '', '', '4'])
+        self.assertEqual([(r[2], r[5]) for r in rows[2:]], [('L1', '2'), ('L2', '3')])
 
     def test_the_gradebook_counts_one_form_not_the_key(self):
         quiet(outputs.write, self.out, prefix='L')

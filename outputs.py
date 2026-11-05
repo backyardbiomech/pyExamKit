@@ -331,6 +331,18 @@ def all_possible(graded: list[Graded]) -> set[float]:
     return out
 
 
+# Canvas's importer (lib/gradebook_importer.rb) rejects a header without
+# more than three columns, 'Student' then 'ID' first, and 'Section' last
+# before the assignments, and reads SIS User ID only when SIS Login ID
+# follows it. The blank columns are there to pass that check.
+CANVAS_HEADER = ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Section']
+
+
+def _canvas_info(name: str, sis: str) -> list[str]:
+    """A student's cells under CANVAS_HEADER."""
+    return [name, '', sis, '', '']
+
+
 def write_canvas(path, graded: list[Graded], title: str, prefix: str,
                  adjust: dict | None = None) -> None:
     """A file Canvas's gradebook import takes as is: its own header, a Points
@@ -344,11 +356,11 @@ def write_canvas(path, graded: list[Graded], title: str, prefix: str,
               + '); Points Possible uses the largest.', flush=True)
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(['Student', 'SIS User ID', title])
-        w.writerow(['    Points Possible', '', _score(max(possible))])
+        w.writerow(CANVAS_HEADER + [title])
+        w.writerow(_canvas_info('    Points Possible', '') + [_score(max(possible))])
         for name, sis, i, r in _canvas_rows(graded, prefix):
-            w.writerow([name, sis, _score(graded[i].total(r)
-                                          + adjustment(adjust, graded[i].version))])
+            w.writerow(_canvas_info(name, sis)
+                       + [_score(graded[i].total(r) + adjustment(adjust, graded[i].version))])
 
 
 def write_gradebook(path, graded: list[Graded], title: str = '', prefix: str = '',
@@ -779,19 +791,20 @@ def _canvas_sheet(ws, graded: list[Graded], ranges: list, title: str, prefix: st
     scores sit to the right, past a blank column, for checking."""
     from openpyxl.styles import Font
     possible = max(all_possible(graded))
-    _header(ws, ['Student', 'SIS User ID', title, None, 'Unadjusted'], height=20)
-    ws.append(['    Points Possible', '', _num(possible)])
+    _header(ws, CANVAS_HEADER + [title, None, 'Unadjusted'], height=20)
+    ws.append(_canvas_info('    Points Possible', '') + [_num(possible)])
     for name, sis, i, r in _canvas_rows(graded, prefix):
         t = ranges[i]
         row = t.first + graded[i].students.index(r)
-        ws.append([name, sis, f"=ROUND('{t.sheet}'!{t.adj_col}{row},2)", None,
-                   f"=ROUND('{t.sheet}'!{t.col}{row},2)"])
-    ws.cell(row=1, column=7).value = (
-        'Column C is canvas_upload.csv with the adjustment on Exam stats added, row for row. '
-        'Copy C3 down to the last student and paste it over C3 in canvas_upload.csv.')
-    ws.cell(row=1, column=7).font = Font(italic=True, color='52514E')
+        ws.append(_canvas_info(name, sis)
+                  + [f"=ROUND('{t.sheet}'!{t.adj_col}{row},2)", None,
+                     f"=ROUND('{t.sheet}'!{t.col}{row},2)"])
+    ws.cell(row=1, column=10).value = (
+        'Column F is canvas_upload.csv with the adjustment on Exam stats added, row for row. '
+        'Copy F3 down to the last student and paste it over F3 in canvas_upload.csv.')
+    ws.cell(row=1, column=10).font = Font(italic=True, color='52514E')
     ws.freeze_panes = 'A3'
-    for col, w in zip('ABCDE', (28, 14, 14, 3, 12)):
+    for col, w in zip('ABCDEFGH', (28, 4, 14, 4, 4, 14, 3, 12)):
         ws.column_dimensions[col].width = w
 
 

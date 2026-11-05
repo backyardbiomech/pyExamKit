@@ -152,17 +152,22 @@ class TestMultiVersionWritten(unittest.TestCase):
         self.assertEqual(len(list((self.results / 'marked').glob('*.jpg'))), 4)
 
     def test_canvas_file_uploads_as_is(self):
-        rows = (self.results / 'canvas_upload.csv').read_text().splitlines()
-        self.assertEqual(rows[0], 'Student,SIS User ID,MV')
-        possible = rows[1].split(',')
-        self.assertEqual(possible[:2], ['    Points Possible', ''])
-        self.assertAlmostEqual(float(possible[2]), self.expected['A'])
+        rows = list(csv.reader((self.results / 'canvas_upload.csv').open()))
+        header = rows[0]
+        self.assertEqual(header, ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Section', 'MV'])
+        # What Canvas's importer checks before it reads anything else
+        self.assertGreater(len(header), 3)
+        self.assertIn('Student', header[0])
+        self.assertIn('ID', header[1])
+        self.assertIn('Section', header[4])
+        self.assertEqual(rows[1][:5], ['    Points Possible', '', '', '', ''])
+        self.assertAlmostEqual(float(rows[1][5]), self.expected['A'])
         body = rows[2:]
         self.assertEqual(len(body), 4)
-        for line in body:
-            sid, score = line.rsplit(',', 2)[-2:]
-            self.assertRegex(sid, r'^L\d{8}$')
-            self.assertGreater(float(score), 0)
+        for row in body:
+            self.assertEqual(len(row), 6)
+            self.assertRegex(row[2], r'^L\d{8}$')
+            self.assertGreater(float(row[5]), 0)
 
     def test_canvas_file_loads_back_as_a_roster(self):
         import roster
@@ -208,11 +213,11 @@ class TestMultiVersionWritten(unittest.TestCase):
         import openpyxl
         ws = openpyxl.load_workbook(self.results / 'gradebook.xlsx')['Canvas scores']
         rows = list(csv.reader((self.results / 'canvas_upload.csv').open()))
-        self.assertEqual([c.value for c in ws[1]][:3], rows[0])
+        self.assertEqual([c.value for c in ws[1]][:6], rows[0])
         self.assertEqual(ws.max_row, len(rows))
         for i, row in enumerate(rows[2:], 3):
-            self.assertEqual([ws.cell(row=i, column=c).value or '' for c in (1, 2)], row[:2])
-            self.assertTrue(str(ws.cell(row=i, column=3).value).startswith("=ROUND('Version "))
+            self.assertEqual([ws.cell(row=i, column=c).value or '' for c in range(1, 6)], row[:5])
+            self.assertTrue(str(ws.cell(row=i, column=6).value).startswith("=ROUND('Version "))
 
     def test_versions_combined_by_bank_question(self):
         graded = [outputs.load(p) for p in outputs.listed(self.results)]

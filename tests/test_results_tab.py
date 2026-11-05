@@ -201,7 +201,7 @@ def edit_through_the_tab(outdir) -> dict:
     ui.export_button.invoke()
     root.update()
     with open(f'{outdir}/canvas_upload.csv', encoding='utf-8') as f:
-        canvas = {r[1]: float(r[2]) for r in list(csv.reader(f))[2:]}
+        canvas = {r[2]: float(r[5]) for r in list(csv.reader(f))[2:]}
     done = {'errors': errors, 'edits': [rm.describe(ui.res, e) for e in ui.res.edits],
             'notes': [e['note'] for e in ui.res.edits], 'canvas': canvas,
             'unexported_before': unexported_before, 'unexported_after': ui.res.unexported,
