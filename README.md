@@ -4,6 +4,8 @@
 
 A desktop app for building bubble-sheet exams from question banks, then scanning and grading them. Both halves — building and grading — share one file format and one download; there is nothing else to install.
 
+**[Download the latest version](https://github.com/backyardbiomech/pyExamKit/releases/latest)** and follow the [installation steps](docs/installation.md).
+
 Written by Brandon E. Jackson, Ph.D. Licensed under [GPLv3](LICENSE).
 
 ---
