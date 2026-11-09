@@ -19,6 +19,49 @@ def explain(text, threshold=None):
     return s, explain_suggestion(text, FULL, PARTIAL, s, threshold)
 
 
+class TestSuggestion(unittest.TestCase):
+    OSTEO_FULL, OSTEO_PARTIAL = ['osteoclast'], ['osteoblast']   # 90% alike
+
+    def suggest(self, text, threshold=None):
+        return suggest_grade(text, self.OSTEO_FULL, 0.9, partial_texts=self.OSTEO_PARTIAL,
+                             partial_threshold=threshold)
+
+    def test_exact_partial_beats_a_similar_full_answer(self):
+        self.assertEqual(self.suggest('Osteoblast'), 'CX')
+
+    def test_exact_full_answer_is_correct(self):
+        self.assertEqual(self.suggest('osteoclast'), 'CC')
+
+    def test_near_miss_takes_the_grade_of_the_closer_answer(self):
+        self.assertEqual(self.suggest('osteoblaast'), 'CX')
+        self.assertEqual(self.suggest('osteoclaast'), 'CC')
+
+    def test_answer_on_both_lists_earns_full_credit(self):
+        self.assertEqual(suggest_grade('ulna', ['ulna'], 0.9, partial_texts=['ulna']), 'CC')
+
+    def test_strictness_one_refuses_a_one_letter_misspelling(self):
+        self.assertEqual(self.suggest('osteoclaast', threshold=1.0), 'XX')
+
+    def test_strictness_one_refuses_a_misspelled_partial(self):
+        self.assertEqual(self.suggest('osteoblaast', threshold=1.0), 'XX')
+
+    def test_strictness_one_keeps_exact_answers(self):
+        self.assertEqual(self.suggest(' OSTEOCLAST ', threshold=1.0), 'CC')
+        self.assertEqual(self.suggest('osteoblast', threshold=1.0), 'CX')
+
+    def test_strictness_below_the_correct_bar_leaves_it_alone(self):
+        # 86% like "radius": correct at the default strictness
+        self.assertEqual(suggest_grade('radious', ['radius'], 0.9, partial_threshold=0.5), 'CC')
+
+    def test_strictness_above_the_correct_bar_raises_it(self):
+        self.assertEqual(suggest_grade('radious', ['radius'], 0.9, partial_threshold=0.9), 'XX')
+
+    def test_explanation_at_strictness_one(self):
+        s = self.suggest('osteoblast', threshold=1.0)
+        msg = explain_suggestion('osteoblast', self.OSTEO_FULL, self.OSTEO_PARTIAL, s, 1.0)
+        self.assertIn('matches the partial-credit answer “osteoblast”', msg)
+
+
 class TestExplain(unittest.TestCase):
     def test_correct_names_the_match(self):
         s, msg = explain('Renal Pelvis')

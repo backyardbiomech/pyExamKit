@@ -11,7 +11,7 @@ import tkinter.simpledialog
 from pathlib import Path
 from PIL import Image as PILImage, ImageDraw as PILImageDraw
 
-from ocr import attempt_ocr, exact_grade, explain_suggestion, suggest_grade
+from ocr import attempt_ocr, exact_grade, exact_match, explain_suggestion, suggest_grade
 import ai_ocr as _ai_ocr_mod
 import outputs
 from keyformat import (load_key_file, load_key_csv, normalize_answer,
@@ -264,6 +264,7 @@ class OpenQs(object):
         self.acceptable_answers: dict[str, list] = {}   # {qk: [str, ...]}
         self.partial_credit_answers: dict[str, list] = {}  # {qk: [str, ...]}
         self._transcriptions: dict[str, dict] = {}      # {qk: {img_idx: (text, conf)}}
+        self._added_answers: dict[str, list] = {}       # {qk: [answers the grader wrote]}
         self._output_csv_path = output_csv_path
         self._preloaded_file = preloaded_file
         self._review_perfect = review_perfect
@@ -508,6 +509,7 @@ class OpenQs(object):
                     self._transcriptions[_rqk] = {
                         int(idx): tuple(v) for idx, v in _per_q.items()
                     }
+                self._added_answers = _loaded_cache.get('added_answers', {})
 
             if _last_qi >= len(openqs):
                 # Grading was already complete but cache was not deleted (crash after final
@@ -659,6 +661,7 @@ class OpenQs(object):
                 }
                 data.update({
                     'transcriptions': trans_serialisable,
+                    'added_answers': self._added_answers,
                     'grades': grades,
                     'last_qi': qi,
                     'last_s_idx': s_idx,
@@ -961,10 +964,12 @@ class OpenQs(object):
 
         # Graded unseen only when the reading is a key answer exactly; a near
         # miss, a misspelling included, is the grader's call. Review perfect
-        # matches shows exact full-credit answers too.
+        # matches shows exact full-credit answers too, except one the grader
+        # wrote into the key this sitting, which has already been judged.
         exact = exact_grade(student_text, _key_list, _partial_list)
         if (not force_show and exact and exact == suggestion
-                and (exact == 'CX' or not self._review_perfect)):
+                and (exact == 'CX' or not self._review_perfect
+                     or exact_match(student_text, self._added_answers.get(k, [])))):
             return exact
         self._last_shown = True
 
@@ -1140,6 +1145,7 @@ class OpenQs(object):
             if new is None or not new.strip() or new.strip() == old:
                 return
             answers(kind)[i] = new.strip()
+            self._added_answers.setdefault(k, []).append(new.strip())
             n = self._upgrade_earlier(k, img_idx)
             changed(f'Changed “{old}” to “{new.strip()}”.'
                     + (f' {n} earlier student{"s" if n != 1 else ""} upgraded.' if n else ''))
@@ -1276,6 +1282,7 @@ class OpenQs(object):
         new_text = new_text.strip()
         if not new_text:
             return 0
+        self._added_answers.setdefault(qk, []).append(new_text)
         target_dict = self.partial_credit_answers if grade == 'CX' else self.acceptable_answers
         existing_lower = [a.lower() for a in target_dict.get(qk, [])]
         if new_text.lower() in existing_lower:

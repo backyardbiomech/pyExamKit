@@ -29,14 +29,17 @@ class Shown(Exception):
     '''Raised in place of opening the grading window.'''
 
 
-def grade(reading, strictness=0.5, review_perfect=False):
-    '''The grade given without review, or 'shown' when the window opens.'''
+def grade(reading, strictness=0.5, review_perfect=False, add=None, partial=PARTIAL):
+    '''The grade given without review, or 'shown' when the window opens.
+    add is an answer the grader writes into the key first.'''
     q = object.__new__(openQ.OpenQs)
     q.__dict__.update(_ai_texts={QK: {1: reading}}, openQkeytext={}, openQkeyimgs={},
-                      _transcriptions={},
+                      _transcriptions={}, _added_answers={},
                       acceptable_answers={QK: list(FULL)},
-                      partial_credit_answers={QK: list(PARTIAL)},
+                      partial_credit_answers={QK: list(partial)},
                       _strictness=strictness, _review_perfect=review_perfect, _root=None)
+    if add:
+        q._add_acceptable_and_regrade(QK, add, 1)
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / 'page.png'
         Image.new('RGB', (40, 40), 'white').save(page)
@@ -63,6 +66,16 @@ class TestReview(unittest.TestCase):
 
     def test_exact_partial_answer_is_accepted_when_reviewing_perfect_matches(self):
         self.assertEqual(grade('forearm bone', review_perfect=True), 'CX')
+
+    def test_exact_partial_similar_to_a_full_answer_is_accepted(self):
+        # "radios" is 83% like "radius" but is a partial answer exactly
+        self.assertEqual(grade('radios', partial=['radios']), 'CX')
+
+    def test_answer_added_to_the_key_is_accepted_when_reviewing_perfect_matches(self):
+        self.assertEqual(grade(' Radial  Bone', review_perfect=True, add='radial bone'), 'CC')
+
+    def test_other_answers_are_still_shown_after_an_addition(self):
+        self.assertEqual(grade('radius', review_perfect=True, add='radial bone'), 'shown')
 
     def test_misspelled_partial_answer_is_shown(self):
         self.assertEqual(grade('forarm bone'), 'shown')

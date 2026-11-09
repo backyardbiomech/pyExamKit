@@ -50,11 +50,15 @@ At the bottom are the grade buttons. The suggested grade is the button with a co
 
 The transcription is compared against every answer in the key's full-credit list using normalized Levenshtein similarity, where 1.0 is identical.
 
-A similarity of **0.80 or better against any full-credit answer suggests correct**. That tolerance is what absorbs spelling errors and transcription noise: "stratum basile" against "stratum basale" clears it comfortably. It is only a suggestion; the answer still comes to you.
+An answer that is exactly one of the key's answers (capitals and spacing aside) is suggested at that answer's grade, whatever else it resembles: "osteoblast", listed as partial credit, is suggested as partial even though it is 90% like the full-credit "osteoclast". An answer on both lists is suggested as correct.
 
-Below that, the **partial credit strictness** slider decides. It is the similarity at which a near miss is offered partial credit instead of none — at 0, no near miss earns partial credit and only your explicitly listed partial answers do; at 1, nothing short of an exact match qualifies. The default of 0.50 is fairly generous. Separately, anything scoring **0.70 or better against an explicitly listed partial-credit answer** is suggested as partial.
+Otherwise, a similarity of **0.80 or better against any full-credit answer suggests correct**, unless the answer is closer to a listed partial-credit answer. That tolerance is what absorbs spelling errors and transcription noise: "stratum basile" against "stratum basale" clears it comfortably. It is only a suggestion; the answer still comes to you.
 
-The window is skipped **only when the student wrote one of the key's answers exactly** (capitals and spacing aside): a full-credit answer is accepted as correct and a partial-credit answer as partial. Check **Review perfect matches?** to see exact full-credit answers as well. Everything else comes to the window, so a misspelling is always yours to judge, whether it is suggested as correct, as partial, or as wrong.
+Below that, the **partial credit strictness** slider decides. It is the similarity at which a near miss is offered partial credit instead of none: at 0, no near miss earns partial credit and only your explicitly listed partial answers do. The default of 0.50 is fairly generous. Separately, anything scoring **0.70 or better against an explicitly listed partial-credit answer** is suggested as partial.
+
+The slider is also the minimum for every near match, so set above 0.80 or 0.70 it raises those two bars as well. At 1, nothing short of an exact match is suggested as correct or partial, and a one-letter misspelling is suggested as wrong.
+
+The window is skipped **only when the student wrote one of the key's answers exactly** (capitals and spacing aside): a full-credit answer is accepted as correct and a partial-credit answer as partial. Check **Review perfect matches?** to see exact full-credit answers as well, apart from any answer you wrote into the key during this grading session, which you have already judged. Everything else comes to the window, so a misspelling is always yours to judge, whether it is suggested as correct, as partial, or as wrong.
 
 A box with no writing in it is suggested as wrong. Where the box has writing but no transcription came back, no grade is suggested and the answer is shown to you to grade by eye.
 

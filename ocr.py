@@ -38,6 +38,15 @@ def _normalized(text: str) -> str:
     return ' '.join(text.split()).lower()
 
 
+# Similarity at which a reading counts as a listed partial-credit answer
+LISTED_PARTIAL_MATCH = 0.70
+
+
+def _closest(answers, reading: str) -> float:
+    """Highest similarity of the normalized reading to any of answers."""
+    return max((_levenshtein_ratio(_normalized(a), reading) for a in answers), default=0.0)
+
+
 def exact_match(student_text: str, answers) -> bool:
     """
     True when the reading is one of answers word for word, ignoring only
@@ -72,6 +81,11 @@ def suggest_grade(student_text: str, key_texts,
     key_texts may be a single string or a list of acceptable answers (full credit).
     partial_texts, if given, is a list of answers that earn partial credit (CX).
     Similarity is measured with normalized Levenshtein edit distance (order-sensitive).
+    A reading that is a key answer exactly takes that answer's grade; otherwise
+    the listed answer it most resembles decides, so a near miss of a partial
+    answer is not lifted to full credit by a similar full answer.
+    partial_threshold (the strictness) is also a floor on every near match:
+    at 1, only an exact match earns anything.
     Returns 'CC' (full credit), 'CX' (partial), 'XX' (none), or
     None when confidence is too low to suggest (defer to human grader).
     """
@@ -83,27 +97,20 @@ def suggest_grade(student_text: str, key_texts,
     partial_texts = [p for p in (partial_texts or []) if p]
     if not key_texts and not partial_texts:
         return None
-    _rank = {'CC': 3, 'CX': 2, 'XX': 1, None: 0}
-    best = None
-    student_lower = student_text.strip().lower()
-    for key_text in key_texts:
-        ratio = _levenshtein_ratio(key_text.strip().lower(), student_lower)
-        if ratio >= match_threshold:
-            return 'CC'  # short-circuit on perfect match
-        if partial_threshold is not None and ratio >= partial_threshold:
-            grade = 'CX'
-        else:
-            grade = 'XX'
-        if _rank[grade] > _rank[best]:
-            best = grade
-    # Explicitly-defined partial-credit answers (threshold 0.70)
-    if partial_texts and _rank.get(best, 0) < _rank['CX']:
-        for pt in partial_texts:
-            ratio = _levenshtein_ratio(pt.strip().lower(), student_lower)
-            if ratio >= 0.70:
-                best = 'CX'
-                break
-    return best
+    exact = exact_grade(student_text, key_texts, partial_texts)
+    if exact:
+        return exact
+    reading = _normalized(student_text)
+    floor = partial_threshold or 0.0
+    full = _closest(key_texts, reading)
+    listed = _closest(partial_texts, reading)
+    full_ok = full >= max(match_threshold, floor)
+    listed_ok = listed >= max(LISTED_PARTIAL_MATCH, floor)
+    if full_ok and not (listed_ok and listed > full):
+        return 'CC'
+    if listed_ok or (partial_threshold is not None and full >= partial_threshold):
+        return 'CX'
+    return 'XX' if key_texts else None
 
 
 def explain_suggestion(student_text: str, full: list, partial: list,
@@ -118,9 +125,9 @@ def explain_suggestion(student_text: str, full: list, partial: list,
         return 'Suggested: wrong. The box is blank. Enter accepts.'
     if not student_text:
         return 'No reading of the handwriting. Grade it by eye with C, P, or X.'
-    reading = student_text.strip().lower()
-    scored = [(_levenshtein_ratio(a.strip().lower(), reading), a, 'full') for a in full if a]
-    scored += [(_levenshtein_ratio(a.strip().lower(), reading), a, 'partial')
+    reading = _normalized(student_text)
+    scored = [(_levenshtein_ratio(_normalized(a), reading), a, 'full') for a in full if a]
+    scored += [(_levenshtein_ratio(_normalized(a), reading), a, 'partial')
                for a in partial if a]
     if not scored:
         return 'The key has no answers for this question yet. Grade it by eye.'
@@ -133,7 +140,8 @@ def explain_suggestion(student_text: str, full: list, partial: list,
         return (f'Suggested: correct. It is {round(best[0] * 100)}% like “{best[1]}”. '
                 f'Enter accepts.')
     if suggestion == 'CX':
-        pmatch = [s for s in scored if s[2] == 'partial' and s[0] >= 0.70]
+        bar = max(LISTED_PARTIAL_MATCH, partial_threshold or 0.0)
+        pmatch = [s for s in scored if s[2] == 'partial' and s[0] >= bar]
         if pmatch:
             best = max(pmatch)
             if exact_match(student_text, [best[1]]):
