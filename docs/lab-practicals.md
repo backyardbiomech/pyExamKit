@@ -105,7 +105,7 @@ Print the placards and the setup guide separately. Nothing on a placard gives aw
 
 **Video: Grade a lab practical**
 
-<a href="https://www.loom.com/share/3854dcd08a6a431b8521aaf259f26f22"><img src="https://cdn.loom.com/sessions/thumbnails/3854dcd08a6a431b8521aaf259f26f22-a373fbe86bd8d88d.gif" alt="Video: Grade a lab practical" width="480"></a>
+<a href="https://www.loom.com/share/850ee31a234a4db1b6db5bbefce58faa"><img src="https://cdn.loom.com/sessions/thumbnails/850ee31a234a4db1b6db5bbefce58faa-36719e79f9fc5935.gif" alt="Video: Grade a lab practical" width="480"></a>
 
 Scan the whole stack at once through the document feeder, **double-sided**, every form mixed, to a single PDF at 200 dpi, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first, which double-sided scanning of an unshuffled stack gives you. Blank backs are skipped, so there is no need to turn on the scanner's own blank-page removal, and no harm in it.
 

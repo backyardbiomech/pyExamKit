@@ -15,20 +15,6 @@ Ten clips, about 50 minutes in all. Each stands alone, so a colleague can watch 
 | 8 | Grade a lab practical | 6 min | `4_practical/` |
 | 9 | An exam made somewhere else (Standard Sheet) | 4 min | `5_standard_sheet/` |
 
-## To re-record
-
-The Re-grade tab is now the Written view of the Results tab, and the grading window's reading can be corrected. v3.8.5 has neither, so film these from source (`uv run python pyExamKit.py`) until the next release is out. The outline below already describes the new behavior.
-
-| Clip | Status | Part | Why |
-|---|---|---|---|
-| 6 Written answers | **Re-record** | From the grading window to the end. The bank, answer sheet, Scan tab setup and "what leaves the computer" can stay. | The reading under the handwriting is now an editable field, correcting it is new, and the closing segment is on a tab that no longer exists. |
-| 0 What it does and where to start | **Re-record** | The tour of the tabs and the "Where to start" chart. | There are five tabs, not six, and the chart now ends at Results instead of a dotted line to Re-grade. |
-| 8 Grade a lab practical | **Re-record** | The grading window and the answer written back to the source file. The key's summary line, `ALERT.txt`, the marked sheets and the results can stay. | It uses the same grading window, so the reading is an editable field here too, and correcting a reading is new. |
-| 1, 2, 3, 4, 5, 7 | Keep | Nothing, unless you named Re-grade aloud. | Only the tab bar differs, where a Re-grade tab still shows. Clip 5 also has a grayed **Written answers…** button on Questions, and nothing it demonstrates has changed. |
-| 9 Standard Sheet | Keep | Nothing. | Not affected. No video for it is linked in the docs yet. |
-
-After re-recording, replace the Loom links and their thumbnails: clip 6 at the top of `docs/open-ended-questions.md`, where the caption "Written answers, on screen and with Re-grade" also has to change; clip 8 under "Video: Grade a lab practical" in `docs/lab-practicals.md`; and clip 0 under "Video: Getting started" in `README.md`.
-
 ## Before filming
 
 Run this once before the first take and again between takes. It wipes `demo/film/` and rebuilds it, which undoes everything a take changed: keys edited while grading, answers written back into the practical source, results, and Results-tab edits.
@@ -37,7 +23,7 @@ Run this once before the first take and again between takes. It wipes `demo/film
 uv run python tools/make_demo_data.py
 ```
 
-Film with the packaged v3.8.2 or later, so the window title and icon match what colleagues will download and the marked sheets show the current marks. Close anything with student data, and clear the file dialog's recent-items list. Paste the API key off camera, or leave the "show" box unchecked; the field is masked by default. AI transcription bills your Anthropic account a small amount per take.
+Film with the packaged v3.9.0 or later, so the window title and icon match what colleagues will download and the marked sheets show the current marks. Close anything with student data, and clear the file dialog's recent-items list. Paste the API key off camera, or leave the "show" box unchecked; the field is masked by default. AI transcription bills your Anthropic account a small amount per take.
 
 `demo/film/cues.csv` lists every planted problem by scan number, for use off camera.
 

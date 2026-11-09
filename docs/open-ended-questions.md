@@ -4,9 +4,9 @@ An open-ended question is one a student answers in writing on the answer sheet r
 
 The grading is yours. The transcription and the suggestion are there to make going through 90 sheets fast, not to decide anything.
 
-**Video: Written answers, on screen and with Re-grade**
+**Video: Written answers, on screen and on Results**
 
-<a href="https://www.loom.com/share/6a94a6d4cc9d4183b81525bdd190b68e"><img src="https://cdn.loom.com/sessions/thumbnails/6a94a6d4cc9d4183b81525bdd190b68e-76dbda253d03dad7.gif" alt="Video: Written answers, on screen and with Re-grade" width="480"></a>
+<a href="https://www.loom.com/share/e0fcb46be27843cb8379cdd56af33be6"><img src="https://cdn.loom.com/sessions/thumbnails/e0fcb46be27843cb8379cdd56af33be6-62b071f1e2a69d5e.gif" alt="Video: Written answers, on screen and on Results" width="480"></a>
 
 ## Setting up the run
 
