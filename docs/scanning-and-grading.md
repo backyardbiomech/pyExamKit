@@ -4,9 +4,9 @@ The **Scan Exams** tab reads a stack of completed answer sheets, grades them, an
 
 ## Scanning the sheets
 
-Scan at **200 dpi or better, in color**. Put every scan in a folder containing nothing else, since the app treats the folder as the job.
+Scan the whole stack to a **single PDF** at **200 dpi**; grayscale works fine. Put the PDF in a folder containing nothing else, since the app treats the folder as the job.
 
-You can scan the whole stack to a single PDF, or to a folder of JPGs. **JPGs are the safer choice for a large stack**, because a page that scanned badly can be rescanned and dropped into the folder, while a PDF has to be remade.
+A folder of JPGs also works, if you would rather be able to rescan one bad page and drop it into the folder.
 
 If you are not loading a key file, **the key sheet goes first in the stack**. With a key file loaded, the stack is students only. A sheet built with an exam that groups rows by question needs its key file; without one the scan stops and says so.
 

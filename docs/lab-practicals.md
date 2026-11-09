@@ -99,7 +99,7 @@ Print the placards and the setup guide separately. Nothing on a placard gives aw
 
 ## Scanning and grading
 
-Scan the whole stack at once through the document feeder, **double-sided**, every form mixed, at 200 dpi or better in color, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first, which double-sided scanning of an unshuffled stack gives you. Blank backs are skipped, so there is no need to turn on the scanner's own blank-page removal, and no harm in it.
+Scan the whole stack at once through the document feeder, **double-sided**, every form mixed, to a single PDF at 200 dpi, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first, which double-sided scanning of an unshuffled stack gives you. Blank backs are skipped, so there is no need to turn on the scanner's own blank-page removal, and no harm in it.
 
 On the **Scan Exams** tab, choose the practical's source `.md` file as the key. It is the key; there is no CSV. The line under the button confirms it as a lab practical with its stations, forms, and pages per student, and **Grade written answers on screen** is checked for you. Load a [class roster](roster.md) to have names on the results, since the sheet's ID bubbles are all it has to go on.
 

@@ -24,7 +24,7 @@
 
 **Erasures are being counted as answers.** Raise the fill cutoff toward 0.45.
 
-**A page failed to align, or the whole scan looks wrong.** Alignment depends on the three large black registration circles. Anything covering, cropping, or badly reproducing one of them breaks it. Rescan that page in color at 200 dpi or higher, with the whole sheet inside the scan area.
+**A page failed to align, or the whole scan looks wrong.** Alignment depends on the three large black registration circles. Anything covering, cropping, or badly reproducing one of them breaks it. Rescan that page at 200 dpi or higher, with the whole sheet inside the scan area.
 
 **Everything is graded as wrong on one question.** Check whether that question's row was supposed to be in the ignore list — a written question in the middle of the exam has an untouched bubble row, and an untouched row is a wrong answer unless the scanner is told to skip it.
 
