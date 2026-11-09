@@ -42,3 +42,6 @@ tests/fixtures/practical/generated/
 
 # Built practical output (Build Practical writes <Title>_practical/)
 tests/fixtures/practical/*_practical/
+
+# The demo folder tools/make_demo_data.py rebuilds for filming
+demo/film/
