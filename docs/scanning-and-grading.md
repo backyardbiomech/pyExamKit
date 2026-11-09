@@ -2,6 +2,10 @@
 
 The **Scan Exams** tab reads a stack of completed answer sheets, grades them, and writes the results. Everything it produces is described in [Outputs](outputs.md).
 
+**Video: Grade a bubble exam**
+
+<a href="https://www.loom.com/share/fd330a62fc4848db83535e9c54a8c380"><img src="https://cdn.loom.com/sessions/thumbnails/fd330a62fc4848db83535e9c54a8c380-223c7f174c2bbe8c.gif" alt="Video: Grade a bubble exam" width="480"></a>
+
 ## Scanning the sheets
 
 Scan the whole stack to a **single PDF** at **200 dpi**; grayscale works fine. Put the PDF in a folder containing nothing else, since the app treats the folder as the job.

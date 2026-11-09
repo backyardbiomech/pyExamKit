@@ -4,6 +4,10 @@ A question bank is a plain text file — `.txt` or `.md`, UTF-8 — holding one 
 
 Keep the bank file and every image it references in the same folder. The exam builder resolves image paths relative to the bank file.
 
+**Video: Write a question bank**
+
+<a href="https://www.loom.com/share/13ae5ecaa69d48dda8b1fd65e30bac02"><img src="https://cdn.loom.com/sessions/thumbnails/13ae5ecaa69d48dda8b1fd65e30bac02-428c43266e8aef6d.gif" alt="Video: Write a question bank" width="480"></a>
+
 ## The shape of a block
 
 Every question block is a run of consecutive non-blank lines. **There must be no blank line inside a question**, and at least one blank line between questions. A block is up to three optional header lines, in any order, followed by the numbered question stem and its answers.

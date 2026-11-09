@@ -26,6 +26,10 @@ The app opens to one window with six tabs, sharing a single log at the bottom. E
 
 ## Where to start
 
+**Video: Getting started**
+
+<a href="https://www.loom.com/share/3207b09a55ca434298d9c1b652a10ac3"><img src="https://cdn.loom.com/sessions/thumbnails/3207b09a55ca434298d9c1b652a10ac3-e549161f0f76d8f4.gif" alt="Video: Getting started" width="480"></a>
+
 Which tab you start on depends on what you already have. Every path ends on **Scan Exams**.
 
 ```mermaid

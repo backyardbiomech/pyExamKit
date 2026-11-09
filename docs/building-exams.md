@@ -2,6 +2,10 @@
 
 The **Build Exam** tab turns one or more [question bank files](question-bank-format.md) into a printable exam and the answer key CSV that [Scan Exams](scanning-and-grading.md) grades against. It writes an HTML version to print, a PDF of it to send, and a Markdown version to keep or post.
 
+**Video: Build a bubble exam**
+
+<a href="https://www.loom.com/share/200069b1b3fe417dacc58b88294a0f79"><img src="https://cdn.loom.com/sessions/thumbnails/200069b1b3fe417dacc58b88294a0f79-516b9a063ca769ee.gif" alt="Video: Build a bubble exam" width="480"></a>
+
 ## Where the questions come from
 
 **Exact File** uses one bank file exactly as written, every question, in file order. Use it when the bank *is* the exam.

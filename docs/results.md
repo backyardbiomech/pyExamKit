@@ -4,6 +4,10 @@ The **Results** tab is where a scan's grades are checked and corrected before th
 
 The tab reads the scan's results files in `app_data/`, never the gradebook. It is the source of truth: your changes are kept by the app and written into `gradebook.xlsx` and `canvas_upload.csv` when you export, overwriting both. Changes typed into the gradebook in Excel are never read back, so once you start adjusting in Excel, finish there.
 
+**Video: Fix and export grades (Results tab)**
+
+<a href="https://www.loom.com/share/c6a2a9327c5b4c409277339883775efd"><img src="https://cdn.loom.com/sessions/thumbnails/c6a2a9327c5b4c409277339883775efd-4d45441276ed08eb.gif" alt="Video: Fix and export grades (Results tab)" width="480"></a>
+
 ## The four views
 
 **Summary** shows the Exam stats figures ([Outputs](outputs.md#the-results) defines each one): the number of students, points possible, mean, median, standard deviation, highest and lowest score, and Cronbach's alpha, for the whole class and, with several versions, for each version. Points possible is what a student could earn rather than what the key carries, so a [lab practical](lab-practicals.md) is scored out of one form; when the students in a column are not all out of the same total it reads **varies**, and the percents beside the figures are left out. Once points have been added, each column has an **Adjusted** column beside it. The chart counts students in each letter grade, unadjusted in gray behind adjusted in blue.

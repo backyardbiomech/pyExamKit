@@ -4,6 +4,10 @@ An open-ended question is one a student answers in writing on the answer sheet r
 
 The grading is yours. The transcription and the suggestion are there to make going through 90 sheets fast, not to decide anything.
 
+**Video: Written answers, on screen and with Re-grade**
+
+<a href="https://www.loom.com/share/6a94a6d4cc9d4183b81525bdd190b68e"><img src="https://cdn.loom.com/sessions/thumbnails/6a94a6d4cc9d4183b81525bdd190b68e-76dbda253d03dad7.gif" alt="Video: Written answers, on screen and with Re-grade" width="480"></a>
+
 ## Setting up the run
 
 On the [Scan Exams](scanning-and-grading.md) tab, **Grade written answers on screen** is checked for you when the key has written questions. With no key file, check it yourself, and list any mid-exam written question under **More options → Also skip questions**, since its bubble row would otherwise be graded as a wrong answer. Then run the scan as usual. A scan of several versions grades each version's written answers in turn, against that version's key.

@@ -4,6 +4,10 @@ A lab practical here is a set of numbered stations, each with four written quest
 
 pyExamKit builds a practical from one plain-text source file and grades it with that same file. Every form's sheets are scanned together in one stack, and each question has one list of accepted answers, so an answer you accept for 7C while grading counts for every student who answered 7C, whatever their form.
 
+**Video: Build a lab practical**
+
+<a href="https://www.loom.com/share/581353efaa404a0ea090832a493138c4"><img src="https://cdn.loom.com/sessions/thumbnails/581353efaa404a0ea090832a493138c4-7ac63eb8677ac1e3.gif" alt="Video: Build a lab practical" width="480"></a>
+
 ## The source file
 
 The source file is markdown, readable in any text editor. Each station starts with a heading, each question starts with its letter, and the accepted answers follow the question: `=` lines are full credit and `~` lines are partial credit.
@@ -98,6 +102,10 @@ Hand the stack down each row in order. Because the forms are dealt in the order 
 Print the placards and the setup guide separately. Nothing on a placard gives away an answer, but the setup guide and the instructor key hold every answer and should stay with the instructors.
 
 ## Scanning and grading
+
+**Video: Grade a lab practical**
+
+<a href="https://www.loom.com/share/3854dcd08a6a431b8521aaf259f26f22"><img src="https://cdn.loom.com/sessions/thumbnails/3854dcd08a6a431b8521aaf259f26f22-a373fbe86bd8d88d.gif" alt="Video: Grade a lab practical" width="480"></a>
 
 Scan the whole stack at once through the document feeder, **double-sided**, every form mixed, to a single PDF at 200 dpi, as for any exam ([Scanning and grading](scanning-and-grading.md) covers the scanning itself). Order does not matter between students, but each student's pages must stay together with page 1 first, which double-sided scanning of an unshuffled stack gives you. Blank backs are skipped, so there is no need to turn on the scanner's own blank-page removal, and no harm in it.
 

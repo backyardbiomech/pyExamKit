@@ -2,6 +2,10 @@
 
 Download the latest release for your system from the [Releases page](https://github.com/backyardbiomech/pyExamKit/releases/latest). The download contains everything the app needs; there is no Python to install and no environment to set up.
 
+**Video: Installation**
+
+<a href="https://www.loom.com/share/c0f1e2736868411dbb16ca2c5548412a"><img src="https://cdn.loom.com/sessions/thumbnails/c0f1e2736868411dbb16ca2c5548412a-12e623001458280c.gif" alt="Video: Installation" width="480"></a>
+
 ## Windows
 
 Download `PyExamKit-Windows.zip` and extract it — right-click the file and choose **Extract All**. Keep the extracted `PyExamKit` folder together, because `PyExamKit.exe` needs the files next to it to run. Double-click `PyExamKit.exe` inside that folder.
