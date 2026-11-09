@@ -397,8 +397,11 @@ class BuildExamUI(ctk.CTkFrame):
             side='left', padx=(0, 16))
         ctk.CTkRadioButton(radio_row, text='Question Pools', variable=self._source_mode,
                             value='pools', command=self._on_source_mode_changed).pack(side='left')
+        # Outside both source panels: the mode a user is in should not hide it.
+        ctk.CTkButton(radio_row, text='Import QTI…', command=self._import_qti).pack(
+            side='left', padx=(24, 0))
 
-        self._exact_frame = ctk.CTkFrame(frame, fg_color='transparent')
+        self._exact_frame =ctk.CTkFrame(frame, fg_color='transparent')
         self._exact_frame.grid(row=2, column=0, columnspan=3, sticky='w', pady=(6, 0))
         ctk.CTkLabel(self._exact_frame, text='File:').grid(row=0, column=0, padx=(0, 6), sticky='w')
         self.exact_entry = ctk.CTkEntry(self._exact_frame, width=350)
@@ -414,7 +417,6 @@ class BuildExamUI(ctk.CTkFrame):
         btn_row = ctk.CTkFrame(parent, fg_color='transparent')
         btn_row.pack(fill='x', anchor='w')
         ctk.CTkButton(btn_row, text='Add Pool File…', command=self._add_pool_files).pack(side='left')
-        ctk.CTkButton(btn_row, text='Import QTI…', command=self._import_qti).pack(side='left', padx=(8, 0))
 
         header = ctk.CTkFrame(parent, fg_color='transparent')
         header.pack(fill='x', pady=(6, 0))
@@ -676,6 +678,9 @@ class BuildExamUI(ctk.CTkFrame):
         if not self.output_entry.get().strip():
             self.output_entry.insert(0, str(Path(out_path).parent))
         self._update_pool_totals()
+        # The import can start from Exact File, where the new row would be hidden.
+        self._source_mode.set('pools')
+        self._on_source_mode_changed()
 
     def _collect_pool_row_data(self) -> list[dict]:
         return [{'filepath': r['filepath'], 'count_text': r['count_entry'].get(),

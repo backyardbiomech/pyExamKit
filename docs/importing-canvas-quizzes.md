@@ -1,6 +1,6 @@
 # Importing a Canvas quiz
 
-**Import QTI…**, beside **Add Pool File…** on the Build Exam tab, turns a quiz you already built in Canvas into a [question bank file](question-bank-format.md) without retyping it.
+**Import QTI…**, beside **Exact File** and **Question Pools** on the Build Exam tab, turns a quiz you already built in Canvas into a [question bank file](question-bank-format.md) without retyping it.
 
 ## Getting the export out of Canvas
 
@@ -9,7 +9,7 @@ In Canvas, export the quiz QTI and download the `.zip`. On the quiz you will see
 
 ## Doing the import
 
-Click **Import QTI…** and pick the `.zip`. The app reads the quiz title out of the export and suggests it as the bank filename; choose where to save it. It then writes three things: the bank file itself, an `<filename>_images/` folder holding any images the questions use, and a new pool row on the tab pointing at the file it just wrote, already showing how many questions came through.
+Click **Import QTI…** and pick the `.zip`. The app reads the quiz title out of the export and suggests it as the bank filename; choose where to save it. It then writes three things: the bank file itself, an `<filename>_images/` folder holding any images the questions use, and a new pool row on the tab pointing at the file it just wrote, already showing how many questions came through. The tab switches to **Question Pools** to show that row.
 
 From there it behaves like any other pool — set how many questions to draw, set a Pts/Q if you want one, and build.
 

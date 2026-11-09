@@ -9,7 +9,7 @@ The **Build Exam** tab turns one or more [question bank files](question-bank-for
 **Question Pools** draws a random sample from each of one or more bank files. Add a file with **Add Pool File…** and it appears in the table with the number of questions it actually contains under **In Bank**. The **# to pull** column defaults to ten, or to the bank's own total if the bank holds fewer than ten. 
 
 
-**Import QTI…** builds a pool from a Canvas quiz export instead of a file you wrote. See [Importing a Canvas quiz](importing-canvas-quizzes.md).
+**Import QTI…**, beside those two choices, builds a pool from a Canvas quiz export instead of a file you wrote, and switches the tab to **Question Pools**. See [Importing a Canvas quiz](importing-canvas-quizzes.md).
 
 Points resolve in three layers, most specific first. A `(N pts)` line inside the bank file always wins. Failing that, the pool's own **Pts/Q** column applies to every question drawn from that pool. Failing that, the exam-wide **Default pts/question** applies. The running total under the pool table shows both the question count and the point total as you go.
 
