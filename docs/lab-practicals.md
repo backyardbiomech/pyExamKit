@@ -115,7 +115,7 @@ The scanner groups the pages into students by what is printed on each page, read
 
 The grading window works as described in [Open-ended questions](open-ended-questions.md), with two differences. It goes station by station and letter by letter (all of 1A, then 1B, through 25D), and each question is shown only for the students whose form includes it, so "3 of 24" means the third of the 24 students who answered it. The top line gives the question text, and the line below names the student, with a picture of the name they wrote on page 1, so you can recognize a student with a spelling accommodation before grading their answer. That picture is shown only on your screen; only the answer boxes are ever sent for AI transcription.
 
-**Edit…**, next to the key on Scan Exams, is unavailable for a practical: its key is the source file, so open that in a text editor to change it. **Answers you add to the key while grading are written into the source file**, as new `=` or `~` lines under that question. Nothing else in the file changes, so next year's practical starts with every answer you accepted this year. The same happens for answers added later on the **Re-grade** tab.
+**Edit…**, next to the key on Scan Exams, is unavailable for a practical: its key is the source file, so open that in a text editor to change it. **Answers you add to the key while grading are written into the source file**, as new `=` or `~` lines under that question. Nothing else in the file changes, so next year's practical starts with every answer you accepted this year. The same happens for answers added later on the **Written** view of the [Results](results.md) tab, and an answer you remove there comes back out of the file.
 
 ## What the results hold
 

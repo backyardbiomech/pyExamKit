@@ -91,7 +91,6 @@ class pyScanUI(ctk.CTkFrame):
         practical_tab = tabs.add("Build Practical")
         scan_tab   = tabs.add("Scan Exams")
         results_tab = tabs.add("Results")
-        regrade_tab = tabs.add("Re-grade")
         key_tab    = tabs.add("Standard Sheet")
         BuildExamUI(build_tab, log_fn=self._log).pack(fill='both', expand=True)
         BuildPracticalUI(practical_tab, log_fn=self._log).pack(fill='both', expand=True)
@@ -455,29 +454,6 @@ class pyScanUI(ctk.CTkFrame):
                       command=self._open_key_builder).grid(
             row=4, column=0, columnspan=2, pady=10)
 
-        # ════════════════════════════════════════════════════════
-        # TAB 3 — Re-grade
-        # ════════════════════════════════════════════════════════
-        regrade_footer = ctk.CTkFrame(regrade_tab, fg_color='transparent')
-        regrade_footer.pack(side='bottom', fill='x', pady=(6, 0))
-        ctk.CTkButton(regrade_footer, text="Open Re-grader", height=40, width=220,
-                      font=ctk.CTkFont(size=15, weight='bold'),
-                      command=self._open_regrade_dialog,
-                      fg_color='#2563eb', hover_color='#1d4ed8').pack(side='right', padx=10)
-        regrade_frame = ctk.CTkFrame(regrade_tab, fg_color='transparent')
-        regrade_frame.pack(fill='x', pady=(0, 8))
-
-        ctk.CTkLabel(regrade_frame,
-                     text="Update acceptable answers for fill-in-the-blank questions\n"
-                          "and adjust the grades of an earlier scan.",
-                     justify='left').grid(
-            row=0, column=0, columnspan=2, padx=10, pady=(8, 4), sticky='w')
-        ctk.CTkButton(regrade_frame, text="Choose outputs folder…",
-                      command=self._browse_regrade_csv).grid(
-            row=1, column=0, padx=10, pady=4, sticky='w')
-        self.regradeEntry = ctk.CTkEntry(regrade_frame, width=400)
-        self.regradeEntry.grid(row=1, column=1, padx=10, pady=4, sticky='ew')
-
         # ── Status log (shared, below tabs) ───────────────────────────────
         # No Exit button: the window's own close button does that, and an
         # Exit beside the log was being clicked in place of Run Scan.
@@ -554,52 +530,6 @@ class pyScanUI(ctk.CTkFrame):
         self._roster_path = ''
         self.rosterLabel.configure(
             text="Canvas gradebook export, or a LastName, FirstName, ID CSV", text_color='gray')
-
-    def _browse_regrade_csv(self):
-        folder = filedialog.askdirectory(title='Choose the ExamScanner_outputs folder')
-        if folder:
-            self.regradeEntry.delete(0, 'end')
-            self.regradeEntry.insert(0, folder)
-
-    def _regrade_csv(self, chosen: str) -> str | None:
-        """The results file to re-grade in the chosen outputs folder, asking
-        which version when there are several. A results.csv chosen directly,
-        or one at the top of a folder from before app_data/, also works."""
-        p = Path(chosen)
-        if p.is_file():
-            return str(p)
-        csvs = outputs.listed(p)
-        if not csvs and (p / 'results.csv').exists():
-            csvs = [p / 'results.csv']
-        # Only results with written answers have anything to re-grade
-        csvs = [c for c in csvs
-                if (outputs.artifact_dir(c) / f'{c.stem}_openq_answers.json').exists()]
-        if not csvs:
-            self._log('No written answers to re-grade in that folder. Choose the '
-                      'ExamScanner_outputs folder of a scan with written answers.')
-            return None
-        if len(csvs) == 1:
-            return str(csvs[0])
-        versions = {outputs.version_of(c): c for c in csvs}
-        dlg = ctk.CTkInputDialog(title='Re-grade',
-                                 text='Which version? ' + ', '.join(sorted(versions)))
-        answer = (dlg.get_input() or '').strip().upper()
-        if answer not in versions:
-            return None
-        return str(versions[answer])
-
-    def _open_regrade_dialog(self):
-        chosen = self.regradeEntry.get().strip()
-        if not chosen:
-            self._log('Please choose the outputs folder first.')
-            return
-        csv_path = self._regrade_csv(chosen)
-        if not csv_path:
-            return
-        from openQ import RegradeDialog
-        RegradeDialog(self.parent, csv_path,
-                      on_complete=lambda n: self._log(
-                          f'Re-grading complete: {n} grade(s) upgraded.'))
 
     def _toggle_ai_context_row(self):
         """Show or hide the context / API key row based on the AI OCR checkbox."""

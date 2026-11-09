@@ -9,8 +9,7 @@ The app's working files live in app_data/: one graded results file per key
 (results.csv, or results_versionA.csv and so on), each with a points file and
 a grading record written by grade_functions.gradeResults. write() builds the
 user's files from every results file listed in app_data/outputs.json, so a
-multi-version stack produces one gradebook and one Canvas file, and a
-re-grade of any version rebuilds both.
+multi-version stack produces one gradebook and one Canvas file.
 """
 from __future__ import annotations
 
@@ -129,6 +128,8 @@ class Graded:
     texts: dict = field(default_factory=dict)            # {question column: question text}
     options: dict = field(default_factory=dict)          # {question column: [choice text], index = bank letter}
     open_answers: dict = field(default_factory=dict)   # {openQ_N: [accepted answers]}
+    open_partial: dict = field(default_factory=dict)   # {openQ_N: [partial-credit answers]}
+    transcriptions: dict = field(default_factory=dict) # {openQ_N: {row: [reading, confidence]}}
     settings: dict = field(default_factory=dict)       # how it was scored (grading record)
     accepted: dict = field(default_factory=dict)       # {column: [keys]} after a key edit
     dropped: set = field(default_factory=set)          # columns a credit edit dropped
@@ -245,29 +246,36 @@ def load(csv_path) -> Graded:
         rec = json.loads(grading_json(csv_path).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         pass
-    open_answers = {}
+    open_answers, open_partial, transcriptions = {}, {}, {}
+    stem = artifact_dir(csv_path) / Path(csv_path).stem
     try:
-        raw = json.loads((artifact_dir(csv_path) / (Path(csv_path).stem + '_openq_answers.json'))
-                         .read_text(encoding='utf-8'))
+        raw = json.loads(Path(f'{stem}_openq_answers.json').read_text(encoding='utf-8'))
         for qk, v in raw.items():
             open_answers[qk] = v.get('full', []) if isinstance(v, dict) else list(v)
+            open_partial[qk] = v.get('partial', []) if isinstance(v, dict) else []
     except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        transcriptions = json.loads(Path(f'{stem}_openq_transcriptions.json')
+                                    .read_text(encoding='utf-8'))
+    except (OSError, ValueError):
         pass
     return Graded(version=version_of(csv_path), df=df, pts=pts,
                   possible=rec.get('possible', {}), title=rec.get('title', ''),
                   sources=rec.get('sources', {}), choices=rec.get('choices', {}),
                   texts=rec.get('texts', {}), options=rec.get('options', {}),
-                  open_answers=open_answers,
+                  open_answers=open_answers, open_partial=open_partial,
+                  transcriptions=transcriptions,
                   settings=rec.get('settings', {}))
 
 
 # ── Writing ──────────────────────────────────────────────────────────────────
 
-def write(outdir, prefix: str | None = None, csvs=None) -> bool:
-    """Write gradebook.xlsx and canvas_upload.csv from the listed results,
-    or from csvs when given. True when both were saved; then the edits they
-    carry are recorded as exported."""
-    graded = [load(p) for p in (csvs if csvs is not None else listed(outdir))]
+def write(outdir, prefix: str | None = None) -> bool:
+    """Write gradebook.xlsx and canvas_upload.csv from the listed results.
+    True when both were saved; then the edits they carry are recorded as
+    exported."""
+    graded = [load(p) for p in listed(outdir)]
     graded = [g for g in graded if g.students]
     if not graded:
         print('[Outputs] No graded results to write.', flush=True)
@@ -290,7 +298,7 @@ def write(outdir, prefix: str | None = None, csvs=None) -> bool:
         except Exception as exc:
             saved = False
             print(f'[Outputs] Could not save {name}: {exc}', flush=True)
-    if saved and csvs is None:
+    if saved:
         edits.mark_exported(outdir, made)
     return saved
 

@@ -40,9 +40,9 @@
 
 **The key's transcription is wrong.** Edit it in the grading window. The correction applies to every student from that point on.
 
-**I graded twenty students before realizing an answer should have counted.** Use **Add as partial credit** in the grading window, which upgrades everyone already graded who wrote that answer exactly. After the scan, the [Re-grade](open-ended-questions.md#re-grading-afterward) tab does the same thing against a finished scan.
+**I graded twenty students before realizing an answer should have counted.** Use **Add as partial credit** in the grading window, which upgrades everyone already graded who wrote that answer exactly. After the scan, the **Written** view of the [Results](results.md#the-views) tab does the same thing against a finished scan.
 
-**Can re-grading lower a grade?** No. It only upgrades. To lower one, change the points cell in `gradebook.xlsx` (the total follows) and the score in Canvas.
+**Can changing the key after grading lower a grade?** Adding an answer never does. Removing one from the key on the [Results](results.md#correcting-the-grades) tab's Written view does, for everyone whose reading is exactly that answer. To lower one student's grade, set their points on the Students view.
 
 **The app closed partway through grading.** Run the same scan again and it offers to resume where you stopped, reusing the transcriptions it already made.
 

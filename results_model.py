@@ -19,7 +19,9 @@ import pandas as pd
 
 import analysis
 import edits
+import keyformat
 import outputs
+from ocr import exact_match
 
 
 @dataclass
@@ -111,6 +113,8 @@ def add(res: Results, edit: dict) -> Results:
             return not edit.get('also')
         if edit['type'] == 'credit':
             return old.get('action') == edit.get('action')
+        if edit['type'] == 'written':
+            return exact_match(old.get('answer', ''), [edit['answer']])
         return True
     made = [e for e in res.edits if not moot(e)]
     clears = (edit['type'] == 'adjust' and not edit.get('points')) or (
@@ -118,13 +122,43 @@ def add(res: Results, edit: dict) -> Results:
     if not clears:
         made.append(edit)               # an adjustment of 0, or a move back, only clears the earlier one
     edits.save(res.outdir, made)
-    return open_folder(res.outdir)
+    new = open_folder(res.outdir)
+    if edit['type'] == 'written':
+        _write_answers_to_key_file(new)
+    return new
 
 
 def delete(res: Results, edit_ids) -> Results:
     ids = {edit_ids} if isinstance(edit_ids, str) else set(edit_ids)
     edits.save(res.outdir, [e for e in res.edits if e['id'] not in ids])
-    return open_folder(res.outdir)
+    new = open_folder(res.outdir)
+    if any(e['id'] in ids and e['type'] == 'written' for e in res.edits):
+        _write_answers_to_key_file(new)
+    return new
+
+
+def _write_answers_to_key_file(res: Results) -> None:
+    """A lab practical's source file is its key: keep its answers current, so
+    next year's practical starts with them. Only a practical's grading records
+    a key_file. A file that cannot be written leaves the edit standing."""
+    for path in outputs.listed(res.outdir):
+        try:
+            config = outputs.artifact_dir(path) / f'{path.stem}_openq_gradeconfig.json'
+            if not config.exists():
+                continue
+            key_file = json.loads(config.read_text(encoding='utf-8')).get('key_file')
+            if not key_file or not Path(key_file).exists():
+                continue
+            g = _version(res, outputs.version_of(path))
+            data = keyformat.load_key_file(key_file)
+            if not data:
+                continue
+            for qk, oq in data.get('open_questions', {}).items():
+                oq['full'] = list(g.open_answers.get(qk, oq['full']))
+                oq['partial'] = list(g.open_partial.get(qk, oq['partial']))
+            keyformat.save_key_file(key_file, data)
+        except (OSError, ValueError, StopIteration) as exc:
+            print(f'[Results] Could not update the key file: {exc}', flush=True)
 
 
 def set_note(res: Results, edit_id: str, note: str) -> Results:
@@ -170,7 +204,7 @@ def target(res: Results, q: Question) -> dict:
 def key_edit(res: Results, q: Question, keys: list[str], also: bool, note: str = '') -> dict:
     """Keys in the bank's letters, as the Questions view shows them."""
     if q.written:
-        raise ValueError('A written question is graded on the Re-grade tab.')
+        raise ValueError('A written question\'s answers change on the Written view.')
     where = target(res, q)
     if 'version' in where:
         g = _version(res, where['version'])
@@ -233,6 +267,11 @@ def describe(res: Results, e: dict) -> str:
             return e['source']
         q = e.get('question', '')
         return f'Version {e["version"]} {q}' if e.get('version') else q
+    if e['type'] == 'written':
+        return {'full': f'{where()}: also accept "{e.get("answer")}"',
+                'partial': f'{where()}: half credit for "{e.get("answer")}"',
+                'remove': f'{where()}: "{e.get("answer")}" taken off the answers'
+                }.get(e.get('grade'), f'{where()}: {e.get("answer")}')
     if e['type'] == 'key':
         keys = ' or '.join(e.get('keys', []))
         return f'{where()}: also accept {keys}' if e.get('also') else f'{where()}: key changed to {keys}'
@@ -388,6 +427,95 @@ def _ordered(counts: dict) -> dict:
     letters = sorted(k for k in counts if re.fullmatch(r'[A-Z]', k))
     rest = sorted(k for k in counts if k not in letters and k != 'Blank')
     return {k: counts[k] for k in letters + rest + (['Blank'] if 'Blank' in counts else [])}
+
+
+# ── Written questions ────────────────────────────────────────────────────────
+
+@dataclass
+class WrittenKey:
+    answer: str
+    grade: str                  # 'full' or 'partial'
+    edit_id: str = ''           # the edit that added it; '' for an answer from the scan
+
+
+@dataclass
+class Reading:
+    student: str                # 'Last, First'
+    where: str                  # the sheet it was on: 'A3'
+    text: str                   # the transcription, '' when there is none
+    grade: str                  # 'Full', 'Half', 'None', or '' if not graded
+
+
+def written_keys(res: Results, q: Question) -> list[WrittenKey]:
+    """The answers a written question accepts, full credit first, combined
+    across the versions that printed it. Each version was graded against its
+    own key, so their lists can differ."""
+    where = target(res, q)
+    added = {e['answer']: e['id'] for e in res.edits
+             if e['type'] == 'written' and e.get('grade') != 'remove' and _same_target(e, where)}
+    out: list[WrittenKey] = []
+    for grade, attr in (('full', 'open_answers'), ('partial', 'open_partial')):
+        for version, col in q.cols:
+            for answer in getattr(_version(res, version), attr).get(col, []):
+                if not any(exact_match(k.answer, [answer]) for k in out):
+                    out.append(WrittenKey(answer, grade, added.get(answer, '')))
+    return out
+
+
+def written_edit(res: Results, q: Question, answer: str, grade: str, note: str = '') -> dict:
+    """Accept answer for a written question, at grade 'full' or 'partial', or
+    with 'remove', take it off the list."""
+    assert grade in ('full', 'partial', 'remove'), grade
+    answer = ' '.join(answer.split())
+    if not q.written:
+        raise ValueError(f'{q.label} is not a written question.')
+    if not answer:
+        raise ValueError('Type the answer to accept.')
+    if any(k.grade == grade and exact_match(k.answer, [answer]) for k in written_keys(res, q)):
+        raise ValueError(f'"{answer}" is already on the list.')
+    return edits.make('written', note, **target(res, q), answer=answer, grade=grade)
+
+
+def remove_written(res: Results, q: Question, key: WrittenKey, note: str = '') -> Results:
+    """Take an answer off a question's list. One added on this tab is undone,
+    which puts its students back as the scan graded them; one from the scan
+    was a key error, and everyone who wrote it exactly loses the credit."""
+    if key.edit_id:
+        return delete(res, key.edit_id)
+    return add(res, written_edit(res, q, key.answer, 'remove', note))
+
+
+def grades_changed(before: Results, after: Results, q: Question) -> int:
+    """How many students' grades on q differ between two openings."""
+    n = 0
+    for version, col in q.cols:
+        a, b = _version(before, version), _version(after, version)
+        n += sum(str(a.df.loc[r, col])[:2] != str(b.df.loc[r, col])[:2]
+                 for r in a.students if r in b.df.index)
+    return n
+
+
+def written_rows(res: Results, q: Question) -> list[Reading]:
+    """What each student wrote on q as it was read, sorted by that reading so
+    the same answer sits together."""
+    moved = {(e['version'], str(e['row'])): (e['to'], edits.moved_row(e)) for e in res.edits
+             if e['type'] == 'version'}
+    labels = {'CC': 'Full', 'CX': 'Half', 'XX': 'None'}
+    out = []
+    for version, col in q.cols:
+        for row, reading in _version(res, version).transcriptions.get(col, {}).items():
+            v, r = moved.get((version, row), (version, row))
+            if not any(g.version == v for g in res.graded):
+                continue
+            g = _version(res, v)
+            if r not in g.students or not g.asked(r, col):
+                continue
+            last, first = _cell(g, r, 'LastName'), _cell(g, r, 'FirstName')
+            out.append(Reading(f'{last}, {first}' if first else last,
+                               f'{version}{outputs._qnum(col)}', reading[0] or '',
+                               labels.get(_cell(g, r, col)[:2], '')))
+    out.sort(key=lambda x: (not x.text, ' '.join(x.text.split()).lower(), x.student.lower()))
+    return out
 
 
 # ── Students ─────────────────────────────────────────────────────────────────

@@ -10,6 +10,13 @@ deleting an edit undoes it. docs/dev/results-tab.md has the design.
 Each edit is a dict with an id, a type, an optional note, and the time it
 was made. The types, applied in this order:
 
+  written   source or version and question (a written question), answer, and
+            grade: 'full' or 'partial' accepts the answer and upgrades every
+            student whose saved reading is exactly it; 'remove' takes it off
+            the question's list and gives those students no credit, and
+            'partial' on an answer that had full credit gives them half: a
+            key error, corrected for everyone who wrote it. Before version,
+            since the readings are keyed by the row the scanner read
   version   version and row (the student, as override identifies them, with
             student_id checked against that row), to: the version their sheet
             actually was, for a student who bubbled the wrong one. They move
@@ -46,9 +53,10 @@ import pandas as pd
 
 import grade_functions
 import outputs
+from ocr import exact_match
 
 EDITS = 'edits.json'
-TYPES = ('version', 'key', 'credit', 'override', 'adjust')
+TYPES = ('written', 'version', 'key', 'credit', 'override', 'adjust')
 
 # Scoring for results graded before the grading record kept its settings:
 # the Scan tab's defaults (docs/dev/results-tab.md, default 4)
@@ -134,14 +142,14 @@ def adjustments(edits: list[dict]) -> dict:
 
 def apply(graded: list[outputs.Graded], edits: list[dict]
           ) -> tuple[list[outputs.Graded], list[str]]:
-    """Copies of graded with the version, key, credit, and override edits in,
+    """Copies of graded with the written, version, key, credit, and override edits in,
     and a note for every edit that matched nothing. The inputs are left
     alone."""
     out = [copy.deepcopy(g) for g in graded]
     by_version = {g.version: g for g in out}
     problems = []
     moved = {}                      # {(version, row) as scanned: (version, row) now}
-    for kind in ('version', 'key', 'credit', 'override'):
+    for kind in ('written', 'version', 'key', 'credit', 'override'):
         for e in (e for e in edits if e['type'] == kind):
             if kind == 'version':
                 ok = _version(e, out, by_version)
@@ -150,7 +158,7 @@ def apply(graded: list[outputs.Graded], edits: list[dict]
             elif kind == 'override':
                 ok = _override(e, out, by_version, moved)
             else:
-                ok = {'key': _key, 'credit': _credit}[kind](e, out, by_version)
+                ok = {'written': _written, 'key': _key, 'credit': _credit}[kind](e, out, by_version)
             if not ok:
                 problems.append(f'{kind} edit {e["id"]} matched nothing: {_describe(e)}')
     return out, problems
@@ -212,21 +220,64 @@ def _version(e, out, by_version) -> bool:
     return True
 
 
+def _targets(e, out, by_version) -> list[tuple[outputs.Graded, str]]:
+    """Where an edit aimed at a question lands: every version that printed
+    its bank question, or the one version and column it names."""
+    if e.get('source'):
+        return [(g, c) for g in out for c, src in g.sources.items()
+                if src == e['source'] and c in g.df.columns]
+    g = by_version.get(e.get('version', ''))
+    return [(g, e.get('question'))] if g is not None and e.get('question') in g.df.columns else []
+
+
+def _written(e, out, by_version) -> bool:
+    answer, grade = e.get('answer', ''), e.get('grade')
+    targets = [(g, c) for g, c in _targets(e, out, by_version) if g.df.loc['0', c] == 'CC']
+    if not answer or grade not in ('full', 'partial', 'remove'):
+        return False
+    # The versions share one list on the tab, so whether the key gave this
+    # answer full credit is asked of the question, not of each version
+    was_full = any(exact_match(answer, g.open_answers.get(c, [])) for g, c in targets)
+    for g, col in targets:
+        # An answer is on one list at most: it moves if it was on the other
+        full = [a for a in g.open_answers.get(col, []) if not exact_match(a, [answer])]
+        partial = [a for a in g.open_partial.get(col, []) if not exact_match(a, [answer])]
+        g.open_answers[col], g.open_partial[col] = full, partial
+        if grade != 'remove':
+            (full if grade == 'full' else partial).append(answer)
+        students = set(g.students)
+        for row, reading in g.transcriptions.get(col, {}).items():
+            if row in students and g.asked(row, col) and exact_match(reading[0], [answer]):
+                cell = _regraded(g.df.loc[row, col], reading[0], grade, was_full)
+                if cell:
+                    g.df.loc[row, col] = cell
+                    _rescore(g, col, [row])
+    return bool(targets)
+
+
+def _regraded(cell, reading: str, grade: str, was_full: bool) -> str | None:
+    """The new cell of a student who wrote exactly a written edit's answer, or
+    None when it stays. A key error comes off everyone who wrote the answer;
+    otherwise an edit only raises a grade."""
+    now = str(cell)[:2]
+    lowered = 'XX' if grade == 'remove' else 'CX' if grade == 'partial' and was_full and now == 'CC' else None
+    if lowered:
+        return f'{lowered}: {reading}' if now != lowered else None
+    accepted = ([reading], []) if grade == 'full' else ([], [reading])
+    return grade_functions.upgraded_cell(cell, reading, *accepted)
+
+
 def _key(e, out, by_version) -> bool:
     keys = [k for k in e.get('keys', []) if k]
-    if e.get('source'):
-        # Keys in the bank's letters, put into each sheet's own
-        targets = [(g, c, [g.sheet_letters(c, k) for k in keys]) for g in out
-                   for c, src in g.sources.items() if src == e['source'] and c in g.df.columns]
-    else:
-        g, col = by_version.get(e.get('version', '')), e.get('question')
-        targets = [(g, col, keys)] if g is not None and col in g.df.columns else []
+    # By source, the keys are in the bank's letters: put them into each sheet's own
+    targets = [(g, c, [g.sheet_letters(c, k) for k in keys] if e.get('source') else keys)
+               for g, c in _targets(e, out, by_version)]
     if not keys:
         return False
     done = False
     for g, col, sheet_keys in targets:
         if g.df.loc['0', col] == 'CC':
-            continue                # written answers are re-graded on Re-grade
+            continue                # written answers have their own edit
         original = g.accepted.get(col) or [g.df.loc['0', col]]
         if not grade_functions.graded_key(original[0]):
             original = []
@@ -240,13 +291,7 @@ def _key(e, out, by_version) -> bool:
 
 
 def _credit(e, out, by_version) -> bool:
-    if e.get('source'):
-        targets = [(g, c) for g in out for c, src in g.sources.items()
-                   if src == e['source'] and c in g.df.columns]
-    else:
-        g = by_version.get(e.get('version', ''))
-        targets = [(g, e.get('question'))] if g is not None and e.get('question') in g.df.columns else []
-    targets = [(g, c) for g, c in targets if c in g.possible]
+    targets = [(g, c) for g, c in _targets(e, out, by_version) if c in g.possible]
     action = e.get('action')
     for g, col in targets:
         if action == 'full':

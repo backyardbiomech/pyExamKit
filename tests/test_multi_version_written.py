@@ -1,7 +1,6 @@
 '''
 A stack scanned against several versions' keys grades the written answers
-too, each version against its own key, and Re-grade scores them with the
-key's points.
+too, each version against its own key.
 
 The on-screen grader is interactive, so it is replaced by a stand-in that
 marks every written answer correct; what is tested is everything around it.
@@ -230,12 +229,6 @@ class TestMultiVersionWritten(unittest.TestCase):
             # and every student chose the key, in the bank's letters
             if not it.written:
                 self.assertEqual({a for *_, a in it.responses}, {it.key}, it.label)
-
-    def test_regrade_config_carries_the_key_points(self):
-        cfg = json.loads((self.results / 'app_data' /
-                          'results_versionA_openq_gradeconfig.json').read_text())
-        self.assertEqual(cfg['point_values'],
-                         keyformat.load_key_file(self.keys['A'])['point_values'])
 
 
 if __name__ == '__main__':

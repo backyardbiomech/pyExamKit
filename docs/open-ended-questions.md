@@ -34,7 +34,7 @@ Cropped answer images and an anonymized index — a row number, not a name — a
 
 The window takes one question at a time and goes through every student who answered it, then moves to the next question. The top line names the question (with its text, for a lab practical) and how far through it you are, and the line below names the student: the roster name, and a picture of the name they wrote, so a student with a spelling accommodation is recognized before you grade.
 
-Below that, **what the student wrote** is on the left and **what the key accepts** is on the right, each shown once. The student's answer is the picture from their sheet, outlined in blue; the AI's reading of it is the small gray line underneath, since it is an interpretation of the handwriting rather than part of the answer. The key box lists the full-credit answers and then the partial-credit ones. On an exam graded without a key file, the key sheet's own crop sits at the top of the key box.
+Below that, **what the student wrote** is on the left and **what the key accepts** is on the right, each shown once. The student's answer is the picture from their sheet, outlined in blue; the AI's reading of it is in the field underneath, since it is an interpretation of the handwriting rather than part of the answer. The key box lists the full-credit answers and then the partial-credit ones. On an exam graded without a key file, the key sheet's own crop sits at the top of the key box.
 
 At the bottom are the grade buttons. The suggested grade is the button with a colored ring (green for correct, amber for partial, red for wrong), and the sentence under the buttons says why: which key answer the reading matched, or came closest to, and how alike they are. An empty box is suggested as wrong, so Enter moves past it. When the box has writing but no reading came back (AI transcription off, or handwriting it could not read), nothing is suggested and Enter does nothing: grade it with `c`, `p`, or `x`, so an unread answer is never marked wrong by reflex. Color in the window means only the suggestion.
 
@@ -44,9 +44,12 @@ At the bottom are the grade buttons. The suggested grade is the button with a co
 | `p` | Partial — half the question's points |
 | `x` | Wrong — no points |
 | `b` | Back one student |
+| `e` | Correct the reading |
 | `Enter` | Accept the suggested grade |
 
-**Back** (`b`) returns to the last answer you reviewed, to fix a grade given in error. Answers accepted without review (exact matches to a key answer) are skipped over, since you never saw them, and so is the boundary between questions: Back from the first student of 2A reaches the last answer you graded on 1D. The answer comes back into view even if a key answer you have added since would now accept it on sight. After you re-grade it, grading moves forward again to where you were, re-showing any other answers you had reviewed in between. Back reaches as far as the start of this sitting; after resuming an interrupted session, answers graded before the interruption are corrected on the Re-grade tab instead.
+**Correcting a reading.** When the AI misread the handwriting ("acetulcholine" for "acetylcholine"), press `e` or click the reading, fix it, and press Enter; `Esc` puts it back. The suggestion updates at once, and the next Enter accepts it. The corrected reading replaces the AI's everywhere after that: on **Back**, after resuming, when you add an answer to the key later in the session, and on the [Results](results.md#the-views) tab's Written view. Your correction is what gets matched against the key, so type what the student actually wrote, misspelling and all.
+
+**Back** (`b`) returns to the last answer you reviewed, to fix a grade given in error. Answers accepted without review (exact matches to a key answer) are skipped over, since you never saw them, and so is the boundary between questions: Back from the first student of 2A reaches the last answer you graded on 1D. The answer comes back into view even if a key answer you have added since would now accept it on sight. After you re-grade it, grading moves forward again to where you were, re-showing any other answers you had reviewed in between. Back reaches as far as the start of this sitting; after resuming an interrupted session, answers graded before the interruption are corrected on the [Results](results.md#correcting-the-grades) tab instead.
 
 **Changing the key while grading.** The key sits under the student's answer so the two can be compared top to bottom. Beside them, **Add to key as full credit** and **Add to key as partial credit** take what the student wrote, let you edit it, and add it to the key. The field at the bottom of the key box adds an answer of your own, as full or partial credit. Either way, **every student already graded on that question is re-checked against the new answer and upgraded where it now matches**, and the window reports how many changed. An upgrade takes an exact match to a key answer; a near miss keeps the grade you gave it. This is what makes it safe to start grading before you have thought of every acceptable phrasing: the twentieth student's unexpectedly reasonable answer fixes the first nineteen. Double-click a key answer to correct it (a misread key sheet, say), which re-checks the same way; select one and press **Remove selected** to take it out, which never lowers a grade already given. When you are grading against a key file, every change is written back to that file as you go, so next year's key starts where this year's ended.
 
@@ -72,13 +75,13 @@ Basically, no points are lost unless you confirm it, and points are gained witho
 
 Grading progress — transcriptions, grades so far, and your position in the stack — is written to `app_data/` beside the results after every answer. If the app is closed or crashes partway through, the next run on the same scans offers to resume where you stopped. It reuses the transcriptions already made, so resuming does not pay for the same API calls twice.
 
-## Re-grading afterward
+## Changing the key afterward
 
-The **Re-grade** tab reopens a finished scan and lets you edit the acceptable-answer lists for open-ended questions, then re-runs the grading against the transcriptions saved during the original scan. Nothing is rescanned and no API calls are made.
+The **Written** view of the [Results](results.md#the-views) tab reopens a finished scan's written questions. Add an answer there and every student whose saved transcription is exactly that answer (capitals and spacing aside) is upgraded, on every version that printed the question. Nothing is rescanned and no API calls are made.
 
-Re-grading **only upgrades** — wrong to partial, wrong to correct, partial to correct. It never takes points away, and it raises a grade only where the answer is one of the key's answers exactly. That makes it the right tool for a key that turned out to be too strict, which is the mistake that actually happens, and it means a student cannot lose points because you edited a key after handing work back. To lower a grade, change the points cell in `gradebook.xlsx` and the score in Canvas.
+Adding an answer **only upgrades**, which makes it the right tool for a key that turned out to be too strict, the mistake that actually happens. Removing an answer that came with the key treats it as a key error: everyone whose reading is exactly that answer loses the credit. Each change is an edit on the Results tab, so deleting it reverses it. To lower one student's grade, set their points on the Students view.
 
-Point the tab at the scan's `ExamScanner_outputs` folder, click **Open Re-grader** (and name the version, when the stack had several), edit the answers, and it reports how many grades changed. Scores are recalculated with the per-question points from the key the scan used, and `gradebook.xlsx` and `canvas_upload.csv` are rewritten. A folder from before results files moved into `app_data/` still works.
+The gradebook and Canvas file take the change at the next **Export**, like any other edit.
 
 ---
 

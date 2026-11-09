@@ -12,7 +12,7 @@ Planned 2026-10-29. Phases 1 (foundations), 2 (the read-only tab) and 3 (editing
 ## Decisions (Brandon, 2026-10-29)
 
 - **The app is the source of truth, and Excel is downstream.** The app writes `gradebook.xlsx` and `canvas_upload.csv`, overwriting both, and never reads them back. An instructor who edits the gradebook by hand has chosen to finish in Excel and won't reload into the app.
-- **Results is a new tab, separate from Re-grade.** Re-grade edits the acceptable answers for written questions; Results covers everything after grading: stats, key fixes, credit, adjustments, export. Results can offer a button that opens the Re-grader for a folder with written answers, and reloads once it closes.
+- **Results is a new tab, separate from Re-grade** (since merged: `written-answers-in-results.md`). Re-grade edits the acceptable answers for written questions; Results covers everything after grading: stats, key fixes, credit, adjustments, export. Results can offer a button that opens the Re-grader for a folder with written answers, and reloads once it closes.
 - **A scan opens Results automatically** on its own outputs folder when it finishes.
 - **`canvas_upload.csv` carries the final scores**, every edit included, so it uploads as is. The workbook's Canvas scores tab stays as the route for anyone adjusting in Excel afterward.
 

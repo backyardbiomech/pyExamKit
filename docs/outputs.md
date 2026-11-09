@@ -14,7 +14,7 @@ A scan into a folder that already holds an earlier run's outputs replaces these 
 
 ## The results
 
-Both files are written by the app: by the scan, by the Re-grade tab, and by **Export** on the [Results](results.md) tab, which is where keys are fixed, questions credited or dropped, points added, and single scores corrected before the files go to Canvas. Each time, both are overwritten with the scan's results and every change made on the Results tab. The app never reads them back, so a change typed into the gradebook is lost at the next export; once you adjust in Excel, finish there.
+Both files are written by the app: by the scan and by **Export** on the [Results](results.md) tab, which is where keys are fixed, questions credited or dropped, points added, and single scores corrected before the files go to Canvas. Each time, both are overwritten with the scan's results and every change made on the Results tab. The app never reads them back, so a change typed into the gradebook is lost at the next export; once you adjust in Excel, finish there.
 
 **`gradebook.xlsx`** is the working copy of the grades. Each question gets an answer column and a points column, the key is on a highlighted row at the top with each question's points beside it, and **each student's total is a live `SUM` formula**, so changing a points cell after a regrade discussion updates the total immediately. The key row shows the acceptable answers for written questions, pipe-separated. Students are listed in the order they were scanned. Where the students are not all out of the same total, a **Possible** column after **Adjusted** gives each one the points on their own sheet, and the figures on Exam stats use it. With a key made by Build Exam, a **Question** row under the headers gives each question's text, with the part a row grades (a dropdown, an ordering position, a matching item) in brackets after it.
 
@@ -65,7 +65,7 @@ A lab practical's outputs differ a little: a `form` column, blanks for questions
 
 ## app_data/
 
-**`results.csv`** (or `results_versionA.csv` and so on, one per version) holds the answers as read and graded, one row per student with the key first; `results_points.csv` beside it holds the points each student earned on each question, and `results_grading.json` what each question is worth. These are what `gradebook.xlsx` and `canvas_upload.csv` are built from, and what the Re-grade tab updates. `outputs.json` lists which results files the last scan produced. These files are never changed after grading, except by the Re-grade tab.
+**`results.csv`** (or `results_versionA.csv` and so on, one per version) holds the answers as read and graded, one row per student with the key first; `results_points.csv` beside it holds the points each student earned on each question, and `results_grading.json` what each question is worth. These are what `gradebook.xlsx` and `canvas_upload.csv` are built from, and what the Results tab starts from. `outputs.json` lists which results files the last scan produced. These files are never changed after grading.
 
 **`edits.json`** holds every change made on the [Results](results.md) tab, each with its note, and records which of them the gradebook and Canvas file were last exported with. Deleting it undoes every change at the next export. A new scan into the folder renames it `edits_replaced_<time>.json`, since its changes were made to different sheets.
 
@@ -73,9 +73,9 @@ A lab practical's outputs differ a little: a `form` column, blanks for questions
 
 **`scanJPGs/`** holds the page images extracted from a scanned PDF. The app converts a PDF to images and works on those.
 
-**`results_openq_transcriptions.json`** holds every handwriting transcription, and **`results_openq_answers.json`** holds the acceptable-answer lists as they stood at the end of grading. Together they are what makes the [Re-grade](open-ended-questions.md#re-grading-afterward) tab possible without rescanning. **`results_openq_gradeconfig.json`** records the grading settings that run used, and a `results_openq_progress.json` appears mid-run so an interrupted session can be resumed; it is removed when grading finishes.
+**`results_openq_transcriptions.json`** holds every handwriting transcription, and **`results_openq_answers.json`** holds the acceptable-answer lists as they stood at the end of grading. Together they are what lets the [Written](results.md#the-views) view of the Results tab accept an answer without rescanning. **`results_openq_gradeconfig.json`** records the grading settings that run used, and a `results_openq_progress.json` appears mid-run so an interrupted session can be resumed; it is removed when grading finishes.
 
-Delete `app_data/` and the gradebook and Canvas file stay valid, but the Results tab can no longer open the folder, and re-grading written answers and fast re-reads at a new fill cutoff are no longer possible.
+Delete `app_data/` and the gradebook and Canvas file stay valid, but the Results tab can no longer open the folder, and accepting written answers later and fast re-reads at a new fill cutoff are no longer possible.
 
 ---
 

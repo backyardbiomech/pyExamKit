@@ -20,7 +20,7 @@ The app opens to one window with six tabs, sharing a single log at the bottom. E
 
 **Results** opens a finished scan so its grades can be checked and corrected before they go to Canvas: the class's statistics, an item analysis of every question, and each student's answers. From there you can fix a key, credit or drop a question, add points, and export the gradebook and Canvas file again.
 
-**Re-grade** re-runs the open-ended grading against transcriptions already on disk, so a key that turns out to have been too strict can be loosened without rescanning anything.
+**Results** is where a scan's grades are checked and corrected before they go to Canvas. A written answer that should have counted can be accepted there, against the transcriptions already on disk, without rescanning anything.
 
 **Standard Sheet** prints a blank answer sheet for an exam made elsewhere, and produces that same key CSV from a scanned answer sheet, either by reading the bubbles you filled in by hand or by letting you mark where the handwritten answers sit on the page.
 
@@ -46,7 +46,7 @@ flowchart TD
     B --> scan
     K --> scan
     F --> scan
-    scan -. key too strict<br/>on written answers .-> R[Re-grade tab]
+    scan --> R[Results tab:<br/>check, correct, export]
 ```
 
 **A lab practical.** Write the practical as one source file ([Lab practicals](docs/lab-practicals.md)) and build it on the **Build Practical** tab, which writes the form sheets, placards, setup guide, and instructor key. On **Scan Exams**, choose the source file itself as the key. A practical graded before, with a key CSV for each form, can be converted to a source file with the tool that guide describes.
@@ -57,7 +57,7 @@ flowchart TD
 
 **An exam made somewhere else**, when you only need the grading. Print a blank sheet from **Make Answer Sheet…** on the **Standard Sheet** tab ([Answer sheets](docs/answer-sheets.md)). If you will grade the exam again, fill in a sheet as the key, scan it, and turn it into a key file with **Build Key from Exam Scan…** on the same tab ([Building a key](docs/building-keys.md)). For a one-time grading, skip the key file: put your filled-in key sheet first in the stack and scan without one.
 
-**After grading**, if the key turns out to have been too strict on written answers, the **Re-grade** tab loosens it and re-grades without rescanning ([Open-ended questions](docs/open-ended-questions.md#re-grading-afterward)).
+**After grading**, the scan opens on the **Results** tab. If the key turns out to have been too strict on written answers, its **Written** view loosens it and upgrades the students it should have credited, without rescanning ([Open-ended questions](docs/open-ended-questions.md#changing-the-key-afterward)).
 
 ## Documentation
 
@@ -69,7 +69,7 @@ flowchart TD
 6. [Building a key](docs/building-keys.md) — the Standard Sheet tab, plus the key CSV format
 7. [Scanning and grading](docs/scanning-and-grading.md) — the Scan Exams tab and how each score is calculated
 8. [Class rosters](docs/roster.md) — putting names on results by ID, from a Canvas export or your own spreadsheet
-9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and re-grading
+9. [Open-ended questions](docs/open-ended-questions.md) — handwriting transcription, on-screen grading, and changing the key afterward
 10. [Outputs](docs/outputs.md) — every file the app writes and what to do with it
 11. [The Results tab](docs/results.md) — statistics, item analysis, fixing a key, crediting or dropping a question, adding points, and exporting to Canvas
 12. [Lab practicals](docs/lab-practicals.md) — writing a practical's source file, building its sheets and placards, and grading every form in one stack

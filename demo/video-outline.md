@@ -10,10 +10,24 @@ Ten clips, about 50 minutes in all. Each stands alone, so a colleague can watch 
 | 3 | Build a bubble exam | 6 min | `1_bubble_build/` |
 | 4 | Grade a bubble exam | 7 min | `2_bubble_grade/` |
 | 5 | Fix and export grades (Results tab) | 7 min | continues clip 4 |
-| 6 | Written answers, on screen and with Re-grade | 7 min | `3_written/` |
+| 6 | Written answers, on screen and on Results | 7 min | `3_written/` |
 | 7 | Build a lab practical | 4 min | `4_practical/` |
 | 8 | Grade a lab practical | 6 min | `4_practical/` |
 | 9 | An exam made somewhere else (Standard Sheet) | 4 min | `5_standard_sheet/` |
+
+## To re-record
+
+The Re-grade tab is now the Written view of the Results tab, and the grading window's reading can be corrected. v3.8.5 has neither, so film these from source (`uv run python pyExamKit.py`) until the next release is out. The outline below already describes the new behavior.
+
+| Clip | Status | Part | Why |
+|---|---|---|---|
+| 6 Written answers | **Re-record** | From the grading window to the end. The bank, answer sheet, Scan tab setup and "what leaves the computer" can stay. | The reading under the handwriting is now an editable field, correcting it is new, and the closing segment is on a tab that no longer exists. |
+| 0 What it does and where to start | **Re-record** | The tour of the tabs and the "Where to start" chart. | There are five tabs, not six, and the chart now ends at Results instead of a dotted line to Re-grade. |
+| 8 Grade a lab practical | **Re-record** | The grading window and the answer written back to the source file. The key's summary line, `ALERT.txt`, the marked sheets and the results can stay. | It uses the same grading window, so the reading is an editable field here too, and correcting a reading is new. |
+| 1, 2, 3, 4, 5, 7 | Keep | Nothing, unless you named Re-grade aloud. | Only the tab bar differs, where a Re-grade tab still shows. Clip 5 also has a grayed **Written answers…** button on Questions, and nothing it demonstrates has changed. |
+| 9 Standard Sheet | Keep | Nothing. | Not affected. No video for it is linked in the docs yet. |
+
+After re-recording, replace the Loom links and their thumbnails: clip 6 at the top of `docs/open-ended-questions.md`, where the caption "Written answers, on screen and with Re-grade" also has to change; clip 8 under "Video: Grade a lab practical" in `docs/lab-practicals.md`; and clip 0 under "Video: Getting started" in `README.md`.
 
 ## Before filming
 
@@ -34,9 +48,9 @@ The questions were written for the demo and are not source-checked. They are fin
 **Have open:** [README, Where to start](https://github.com/backyardbiomech/pyExamKit#where-to-start)
 
 - One app replaces the Scantron workflow: build, print, scan, grade, Canvas
-- Tour the six tabs in one pass, without clicking into any
+- Tour the five tabs in one pass, without clicking into any
 - "Where to start" chart from the README: practical, question bank, Canvas quiz, or exam made elsewhere
-- Every path ends at Scan Exams
+- Every path goes through Scan Exams and ends at Results
 - Point at the Help button: each tab opens its own guide page
 
 ## Clip 1: Download, install, first-time setup
@@ -124,9 +138,9 @@ Continues from clip 4's scan. Open the Results tab on `2_bubble_grade/scans/Exam
 - `canvas_upload.csv` is the file to import to Canvas; name it and move on, no import demo
 - Marked sheets are not redrawn after a key change
 
-## Clip 6: Written answers, on screen and with Re-grade
+## Clip 6: Written answers, on screen and on Results
 
-**Have open:** [Open-ended questions](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/open-ended-questions.md) · [Written answers on the sheet](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/answer-sheets.md#written-answers-on-the-sheet) · [Re-grading afterward](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/open-ended-questions.md#re-grading-afterward)
+**Have open:** [Open-ended questions](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/open-ended-questions.md) · [Written answers on the sheet](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/answer-sheets.md#written-answers-on-the-sheet) · [Changing the key afterward](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/open-ended-questions.md#changing-the-key-afterward)
 
 Key: `3_written/Quiz_2/Quiz_2_vA_key.csv`. Scans: `3_written/scans/Quiz_2_scans.pdf`, 14 students. Roster: `class_roster.csv`. A 12-question quiz: 8 bubbled at 1 point each and 4 written at 2.
 
@@ -136,10 +150,12 @@ Key: `3_written/Quiz_2/Quiz_2_vA_key.csv`. Scans: `3_written/scans/Quiz_2_scans.
 - What leaves the computer: crops of the writing and an anonymous index
 - The grading window, about 18 answers once exact matches are skipped:
     - Left the student's writing, right the key; suggested grade is the colored ring; `c`, `p`, `x`, `b`, Enter
+    - A misread answer: the AI's reading is in a field under the handwriting; press `e`, fix it to what the student wrote, Enter; the suggestion updates. Readings vary by take ("acetylcholine" came back as "acetulcholine" in the first filming), so use whichever misreading turns up
     - Question 11: several students wrote "ACh". **Add to key as full credit**, and earlier students are re-checked and upgraded
     - Question 9: three students wrote "stratum germinativum", which is not in the key. Mark them wrong for now
 - Interruptions: closing mid-way offers to resume
-- **Re-grade** tab on `3_written/scans/ExamScanner_outputs/`: add "stratum germinativum" as full credit; those three are upgraded; nothing rescanned, nothing billed; only ever upgrades
+- **Results** tab, **Written** view: on question 9, click a reading of "stratum germinativum" and **Add full**; those three are upgraded on every version; nothing rescanned, nothing billed; delete the edit to take it back
+- **Remove** on an answer that came with the key: a key error, so everyone who wrote exactly that answer loses the credit; delete the edit to bring it back
 
 ## Clip 7: Build a lab practical
 
@@ -165,7 +181,9 @@ Key: `4_practical/Demo_Practical.md` (the source file itself). Scans: `4_practic
 - Each student is two pages, front and back; the scanner groups them by what is printed on each page, so each student's page 1 has to stay ahead of their page 2
 - Grading window goes by station and letter, about 85 answers with AI on and exact matches skipped (cut the middle)
 - The name crop beside each answer
+- A misread answer: press `e`, fix the reading to what the student wrote, Enter; the suggestion updates
 - Add an answer in the window; open `Demo_Practical.md` to show it written back as a new `=` line
+- An answer accepted later on the **Written** view of Results is written back the same way (mention, no need to film)
 - `ALERT.txt`: scan 2 (Linden) light pencil, scan 5 (Birch) one digit off the roster
 - Marked sheet: form and score on page 1, each box's points beside it. Spruce has a crossed-out answer, and Cedar's box 3C shows writing that runs past the box
 - Results: a `form` column; blank, not zero, for questions not on a form; points possible is one form's

@@ -1041,13 +1041,21 @@ class OpenQs(object):
         s_lbl = tk.Label(crop_frame, image=s_img, bd=0)
         s_lbl.pack()
         s_lbl.tk_img = s_img
+        # The reading is editable: it is what every later re-check of this
+        # answer goes by, so a misread word is fixed here, against the picture
+        read_row = tk.Frame(left)
+        read_row.pack(anchor='w', fill='x', pady=(3, 0))
         if student_text:
-            reading = f'{ocr_source} reading:  {student_text}'
+            reading = f'{ocr_source} reading (E to correct):'
         elif blank:
-            reading = 'Blank box'
+            reading = 'Blank box (E to type a reading):'
         else:
-            reading = 'No reading of the handwriting'
-        small(left, reading, fg=FAINT).pack(anchor='w', pady=(3, 0))
+            reading = 'No reading of the handwriting (E to type one):'
+        reading_lbl = small(read_row, reading, fg=FAINT)
+        reading_lbl.pack(side='left')
+        reading_var = tk.StringVar(win, value=student_text or '')
+        reading_entry = tk.Entry(read_row, textvariable=reading_var, font=('Arial', 12))
+        reading_entry.pack(side='left', fill='x', expand=True, padx=(6, 0))
 
         # ── Below it: what the key accepts, so the two read top to bottom ──
         small(left, 'Key accepts').pack(anchor='w', pady=(10, 0))
@@ -1116,7 +1124,29 @@ class OpenQs(object):
             changed(f'Added “{text}” as {where}.'
                     + (f' {n} earlier student{"s" if n != 1 else ""} upgraded.' if n else ''))
 
+        def commit_reading(_e=None):
+            nonlocal student_text, ocr_conf, blank
+            new = reading_var.get().strip()
+            if new == (student_text or '') or not win.winfo_exists():
+                return
+            student_text, ocr_conf = new, 0.90
+            blank = not new and looks_blank(student_crop)
+            self._correct_reading(k, img_idx, new)
+            reading_lbl.configure(text='Corrected reading:')
+            update_suggestion()
+            status_var.set('Reading corrected.')
+
+        def revert_reading(_e=None):
+            reading_var.set(student_text or '')
+            win.focus_set()
+            return 'break'
+
+        reading_entry.bind('<Return>', commit_reading)
+        reading_entry.bind('<FocusOut>', commit_reading)
+        reading_entry.bind('<Escape>', revert_reading)
+
         def add_student(kind):
+            commit_reading()
             edited = tkinter.simpledialog.askstring(
                 'Add to key', 'Add this to the key as '
                 + ('full credit' if kind == 'CC' else 'partial credit') + ':',
@@ -1208,6 +1238,7 @@ class OpenQs(object):
                 fg=GRADE_STYLE[sug][0] if sug in GRADE_STYLE else MUTED)
 
         def set_grade(g):
+            commit_reading()    # a button click does not take focus from the field on macOS
             result['grade'] = g
             # Capture position before destroying — picks up any move the user made.
             self._grading_win_geometry = f'+{win.winfo_x()}+{win.winfo_y()}'
@@ -1222,6 +1253,13 @@ class OpenQs(object):
                     set_grade(g)
             win.bind(key_char, handler)
             win.bind(key_char.upper(), handler)
+
+        def edit_reading(_e):
+            if not typing():
+                reading_entry.focus_set()
+                reading_entry.select_range(0, tk.END)
+        win.bind('e', edit_reading)
+        win.bind('E', edit_reading)
 
         def on_return(e):
             if typing():
@@ -1269,6 +1307,15 @@ class OpenQs(object):
             print(f'[OpenQ] Key file updated \u2192 {self._key_file_path}', flush=True)
         except Exception as _kexc:
             print(f'[OpenQ] Could not update key file: {_kexc}', flush=True)
+
+    def _correct_reading(self, qk: str, img_idx: int | None, text: str) -> None:
+        """Replace an answer's reading with what the grader says it is. Also
+        where the window reads it from, so Back and a resumed session show the
+        correction instead of the machine's reading."""
+        if img_idx is None:
+            return
+        self._ai_texts.setdefault(qk, {})[img_idx] = text
+        self._transcriptions.setdefault(qk, {})[img_idx] = (text, 0.90)
 
     def _add_acceptable_and_regrade(self, qk: str, new_text: str,
                                      current_idx: int, grade: str = 'CC') -> int:
@@ -1358,311 +1405,6 @@ class OpenQs(object):
             self._write_answers_to_key_file()
         except Exception as exc:
             print(f'[OpenQ] save_artifacts failed: {exc}', flush=True)
-
-
-class RegradeDialog:
-    """
-    Post-session re-grader dialog.
-    Loads {stem}_openq_answers.json and {stem}_openq_transcriptions.json,
-    lets the user edit acceptable answers, then calls regrade_open_questions()
-    and gradeResults() when the user clicks Apply.
-    """
-
-    def __init__(self, parent, csv_path: str, on_complete=None):
-        self._parent = parent
-        self._csv_path = csv_path
-        self._on_complete = on_complete
-
-        # Prefer the app_data/ layout; fall back to the oldest layout, with
-        # the answers beside results.csv
-        app_data_dir = outputs.artifact_dir(csv_path)
-        new_stem = str(app_data_dir / Path(csv_path).stem)
-        old_stem = str(Path(csv_path).with_suffix(''))
-        if Path(new_stem + '_openq_answers.json').exists():
-            stem = new_stem
-        else:
-            stem = old_stem
-        self._artifact_stem = stem
-
-        answers_path = stem + '_openq_answers.json'
-        trans_path   = stem + '_openq_transcriptions.json'
-
-        if not Path(answers_path).exists():
-            import tkinter.messagebox as mb
-            mb.showerror('Re-grader',
-                         f'Cannot find:\n{answers_path}\n\n'
-                         'Run a scan with open-ended questions first.',
-                         parent=self._parent)
-            return
-
-        raw_answers = json.loads(Path(answers_path).read_text(encoding='utf-8'))
-        self._acceptable_answers = {}
-        self._partial_credit_answers = {}
-        for qk, val in raw_answers.items():
-            if isinstance(val, dict):
-                # New format: {"full": [...], "partial": [...]}
-                self._acceptable_answers[qk] = val.get('full', [])
-                self._partial_credit_answers[qk] = val.get('partial', [])
-            elif isinstance(val, list):
-                # Old format: all full credit
-                self._acceptable_answers[qk] = val
-        self._transcriptions = (
-            json.loads(Path(trans_path).read_text(encoding='utf-8'))
-            if Path(trans_path).exists() else {})
-
-        self._build_ui()
-
-    def _build_ui(self):
-        win = tk.Toplevel(self._parent)
-        win.title('Re-grade Open Questions')
-        win.resizable(True, True)
-        win.grab_set()
-        self._win = win
-
-        _F  = ('Arial', 12)
-        _FB = ('Arial', 12, 'bold')
-        _FM = ('Arial', 13, 'bold')
-        _FC = ('Courier', 11)
-
-        # ── Left panel: question list ─────────────────────────────────────
-        left = tk.Frame(win)
-        left.pack(side='left', fill='y', padx=8, pady=8)
-        tk.Label(left, text='Questions:', font=_FM).pack(anchor='w')
-        q_listbox = tk.Listbox(left, width=18, font=_F,
-                               exportselection=False)
-        q_listbox.pack(fill='both', expand=True)
-        for qk in sorted(set(list(self._acceptable_answers.keys()) +
-                              list(self._partial_credit_answers.keys())),
-                         key=_openq_sort_key):
-            q_listbox.insert(tk.END, qk)
-
-        # ── Right panel: editor + transcriptions ──────────────────────────
-        right = tk.Frame(win)
-        right.pack(side='left', fill='both', expand=True, padx=8, pady=8)
-
-        tk.Label(right, text='Acceptable answers for selected question:',
-                 font=_FM).pack(anchor='w')
-        aa_listbox = tk.Listbox(right, height=8, font=_F,
-                                exportselection=False)
-        aa_listbox.pack(fill='x', pady=(2, 4))
-
-        entry_frame = tk.Frame(right)
-        entry_frame.pack(fill='x', pady=2)
-        tk.Label(entry_frame, text='New answer:', font=_F).pack(side='left')
-        new_ans_var = tk.StringVar()
-        new_ans_entry = tk.Entry(entry_frame, textvariable=new_ans_var,
-                                 width=30, font=_F)
-        new_ans_entry.pack(side='left', padx=6)
-
-        btn_row = tk.Frame(right)
-        btn_row.pack(fill='x', pady=2)
-        current_q = {'k': None}
-
-        def _refresh_aa():
-            aa_listbox.delete(0, tk.END)
-            k = current_q['k']
-            if not k:
-                return
-            for i, ans in enumerate(self._acceptable_answers.get(k, [])):
-                prefix = '(primary) ' if i == 0 else ''
-                aa_listbox.insert(tk.END, prefix + ans)
-
-        def _on_q_select(event):
-            sel = q_listbox.curselection()
-            if not sel:
-                return
-            current_q['k'] = q_listbox.get(sel[0])
-            _refresh_aa()
-            _refresh_pa()
-            trans_text.configure(state='normal')
-            trans_text.delete('1.0', 'end')
-            k = current_q['k']
-            q_trans = self._transcriptions.get(k, {})
-            if q_trans:
-                for idx_str in sorted(q_trans.keys(), key=lambda x: int(x)):
-                    text, conf = q_trans[idx_str][0], q_trans[idx_str][1]
-                    trans_text.insert(
-                        'end',
-                        f'  Student {idx_str}: "{text}"  (conf={conf:.2f})\n')
-            else:
-                trans_text.insert('end', '  (no transcriptions available)\n')
-            trans_text.configure(state='disabled')
-
-        q_listbox.bind('<<ListboxSelect>>', _on_q_select)
-
-        def _add_answer():
-            k = current_q['k']
-            if not k:
-                return
-            new = new_ans_var.get().strip()
-            if not new:
-                return
-            existing_lower = [a.lower() for a in
-                              self._acceptable_answers.get(k, [])]
-            if new.lower() not in existing_lower:
-                self._acceptable_answers.setdefault(k, []).append(new)
-                _refresh_aa()
-            new_ans_var.set('')
-
-        def _remove_answer():
-            k = current_q['k']
-            if not k:
-                return
-            sel = aa_listbox.curselection()
-            if not sel:
-                return
-            del self._acceptable_answers[k][sel[0]]
-            _refresh_aa()
-
-        new_ans_entry.bind('<Return>', lambda e: _add_answer())
-        tk.Button(btn_row, text='Add', command=_add_answer,
-                  bg='#90EE90', font=_F).pack(side='left', padx=(0, 4))
-        tk.Button(btn_row, text='Remove selected',
-                  command=_remove_answer, font=_F).pack(side='left', padx=(0, 4))
-
-        # ── Partial credit answers ────────────────────────────────────────────────
-        tk.Label(right, text='Partial credit answers (auto-graded CX):',
-                 font=_FB).pack(anchor='w', pady=(6, 0))
-        pa_listbox = tk.Listbox(right, height=4, font=_F, exportselection=False)
-        pa_listbox.pack(fill='x', pady=(2, 4))
-
-        pa_entry_frame = tk.Frame(right)
-        pa_entry_frame.pack(fill='x', pady=2)
-        tk.Label(pa_entry_frame, text='New partial:', font=_F).pack(side='left')
-        new_partial_var = tk.StringVar()
-        new_partial_entry = tk.Entry(pa_entry_frame, textvariable=new_partial_var,
-                                     width=30, font=_F)
-        new_partial_entry.pack(side='left', padx=6)
-
-        pa_btn_row = tk.Frame(right)
-        pa_btn_row.pack(fill='x', pady=2)
-
-        def _refresh_pa():
-            pa_listbox.delete(0, tk.END)
-            k = current_q['k']
-            if not k:
-                return
-            for ans in self._partial_credit_answers.get(k, []):
-                pa_listbox.insert(tk.END, ans)
-
-        def _add_partial():
-            k = current_q['k']
-            if not k:
-                return
-            new = new_partial_var.get().strip()
-            if not new:
-                return
-            existing_lower = [a.lower() for a in
-                              self._partial_credit_answers.get(k, [])]
-            if new.lower() not in existing_lower:
-                self._partial_credit_answers.setdefault(k, []).append(new)
-                _refresh_pa()
-            new_partial_var.set('')
-
-        def _remove_partial():
-            k = current_q['k']
-            if not k:
-                return
-            sel = pa_listbox.curselection()
-            if not sel:
-                return
-            del self._partial_credit_answers[k][sel[0]]
-            _refresh_pa()
-
-        new_partial_entry.bind('<Return>', lambda e: _add_partial())
-        tk.Button(pa_btn_row, text='Add partial', command=_add_partial,
-                  bg='#FFD700', font=_F).pack(side='left', padx=(0, 4))
-        tk.Button(pa_btn_row, text='Remove selected',
-                  command=_remove_partial, font=_F).pack(side='left', padx=(0, 4))
-
-        tk.Label(right, text='Student transcriptions (read-only):',
-                 font=_FB).pack(anchor='w', pady=(6, 0))
-        trans_text = tk.Text(right, height=6, state='disabled', font=_FC)
-        trans_text.pack(fill='x')
-
-        # ── Bottom buttons ────────────────────────────────────────────────
-        btn_bottom = tk.Frame(win)
-        btn_bottom.pack(fill='x', padx=8, pady=8, side='bottom')
-        status_var = tk.StringVar(value='')
-        tk.Label(btn_bottom, textvariable=status_var,
-                 font=_F, fg='#16a34a').pack(side='left')
-
-        def _apply():
-            import grade_functions
-            stem = self._artifact_stem
-            try:
-                # Save updated answers JSON (merged format)
-                merged = {}
-                for qk in set(list(self._acceptable_answers.keys()) +
-                              list(self._partial_credit_answers.keys())):
-                    merged[qk] = {
-                        'full': self._acceptable_answers.get(qk, []),
-                        'partial': self._partial_credit_answers.get(qk, []),
-                    }
-                Path(stem + '_openq_answers.json').write_text(
-                    json.dumps(merged, indent=2), encoding='utf-8')
-                # Re-grade CSV
-                n = grade_functions.regrade_open_questions(
-                    self._csv_path, self._acceptable_answers, self._transcriptions,
-                    partial_answers=self._partial_credit_answers)
-            except Exception as exc:
-                status_var.set(f'Error: {exc}')
-                return
-            # Recalculate scores using saved grade config if available
-            try:
-                config_path = Path(stem + '_openq_gradeconfig.json')
-                if config_path.exists():
-                    cfg = json.loads(config_path.read_text(encoding='utf-8'))
-                    bubble_val = float(cfg.get('bubbleVal', 1))
-                    open_val   = float(cfg.get('openVal', 2))
-                    select_all = bool(cfg.get('selectAll', False))
-                    # The key's own points, when the scan had them; older
-                    # configs fall back to the defaults above
-                    point_values = cfg.get('point_values') or None
-                else:
-                    bubble_val, open_val, select_all = 1.0, 2.0, False
-                    point_values = None
-                df_check = pd.read_csv(self._csv_path)
-                has_open = any(c.startswith('openQ_') for c in df_check.columns)
-                grade_functions.gradeResults(
-                    self._csv_path,
-                    selectAll=select_all,
-                    openQ=has_open,
-                    bubbleVal=bubble_val,
-                    openVal=open_val,
-                    markeddir=outputs.outdir_of(self._csv_path) / 'marked',
-                    point_values=point_values,
-                )
-                outdir = outputs.outdir_of(self._csv_path)
-                if Path(self._csv_path).parent.name == outputs.APP_DATA:
-                    outputs.write(outdir)
-                else:   # a run from before results files moved into app_data/
-                    outputs.write(outdir, csvs=[self._csv_path])
-            except Exception as exc:
-                print(f'[Regrade] gradeResults error: {exc}', flush=True)
-            # A lab practical's source file is its key: keep its answers current
-            try:
-                key_file = cfg.get('key_file') if config_path.exists() else None
-                if key_file and Path(key_file).exists():
-                    kd = load_key_file(key_file)
-                    for qk, oq in (kd or {}).get('open_questions', {}).items():
-                        oq['full'] = list(self._acceptable_answers.get(qk, oq['full']))
-                        oq['partial'] = list(self._partial_credit_answers.get(qk, oq['partial']))
-                    if kd:
-                        save_key_file(key_file, kd)
-                        print(f'[Regrade] Answers saved to {key_file}', flush=True)
-            except Exception as exc:
-                print(f'[Regrade] Could not update the key file: {exc}', flush=True)
-
-            status_var.set(
-                f'Done. {n} grade(s) upgraded and scores recalculated.')
-            if self._on_complete:
-                self._on_complete(n)
-
-        tk.Button(btn_bottom, text='▶  Apply Re-grading', command=_apply,
-                  font=('Arial', 12, 'bold'), padx=10).pack(side='right', padx=4)
-        tk.Button(btn_bottom, text='Close', command=win.destroy,
-                  font=_F, padx=8).pack(side='right', padx=4)
 
 
 class KeyFileEditorDialog:

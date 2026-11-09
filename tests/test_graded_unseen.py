@@ -8,6 +8,7 @@ partial. Upgrades after a key change follow the same rule.
 '''
 import sys
 import tempfile
+import tkinter as tk
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -107,18 +108,76 @@ class TestUpgrades(unittest.TestCase):
         self.assertEqual(q._upgrade_earlier(QK, 6), 2)
         self.assertEqual(list(q.openQres[QK][1:]), ['XX', 'XX', 'CX', 'CC', 'XX'])
 
-    def test_regrade_needs_an_exact_match(self):
+    def test_upgrade_after_grading_needs_an_exact_match(self):
+        self.assertEqual([grade_functions.upgraded_cell('XX', t, FULL, PARTIAL)
+                          for t in self.READINGS.values()],
+                         [None, None, 'CX: forearm bone', 'CC: Radius', None])
+
+    def test_upgrade_never_lowers(self):
+        self.assertIsNone(grade_functions.upgraded_cell('CC: x', 'forearm bone', FULL, PARTIAL))
+        self.assertIsNone(grade_functions.upgraded_cell('CX', 'forearm bone', FULL, PARTIAL))
+        self.assertEqual(grade_functions.upgraded_cell('CX', 'radius', FULL, PARTIAL), 'CC: radius')
+
+
+class TestCorrectingAReading(unittest.TestCase):
+    MISREAD, RIGHT = 'radious', 'radius'
+
+    def window(self, reading, type_in=None):
+        '''The real grading window: type_in goes in the reading's field and
+        Correct is clicked. Returns the grader object and the grade.'''
+        try:
+            root = tk.Tk()
+        except tk.TclError:
+            self.skipTest('no display for Tk')
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        q = object.__new__(openQ.OpenQs)
+        q.__dict__.update(_ai_texts={QK: {1: reading}}, openQkeytext={}, openQkeyimgs={},
+                          _transcriptions={}, _added_answers={},
+                          acceptable_answers={QK: list(FULL)},
+                          partial_credit_answers={QK: list(PARTIAL)}, _strictness=0.5,
+                          _review_perfect=False, _root=root, _progress=None, _q_text={},
+                          _student_info=None, _key_file_mode=False, _key_file_path=None)
+
+        def walk(w):
+            yield w
+            for c in w.winfo_children():
+                yield from walk(c)
+
+        def click_correct(win):
+            win.update()
+            field = next(w for w in walk(win) if isinstance(w, tk.Entry) and w.get() == reading)
+            field.delete(0, 'end')
+            field.insert(0, type_in)
+            next(w for w in walk(win) if isinstance(w, tk.Button)
+                 and w.cget('text').startswith('Correct')).invoke()
+
+        root.wait_window = click_correct
         with tempfile.TemporaryDirectory() as tmp:
-            csv = Path(tmp) / 'results.csv'
-            pd.DataFrame({'index': [str(i) for i in range(6)],
-                          QK: ['', 'XX', 'XX', 'XX', 'XX', 'XX']}).to_csv(csv, index=False)
-            trans = {QK: {str(i): [t, 0.9] for i, t in self.READINGS.items()}}
-            n = grade_functions.regrade_open_questions(
-                str(csv), {QK: FULL}, trans, partial_answers={QK: PARTIAL})
-            self.assertEqual(n, 2)
-            out = pd.read_csv(csv, dtype=object)
-            self.assertEqual(list(out[QK][1:]),
-                             ['XX', 'XX', 'CX: forearm bone', 'CC: Radius', 'XX'])
+            page = Path(tmp) / 'page.png'
+            Image.new('RGB', (40, 40), 'white').save(page)
+            return q, q._gradeOneAnswer(str(page), QK, (0, 0, 40, 40), img_idx=1)
+
+    def test_a_correction_made_in_the_window_is_kept(self):
+        q, g = self.window(self.MISREAD, self.RIGHT)
+        self.assertEqual(g, 'CC')
+        self.assertEqual(q._transcriptions[QK][1][0], self.RIGHT)
+        self.assertEqual(q._ai_texts[QK][1], self.RIGHT)
+
+    def test_a_field_left_alone_changes_nothing(self):
+        q, _ = self.window(self.MISREAD, self.MISREAD)
+        self.assertEqual(q._transcriptions[QK][1][0], self.MISREAD)
+
+    def test_a_later_key_answer_finds_the_corrected_reading(self):
+        q = object.__new__(openQ.OpenQs)
+        q.__dict__.update(_transcriptions={QK: {1: ('acetulcholine', 0.9)}}, _ai_texts={},
+                          _added_answers={}, openQres=pd.DataFrame({QK: ['', 'XX']}),
+                          acceptable_answers={QK: []}, partial_credit_answers={QK: []})
+        self.assertEqual(q._add_acceptable_and_regrade(QK, 'acetylcholine', 2), 0)
+        q.acceptable_answers[QK] = []
+        q._correct_reading(QK, 1, 'acetylcholine')
+        self.assertEqual(q._add_acceptable_and_regrade(QK, 'acetylcholine', 2), 1)
+        self.assertEqual(q.openQres[QK][1], 'CC')
 
 
 if __name__ == '__main__':

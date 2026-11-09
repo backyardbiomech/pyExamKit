@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tests'))
 
 from test_edits import make_outputs  # noqa: E402
+from test_written_edits import make_written_outputs  # noqa: E402
 
 # Showing every view takes about a second; a layout loop never finishes
 TIME_LIMIT = 60
@@ -79,6 +80,8 @@ def show_every_view(outdir) -> dict:
         ui._show(view)
         ui.q_tree.selection_set(ui.q_tree.get_children()[0])
         ui.s_tree.selection_set(ui.s_tree.get_children()[0])
+        if ui.w_tree.get_children():
+            ui.w_tree.selection_set(ui.w_tree.get_children()[0])
         # At the window's first size and its smallest, every control shows
         for size in ('840x860', smallest):
             root.geometry(size)
@@ -113,6 +116,40 @@ class ResultsTabTest(unittest.TestCase):
         shown = json.loads(run.stdout.strip().splitlines()[-1])
         self.assertEqual(shown, {'opened': True, 'errors': [], 'outside': [], 'students': 5,
                                  'answers': 3})
+
+    def test_every_view_shows_with_written_questions(self):
+        out = make_written_outputs(Path(tempfile.mkdtemp()))
+        self.addCleanup(shutil.rmtree, out.parent)
+        run = subprocess.run([sys.executable, __file__, str(out)], cwd=ROOT,
+                             capture_output=True, text=True, timeout=TIME_LIMIT)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        shown = json.loads(run.stdout.strip().splitlines()[-1])
+        self.assertEqual((shown['opened'], shown['errors'], shown['outside']), (True, [], []))
+
+    def test_written_view_only_with_written_questions(self):
+        from results_tab import ResultsUI
+        root = _tk_root()
+        self.addCleanup(root.destroy)
+        ui = ResultsUI(root, log_fn=lambda msg: None)
+        ui.open(self.out)
+        self.assertNotIn('Written', ui.switch.cget('values'))
+
+    def test_a_written_answer_accepted_through_the_tab(self):
+        out = make_written_outputs(Path(tempfile.mkdtemp()))
+        self.addCleanup(shutil.rmtree, out.parent)
+        run = subprocess.run([sys.executable, __file__, 'written', str(out)], cwd=ROOT,
+                             capture_output=True, text=True, timeout=TIME_LIMIT)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        done = json.loads(run.stdout.strip().splitlines()[-1])
+        self.assertEqual(done['errors'], [])
+        self.assertEqual(done['view'], 'Written')
+        self.assertEqual(done['copied'], 'stratum germinativum')
+        self.assertEqual(done['edits'], ['bank.md#9: also accept "stratum germinativum"'])
+        self.assertIn('3 grades changed', done['notice'])
+        self.assertEqual(done['entry'], '')
+        self.assertIn('stratum germinativum   (added)', done['full'])
+        self.assertEqual(done['after_remove'], 0)
+        self.assertIn('Written view', done['q_text'])
 
     def test_edits_made_and_exported(self):
         run = subprocess.run([sys.executable, __file__, 'edit', str(self.out)], cwd=ROOT,
@@ -240,7 +277,48 @@ def change_version_through_the_tab(outdir) -> dict:
     return done
 
 
-if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'version':
+def accept_written_through_the_tab(outdir) -> dict:
+    """From the Questions view to the Written view, a student's reading
+    accepted and then removed with the tab's own controls."""
+    import results_model as rm
+    from results_tab import ResultsUI
+    root = _tk_root()
+    errors = []
+    root.report_callback_exception = lambda *exc: errors.append(repr(exc[1]))
+    ui = ResultsUI(root, log_fn=lambda msg: None)
+    ui.pack(fill='both', expand=True)
+    ui.open(outdir)
+    root.update()
+    iid = next(i for i, q in ui._questions.items() if q.written)
+    ui.q_tree.selection_set(iid)
+    root.update()
+    q_text = ui.q_text.cget('text')
+    ui.written_button.invoke()
+    root.update()
+    row = next(i for i in ui.r_tree.get_children()
+               if ui.r_tree.set(i, 'student').startswith('FOX'))
+    ui.r_tree.selection_set(row)
+    root.update()
+    copied = ui.w_entry.get()
+    ui.add_full_button.invoke()
+    root.update()
+    full = [ui.full_tree.set(i, 'answer') for i in ui.full_tree.get_children()]
+    done = {'errors': errors, 'view': ui.switch.get(), 'copied': copied, 'q_text': q_text,
+            'edits': [rm.describe(ui.res, e) for e in ui.res.edits], 'full': full,
+            'notice': ui.notice.cget('text'), 'entry': ui.w_entry.get()}
+    added = next(i for i, k in ui._written_keys.items() if k.edit_id)
+    ui.full_tree.selection_set(added)
+    root.update()
+    ui.remove_key_button.invoke()
+    root.update()
+    done['after_remove'] = len(ui.res.edits)
+    root.destroy()
+    return done
+
+
+if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'written':
+    print(json.dumps(accept_written_through_the_tab(sys.argv[2])))
+elif __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'version':
     print(json.dumps(change_version_through_the_tab(sys.argv[2])))
 elif __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == 'edit':
     print(json.dumps(edit_through_the_tab(sys.argv[2])))

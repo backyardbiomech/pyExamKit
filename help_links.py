@@ -20,7 +20,6 @@ TAB_PAGES = {
     'Build Practical': 'lab-practicals.md',
     'Scan Exams': 'scanning-and-grading.md',
     'Results': 'results.md',
-    'Re-grade': 'open-ended-questions.md#re-grading-afterward',
     'Standard Sheet': 'building-keys.md',
 }
 

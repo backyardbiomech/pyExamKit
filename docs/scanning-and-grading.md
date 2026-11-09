@@ -56,7 +56,7 @@ A mixed stack is graded in one pass whenever more than one version's key is load
 
 Each student's version bubble is read, and each version group is graded against its own key. All versions go into one gradebook, with a tab per version, and one Canvas file; [Outputs](outputs.md#multiple-versions) has the details.
 
-Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and each version's grading can be revisited on the [Re-grade](open-ended-questions.md) tab, which rebuilds the gradebook and Canvas file.
+Written answers are graded one version at a time, each against its own key's boxes and accepted answers, so the on-screen grading runs once per version. The answers you accept are saved back to that version's key, and an answer accepted later on the **Written** view of the [Results](results.md) tab reaches every version that printed the question.
 
 A lab practical's forms are not versions: every form is graded against the one key, the practical's source file, in a single pass. See [Lab practicals](lab-practicals.md).
 

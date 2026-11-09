@@ -4,7 +4,8 @@ results_tab.py
 The Results tab: a scan's results with their edits applied, as summary
 statistics and a grade chart, a table of questions, and a table of students,
 and the place to make those edits: adjustments, key changes and credit for a
-question, one student's points on one question. Each edit is saved to
+question, the answers a written question accepts, one student's points on
+one question. Each edit is saved to
 app_data/edits.json as it is made; Export rewrites the gradebook and Canvas
 file. A scan opens the tab on its own outputs folder when it finishes;
 Choose… opens any earlier one. docs/dev/results-tab.md has the design, and
@@ -28,11 +29,14 @@ import charts
 import outputs
 import results_model as rm
 
-VIEWS = ('Summary', 'Questions', 'Students', 'Edits')
+VIEWS = ('Summary', 'Questions', 'Written', 'Students', 'Edits')
 FILLER = '_filler'                                      # the column that takes a table's slack
 FLAG_FILL = {'Light': '#F8CBAD', 'Dark': '#6B3A2A'}     # the gradebook's flag color, and a dark one
 PENDING_COLOR = ('#B35C00', '#E8A33D')                  # edits not yet exported
 ERROR_COLOR = ('#C0392B', '#FF7B6B')
+WRITTEN_HINT = ('Select a question to see what students wrote and what the key accepts. A new '
+                'answer upgrades everyone whose reading is exactly it; removing one takes the credit '
+                'back from them.')
 
 
 def _fmt(x, digits: int = 2) -> str:
@@ -125,7 +129,8 @@ class ResultsUI(ctk.CTkFrame):
         self.body.pack(fill='both', expand=True)
         self._style_trees()
         self.frames = {'Summary': self._summary_view(), 'Questions': self._questions_view(),
-                       'Students': self._students_view(), 'Edits': self._edits_view()}
+                       'Written': self._written_view(), 'Students': self._students_view(),
+                       'Edits': self._edits_view()}
         self._show(VIEWS[0])
 
     def _style_trees(self):
@@ -252,6 +257,9 @@ class ResultsUI(ctk.CTkFrame):
         self.drop_button = ctk.CTkButton(two, text='Drop question', width=120,
                                          command=lambda: self._credit_action('drop'))
         self.drop_button.pack(side='left', padx=(6, 0))
+        self.written_button = ctk.CTkButton(two, text='Written answers…', width=130,
+                                            state='disabled', command=self._open_written)
+        self.written_button.pack(side='left', padx=(6, 0))
         ctk.CTkLabel(two, text='Note').pack(side='left', padx=(18, 6))
         self.q_note_entry = ctk.CTkEntry(two, placeholder_text='why, for the edits list')
         self.q_note_entry.pack(side='left', fill='x', expand=True)
@@ -263,6 +271,63 @@ class ResultsUI(ctk.CTkFrame):
         self._question_buttons = (self.change_key_button, self.also_button,
                                   self.set_points_button, self.full_button, self.drop_button)
         self._enable(self._question_buttons, False)
+        return f
+
+    def _written_view(self):
+        f = ctk.CTkFrame(self.body, fg_color='transparent')
+        right = ctk.CTkFrame(f, fg_color='transparent')
+        right.pack(side='right', fill='both', padx=(10, 0))
+        left = ctk.CTkFrame(f, fg_color='transparent')
+        left.pack(side='left', fill='both', expand=True)
+        # Grid rather than pack, so a short window shrinks the two tables
+        # together instead of squeezing out the one packed last
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(0, weight=1, uniform='tables')
+        left.rowconfigure(1, weight=2, uniform='tables')
+        self.w_tree, frame = self._tree(left, [
+            ('label', 'Question', 240), ('where', 'On sheet', 80), ('mean', 'Mean score', 75)],
+                                        height=5)
+        frame.grid(row=0, column=0, sticky='nsew')
+        self.w_tree.bind('<<TreeviewSelect>>', lambda e: self._show_written())
+        self.r_tree, frame = self._tree(left, [
+            ('reading', 'Read as', 170), ('student', 'Student', 130), ('grade', 'Grade', 50),
+            ('where', 'On sheet', 60)], height=9)
+        frame.grid(row=1, column=0, sticky='nsew', pady=(6, 0))
+        self.r_tree.bind('<<TreeviewSelect>>', lambda e: self._copy_reading())
+
+        self.w_text = ctk.CTkLabel(right, text=WRITTEN_HINT, anchor='nw', justify='left',
+                                   width=270, wraplength=260)
+        lists = ctk.CTkFrame(right, fg_color='transparent')
+        lists.columnconfigure(0, weight=1)
+        lists.rowconfigure((0, 1), weight=1, uniform='lists')
+        self.full_tree, frame = self._tree(lists, [('answer', 'Full credit', 250)], height=4)
+        frame.grid(row=0, column=0, sticky='nsew')
+        self.partial_tree, frame = self._tree(lists, [('answer', 'Partial credit', 250)], height=4)
+        frame.grid(row=1, column=0, sticky='nsew', pady=(4, 0))
+        self.full_tree.bind('<<TreeviewSelect>>',
+                            lambda e: self._select_key(self.full_tree, self.partial_tree))
+        self.partial_tree.bind('<<TreeviewSelect>>',
+                               lambda e: self._select_key(self.partial_tree, self.full_tree))
+        self.w_entry = ctk.CTkEntry(right, placeholder_text='an answer to accept')
+        self.w_entry.bind('<Return>', lambda e: self._written_add('full'))
+        buttons = ctk.CTkFrame(right, fg_color='transparent')
+        self.add_full_button = ctk.CTkButton(buttons, text='Add full', width=80,
+                                             command=lambda: self._written_add('full'))
+        self.add_full_button.pack(side='left')
+        self.add_partial_button = ctk.CTkButton(buttons, text='Add partial', width=90,
+                                                command=lambda: self._written_add('partial'))
+        self.add_partial_button.pack(side='left', padx=(6, 0))
+        self.remove_key_button = ctk.CTkButton(buttons, text='Remove', width=80,
+                                               command=self._written_remove)
+        self.remove_key_button.pack(side='left', padx=(6, 0))
+        self.w_note_entry = ctk.CTkEntry(right, placeholder_text='note, for the edits list')
+        # From the bottom up, the lists last, as on the other views
+        self.w_note_entry.pack(side='bottom', fill='x', pady=(6, 0))
+        buttons.pack(side='bottom', fill='x', pady=(6, 0))
+        self.w_entry.pack(side='bottom', fill='x', pady=(6, 0))
+        self.w_text.pack(side='top', fill='x')
+        lists.pack(fill='both', expand=True, pady=(4, 0))
+        self._enable((self.add_full_button, self.add_partial_button, self.remove_key_button), False)
         return f
 
     def _students_view(self):
@@ -329,8 +394,8 @@ class ResultsUI(ctk.CTkFrame):
         self.e_tree, frame = self._tree(f, [
             ('what', 'Edit', 330), ('note', 'Note', 220), ('time', 'Made', 130)], height=14)
         self.e_tree.bind('<<TreeviewSelect>>', lambda e: self._show_edit())
-        ctk.CTkLabel(f, text='Edits apply in this order: key changes, then credit, then points '
-                             'set by hand, then points added. Deleting an edit undoes it. Shaded '
+        ctk.CTkLabel(f, text='Edits apply in this order: written answers, version changes, key '
+                             'changes, credit, points set by hand, then points added. Deleting an edit undoes it. Shaded '
                              'edits matched nothing in these results.',
                      anchor='w', justify='left', text_color='gray', wraplength=640,
                      font=ctk.CTkFont(size=12)).pack(side='bottom', fill='x', pady=(6, 0))
@@ -390,7 +455,8 @@ class ResultsUI(ctk.CTkFrame):
         keep = (self._selected(self.q_tree, '_questions', lambda q: q.label),
                 self._selected(self.s_tree, '_students', _who),
                 self._selected(self.a_tree, '_answers', lambda a: a.question),
-                self._selected(self.e_tree, '_edits', lambda e: e['id'])) if same else (None,) * 4
+                self._selected(self.e_tree, '_edits', lambda e: e['id']),
+                self._selected(self.w_tree, '_written_qs', lambda q: q.label)) if same else (None,) * 5
         self.res = res
         self.folder_entry.delete(0, 'end')
         self.folder_entry.insert(0, str(res.outdir))
@@ -398,14 +464,16 @@ class ResultsUI(ctk.CTkFrame):
         self._fill_status()
         self._fill_summary()
         self._fill_questions()
+        self._fill_written()
         self._fill_students()
         self._fill_edits()
         self.export_button.configure(state='normal')
-        q, s, a, e = keep
+        q, s, a, e, w = keep
         self._reselect(self.q_tree, '_questions', lambda x: x.label, q, self._show_question)
         if self._reselect(self.s_tree, '_students', _who, s, self._show_student):
             self._reselect(self.a_tree, '_answers', lambda x: x.question, a, self._show_answer)
         self._reselect(self.e_tree, '_edits', lambda x: x['id'], e, self._show_edit)
+        self._reselect(self.w_tree, '_written_qs', lambda x: x.label, w, self._show_written)
 
     def _selected(self, tree, table: str, ident):
         sel = tree.selection()
@@ -441,21 +509,24 @@ class ResultsUI(ctk.CTkFrame):
 
     def _edit(self, make, done: str = '', clear=None):
         """Run one edit (make returns the results opened again), then show
-        them and empty the note entry clear."""
+        them and empty the note entry clear. done is what to report, or a
+        function that works it out once the edit is made. False when the
+        edit could not be made."""
         if self.res is None:
-            return
+            return False
         try:
             res = make()
         except ValueError as exc:
             self._say(str(exc), error=True)
-            return
+            return False
         except OSError as exc:
             self._say(f'Could not save the edit: {exc}', error=True)
-            return
+            return False
         if clear is not None:
             clear.delete(0, 'end')
         self._load(res)
-        self._say(done)
+        self._say(done() if callable(done) else done)
+        return True
 
     def _fill_status(self):
         res = self.res
@@ -553,7 +624,7 @@ class ResultsUI(ctk.CTkFrame):
                 f'{q.label}   {asked}'.rstrip(), q.where, q.key, _fmt(q.points), q.n,
                 _fmt(q.mean), _fmt(q.r), _fmt(q.di)))
         self.choice_bars.set_data([], set())
-        self._enable(self._question_buttons, False)
+        self._enable(self._question_buttons + (self.written_button,), False)
 
     def _question(self) -> rm.Question | None:
         sel = self.q_tree.selection()
@@ -565,6 +636,7 @@ class ResultsUI(ctk.CTkFrame):
             return
         self._enable(self._question_buttons, True)
         self._enable((self.change_key_button, self.also_button), not q.written)
+        self._enable((self.written_button,), q.written)
         for entry, value in ((self.key_entry, '' if q.written else q.key.replace(' or ', ', ')),
                              (self.q_points_entry, _fmt(q.points))):
             entry.delete(0, 'end')
@@ -574,7 +646,7 @@ class ResultsUI(ctk.CTkFrame):
             lines.append(q.text)
         lines.append(f'Key: {q.labeled_key}')
         if q.written:
-            lines.append('Written: its acceptable answers change on the Re-grade tab.')
+            lines.append('Written: its acceptable answers change on the Written view.')
         elif not q.options:
             lines.append('The key recorded no answer text for this question, so its choices '
                          'are shown as letters.')
@@ -591,6 +663,77 @@ class ResultsUI(ctk.CTkFrame):
             keys = {ch for k in q.key.split(' or ') for ch in k}
             self.choice_bars.set_data([(ch, n, q.choice_text(ch))
                                        for ch, n in q.counts.items()], keys)
+
+    def _fill_written(self):
+        """The written questions, and the view listed only when there are some."""
+        self.w_tree.delete(*self.w_tree.get_children())
+        self._written_qs = {}
+        for i, q in enumerate(q for q in self._questions.values() if q.written):
+            iid = str(i)
+            self._written_qs[iid] = q
+            self.w_tree.insert('', 'end', iid=iid, values=(
+                f'{q.label}   {_one_line(q.text)}'.rstrip(), q.where, _fmt(q.mean)))
+        self._clear_written()
+        self.w_text.configure(text=WRITTEN_HINT)
+        self._enable((self.add_full_button, self.add_partial_button), False)
+        current = self.switch.get()
+        views = [v for v in VIEWS if v != 'Written' or self._written_qs]
+        self.switch.configure(values=views)
+        if current not in views:
+            current = VIEWS[0]
+            self._show(current)
+        self.switch.set(current)
+
+    def _clear_written(self):
+        for tree in (self.full_tree, self.partial_tree, self.r_tree):
+            tree.delete(*tree.get_children())
+        self._written_keys = {}
+        self._enable((self.remove_key_button,), False)
+
+    def _written_q(self) -> rm.Question | None:
+        sel = self.w_tree.selection()
+        return self._written_qs.get(sel[0]) if sel else None
+
+    def _show_written(self):
+        q = self._written_q()
+        if q is None:
+            return
+        self._clear_written()
+        self._enable((self.add_full_button, self.add_partial_button), True)
+        self.w_text.configure(text=f'{q.label}  ({q.where})\n{_one_line(q.text, 120)}'.rstrip())
+        for i, k in enumerate(rm.written_keys(self.res, q)):
+            iid = str(i)
+            self._written_keys[iid] = k
+            tree = self.full_tree if k.grade == 'full' else self.partial_tree
+            tree.insert('', 'end', iid=iid,
+                        values=(k.answer + ('   (added)' if k.edit_id else ''),))
+        for r in rm.written_rows(self.res, q):
+            self.r_tree.insert('', 'end', values=(r.text, r.student, r.grade, r.where))
+
+    def _select_key(self, tree, other):
+        """One answer selected across the two lists, for Remove."""
+        if tree.selection():
+            other.selection_remove(*other.selection())
+            self._enable((self.remove_key_button,), True)
+
+    def _copy_reading(self):
+        """A student's reading, ready to accept or to correct first."""
+        sel = self.r_tree.selection()
+        if sel:
+            self.w_entry.delete(0, 'end')
+            self.w_entry.insert(0, self.r_tree.set(sel[0], 'reading'))
+
+    def _open_written(self):
+        """From the Questions view, the selected question's answers."""
+        q = self._question()
+        iid = next((i for i, w in self._written_qs.items() if q and w.label == q.label), None)
+        if iid is None:
+            return
+        self.switch.set('Written')
+        self._show('Written')
+        self.w_tree.selection_set(iid)
+        self.w_tree.see(iid)
+        self._show_written()
 
     def _fill_students(self):
         self.s_tree.delete(*self.s_tree.get_children())
@@ -743,6 +886,47 @@ class ResultsUI(ctk.CTkFrame):
             self.res, s.version, s.row, a.question, points, note)),
                    f'{s.name}, {a.question}: {_fmt(points)} points.', self.o_note_entry)
 
+    def _written_add(self, grade: str):
+        q = self._written_q()
+        if q is None:
+            return
+        before, answer = self.res, ' '.join(self.w_entry.get().split())
+        note = self._note(self.w_note_entry)
+        made = {}
+
+        def make():
+            made['res'] = rm.add(before, rm.written_edit(before, q, answer, grade, note))
+            return made['res']
+
+        def done():
+            n = rm.grades_changed(before, made['res'], q)
+            changed = f'{n} grade{"s" if n != 1 else ""} changed.' if n else \
+                'No student\'s reading is exactly that answer, so no grade changed.'
+            return f'{q.label}: "{answer}" accepted for {grade} credit. {changed}'
+
+        if self._edit(make, done, self.w_note_entry):
+            self.w_entry.delete(0, 'end')
+
+    def _written_remove(self):
+        q = self._written_q()
+        sel = self.full_tree.selection() + self.partial_tree.selection()
+        if q is None or not sel:
+            return
+        key = self._written_keys[sel[0]]
+        before, note = self.res, self._note(self.w_note_entry)
+        made = {}
+
+        def make():
+            made['res'] = rm.remove_written(before, q, key, note)
+            return made['res']
+
+        def done():
+            n = rm.grades_changed(before, made['res'], q)
+            changed = f'{n} grade{"s" if n != 1 else ""} changed.' if n else 'No grade changed.'
+            return f'{q.label}: "{key.answer}" taken off the list. {changed}'
+
+        self._edit(make, done, self.w_note_entry)
+
     def _change_version(self):
         """Score the selected student's sheet as the version it really was."""
         s = self._student()
@@ -827,7 +1011,7 @@ class ResultsUI(ctk.CTkFrame):
                       error=True)
             return
         done = 'Exported.'
-        if any(e['type'] in ('key', 'credit') for e in res.edits):
+        if any(e['type'] in ('key', 'credit', 'written') for e in res.edits):
             done += (' The marked sheets (marked/, marked.pdf) still show the original key '
                      'and points.')
         self._say(done)

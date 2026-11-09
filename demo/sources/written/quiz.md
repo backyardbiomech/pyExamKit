@@ -50,7 +50,7 @@ B. neuron
 C. alveolus
 D. sarcomere
 
-# "stratum germinativum" is left off on purpose, for the Re-grade clip.
+# "stratum germinativum" is left off on purpose, for the written answers clip.
 SA
 (2 pts)
 9. The ___ is the deepest layer of the epidermis.

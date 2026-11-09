@@ -192,54 +192,15 @@ def gradeResults(resCsv, selectAll, openQ, bubbleVal, openVal, markeddir, strict
     print('Done grading')
 
 
-def regrade_open_questions(resCsv: str, acceptable_answers: dict, transcriptions: dict,
-                            partial_answers: dict | None = None) -> int:
-    """
-    Re-evaluate open-ended question grades in an existing results.csv using
-    updated acceptable_answers and stored transcriptions.
-
-    Only upgrades grades (XX→CC, XX→CX, CX→CC), never downgrades, and only
-    where the answer is a key answer exactly, since the grader does not see
-    these. Returns the total number of grade slots upgraded.
-
-    acceptable_answers: {qk: [str, ...]}
-    transcriptions:     {qk: {str(idx): [text, conf]}}
-    partial_answers:    {qk: [str, ...]}  (optional; earn partial credit CX)
-    """
+def upgraded_cell(cell, text: str, full: list, partial: list) -> str | None:
+    """A written answer's cell raised to what its reading now earns, or None
+    when it stays. Only ever upgrades (XX to CX or CC, CX to CC), and only
+    where the reading is one of the answers exactly, since the grader does
+    not see these."""
     from ocr import exact_grade
-    df = pd.read_csv(resCsv, dtype=object)
-    df.set_index(['index'], inplace=True)
-    df.index = df.index.map(str)
-    df.index.names = [None]
-
-    grade_rank = {'CC': 3, 'CX': 2, 'XX': 1, '': 0}
-    total_upgraded = 0
-    open_cols = [c for c in df.columns if c.startswith('openQ_')]
-
-    for qk in open_cols:
-        if qk not in transcriptions:
-            continue
-        acc_list = acceptable_answers.get(qk, [])
-        partial_list = (partial_answers or {}).get(qk, [])
-        if not acc_list and not partial_list:
-            continue
-        q_trans = transcriptions[qk]   # {str(idx): [text, conf]}
-        for row_str, trans_val in q_trans.items():
-            if row_str not in df.index:
-                continue
-            if row_str in ('0', 'numb_correct'):
-                continue
-            text = trans_val[0]
-            old_grade_cell = str(df.loc[row_str, qk])
-            # support 'CC: transcription text' format as well as plain 'CC'/'CX'/'XX'
-            old_grade = old_grade_cell[:2] if old_grade_cell[:2] in ('CC', 'CX', 'XX') else old_grade_cell
-            new_sug = exact_grade(text, acc_list, partial_list)
-            if new_sug and grade_rank.get(new_sug, 0) > grade_rank.get(str(old_grade), 0):
-                df.loc[row_str, qk] = f'{new_sug}: {text}'
-                total_upgraded += 1
-
-    df.to_csv(resCsv, index=True, index_label='index')
-    return total_upgraded
+    rank = {'CC': 3, 'CX': 2, 'XX': 1}
+    new = exact_grade(text, full, partial)
+    return f'{new}: {text}' if new and rank[new] > rank.get(str(cell)[:2], 0) else None
 
 
 def points_mark(value) -> str | None:
