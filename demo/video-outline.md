@@ -12,7 +12,7 @@ Ten clips, about 50 minutes in all. Each stands alone, so a colleague can watch 
 | 5 | Fix and export grades (Results tab) | 7 min | continues clip 4 |
 | 6 | Written answers, on screen and with Re-grade | 7 min | `3_written/` |
 | 7 | Build a lab practical | 4 min | `4_practical/` |
-| 8 | Grade a lab practical | 5 min | `4_practical/` |
+| 8 | Grade a lab practical | 6 min | `4_practical/` |
 | 9 | An exam made somewhere else (Standard Sheet) | 4 min | `5_standard_sheet/` |
 
 ## Before filming
@@ -90,7 +90,7 @@ An exam built on camera shuffles differently from the prebuilt one, so grade the
 uv run python tools/make_demo_data.py --refill demo/film/1_bubble_build/Exam_1
 ```
 
-- Scanning advice, in one line: the whole stack to a single PDF, 200 dpi or better, in color, in a folder of its own
+- Scanning advice, in one line: the whole stack to a single PDF, 200 dpi, grayscale is fine, in a folder of its own
 - **Choose key files…**: pick `Exam_1_vA_key.csv`; the vB key is found beside it; read the summary line
 - **Choose scans…**: the single PDF `scans/Exam_1_scans.pdf`, 24 students, both versions mixed
 - **Load Class Roster…**: `class_roster.csv`, in the shape of a Canvas gradebook export; show how to get one from Canvas
@@ -145,7 +145,7 @@ Key: `3_written/Quiz_2/Quiz_2_vA_key.csv`. Scans: `3_written/scans/Quiz_2_scans.
 
 **Have open:** [Lab practicals, the source file](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/lab-practicals.md#the-source-file) · [Printing and handing out](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/lab-practicals.md#printing-and-handing-out)
 
-Source: `4_practical/Demo_Practical.md`, eight stations.
+Source: `4_practical/Demo_Practical.md`, twelve stations, so each form sheet is two pages: one piece of paper, printed on both sides.
 
 - The idea: four questions per station, two per student, the pair is the form, neighbors share nothing
 - The source file in a text editor: settings block, `# Station`, `setup:`, `image:`, questions, `=` full and `~` partial
@@ -159,11 +159,11 @@ Source: `4_practical/Demo_Practical.md`, eight stations.
 
 **Have open:** [Lab practicals, scanning and grading](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/lab-practicals.md#scanning-and-grading) · [What the results hold](https://github.com/backyardbiomech/pyExamKit/blob/main/docs/lab-practicals.md#what-the-results-hold)
 
-Key: `4_practical/Demo_Practical.md` (the source file itself). Scans: `4_practical/scans/scans.pdf`, 10 students. Roster: `4_practical/practical_roster.csv`.
+Key: `4_practical/Demo_Practical.md` (the source file itself). Scans: `4_practical/scans/scans.pdf`, 10 students, 20 pages. Roster: `4_practical/practical_roster.csv`.
 
 - The key's summary line says it is a practical; forms come from the printed squares, never from the student
-- Blank backs are skipped; the log says so
-- Grading window goes by station and letter, about 60 answers with AI on and exact matches skipped (cut the middle)
+- Each student is two pages, front and back; the scanner groups them by what is printed on each page, so each student's page 1 has to stay ahead of their page 2
+- Grading window goes by station and letter, about 85 answers with AI on and exact matches skipped (cut the middle)
 - The name crop beside each answer
 - Add an answer in the window; open `Demo_Practical.md` to show it written back as a new `=` line
 - `ALERT.txt`: scan 2 (Linden) light pencil, scan 5 (Birch) one digit off the roster

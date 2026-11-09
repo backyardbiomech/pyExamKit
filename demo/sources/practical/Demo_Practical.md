@@ -131,3 +131,63 @@ C. Which macromolecule does the result in tube C show?
 
 D. Which macromolecule does the result in tube D show?
 = lipid | fat
+
+# Station 9: large intestine
+setup: Torso model, large intestine exposed. Pins A to D.
+
+A. Name the structure at pin A.
+= descending colon
+
+B. Name the structure at pin B.
+= ascending colon
+
+C. Name the structure at pin C.
+= transverse colon
+
+D. Name the structure at pin D.
+= sigmoid colon
+
+# Station 10: abdominal organs
+setup: Torso model, abdominal organs. Pins A to D.
+
+A. Name the structure at pin A.
+= liver
+
+B. Name the structure at pin B.
+= esophagus
+
+C. Name the structure at pin C.
+= stomach
+
+D. Name the structure at pin D.
+= spleen
+
+# Station 11: stomach
+setup: Stomach model, opened. Pins A to D.
+
+A. Name the structure at pin A.
+= rugae
+
+B. Name the structure at pin B.
+= pyloric sphincter
+
+C. Name the structure at pin C.
+= fundus
+
+D. Name the structure at pin D.
+= cardia | cardiac region
+
+# Station 12: oral cavity
+setup: Head model, midsagittal. Pins A to D.
+
+A. Name the structure at pin A.
+= uvula
+
+B. Name the structure at pin B.
+= tongue
+
+C. Name the structure at pin C.
+= hard palate
+
+D. Name the structure at pin D.
+= soft palate
