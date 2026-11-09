@@ -252,9 +252,8 @@ def points_mark(value) -> str | None:
     return None if np.isnan(points) else f'{round(points, 2):g}'
 
 
-def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing, markCorr,
-               pages_per_student=1, q_pages=None, row_areas=None, flags=None,
-               scan_rows=None):
+def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markCorr,
+               pages_per_student=1, q_pages=None, row_areas=None, scan_rows=None):
     """Mark student answer sheets with correct/incorrect indicators.
 
     aligned_image_list layout (both single- and multi-page):
@@ -267,8 +266,6 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                         Bubble questions always default to page 1.
     row_areas         — {row: question areas} for rows on a different sheet
                         layout from qAreas; merged over qAreas for that row
-    flags             — {row: [bubbles.Flag]} marks the reader was unsure of,
-                        drawn as an orange '?letter' beside the row
     scan_rows         — {row: student's position in the scanned stack} when
                         the rows are a subset (one version of several);
                         the row itself otherwise
@@ -291,13 +288,11 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
     RED   = (255, 0, 0)
     BLUE  = (0, 0, 255)
     ORANGE = (255, 140, 0)
-    flag_font = _get_font(size=20)
     WRITTEN_COLOR = {'CC': GREEN, 'CX': ORANGE, 'XX': RED}
     # Written answers are marked with the points they earned, from the points
     # file gradeResults wrote; the key's own sheet shows what each is worth
     graded = outputs.load(resCsv)
     row_areas = row_areas or {}
-    flags = flags or {}
     base_areas = qAreas
 
     keyname = None
@@ -338,11 +333,6 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                 draws.append(ImageDraw.Draw(pil_img))
 
         qAreas = {**base_areas, **row_areas.get(row_str, {})}
-        if draws[0] is not None:
-            for f in flags.get(row_str, []):
-                if f.field in qAreas:
-                    (x0, y0), (x1, _) = qAreas[f.field]
-                    draws[0].text((x1 + 2, y0 + 3), '?' + f.label, fill=ORANGE, font=flag_font)
         for col in df.columns[3:-2]:
             key = df.loc['0', col]
             if key == 'ignore':
@@ -398,12 +388,6 @@ def markSheets(resCsv, aligned_image_list, markeddir, qAreas, qDict, markmissing
                 if right_blank:
                     markX = qAreas[col][0][0] - 26
                     draw.text((markX, markY - TEXT_Y_OFFSET), 'C', fill=GREEN, font=font)
-                if markmissing and len(key) > 0:
-                    markX = qAreas[col][0][0] - 26
-                    draw.text((markX, markY - TEXT_Y_OFFSET), 'M', fill=RED, font=font)
-                if ans == ['-'] and len(key) > 0:
-                    markX = qAreas[col][0][0] - 26
-                    draw.text((markX, markY - TEXT_Y_OFFSET), 'M', fill=RED, font=font)
                 if markCorr and len(key) > 0:
                     for lett in key:
                         coord = qDict[lett]

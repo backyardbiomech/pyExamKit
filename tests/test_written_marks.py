@@ -62,7 +62,7 @@ class WrittenMarks(unittest.TestCase):
         Recorder.marks = []
         with mock.patch.object(grade_functions.ImageDraw, 'Draw', Recorder):
             grade_functions.markSheets(cls.csv, images, markeddir, areas,
-                                       {'A': 20, 'B': 40}, False, False)
+                                       {'A': 20, 'B': 40}, False)
         cls.written = {name: (text, fill) for name, text, fill in Recorder.marks
                        if text not in ('C', 'X')}
 
@@ -82,6 +82,41 @@ class WrittenMarks(unittest.TestCase):
         texts = [t for t, _ in self.written.values()]
         for code in ('CC', 'CX', 'XX'):
             self.assertNotIn(code, texts)
+
+
+class MissedAnswers(unittest.TestCase):
+    """A right answer left unmarked gets a blue # when correct answers are
+    shown, and nothing beside the question number."""
+
+    def marks_for(self, mark_correct):
+        out = Path(tempfile.mkdtemp(prefix='missed_marks_'))
+        csv = outputs.results_csv(out)
+        pd.DataFrame({'LastName': ['KEY', 'Wrong', 'Blank'], 'FirstName': ['', 'A', 'B'],
+                      'studentID': ['', '1', '2'], 'Q1': ['A', 'B', '-']},
+                     index=['0', '1', '2']).to_csv(csv, index=True, index_label='index')
+        markeddir = out / 'marked'
+        markeddir.mkdir()
+        grade_functions.gradeResults(csv, True, False, 1, 1, markeddir)
+        images = []
+        for name in ('key', 's1', 's2'):
+            path = out / f'{name}.jpg'
+            PILImage.new('RGB', (200, 200), 'white').save(path)
+            images.append(str(path))
+        Recorder.names = ['key', 's1', 's2']
+        Recorder.marks = []
+        with mock.patch.object(grade_functions.ImageDraw, 'Draw', Recorder):
+            grade_functions.markSheets(csv, images, markeddir, {'Q1': ((10, 10), (100, 30))},
+                                       {'A': 20, 'B': 40, '-': 0}, mark_correct)
+        return [(name, text) for name, text, _ in Recorder.marks]
+
+    def test_no_missing_mark(self):
+        for shown in (True, False):
+            self.assertNotIn('M', [text for _, text in self.marks_for(shown)])
+
+    def test_correct_answer_shown_on_wrong_and_blank_rows(self):
+        marks = self.marks_for(True)
+        self.assertIn(('s1', '#'), marks)
+        self.assertIn(('s2', '#'), marks)
 
 
 class PointsMark(unittest.TestCase):

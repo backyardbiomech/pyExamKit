@@ -26,7 +26,7 @@ With no key file, the first page of the stack is read as the key (see above). Gi
 
 ### More options
 
-**Save marked answer sheets**, **show the correct answers on marked sheets**, and **partial credit on select-all-that-apply questions** are on by default. Turn off the first to save time when you only need the numbers; the second adds green marks for the right answers beside the red ones; the third is described [below](#select-all-that-apply).
+**Save marked answer sheets**, **show the correct answers on marked sheets**, and **partial credit on select-all-that-apply questions** are on by default. Turn off the first to save time when you only need the numbers; the second adds a blue `#` on each right answer the student did not mark; the third is described [below](#select-all-that-apply).
 
 **Fill cutoff** decides how dark a mark has to be to count as filled, measured against that student's own marks rather than a fixed darkness (see [How a bubble becomes an answer](#how-a-bubble-becomes-an-answer)). The default of 0.35 means a bubble counts when it is at least about a third as dark as the student's typical mark; on a stack of 69 real pencil sheets, every value from 0.30 to 0.45 read identically, so it rarely needs changing. Lower it toward 0.30 if light marks are being missed; raise it toward 0.45 if erasures are being counted. Marks that could go either way are listed in `ALERT.txt` either way. **Re-read without aligning again** makes a second try cheap: it reuses the aligned images from the previous run, so a pass at a different cutoff takes seconds instead of reprocessing every page.
 
@@ -38,7 +38,7 @@ The **version question number** is rarely needed. When the exam was built with *
 
 ## Select all that apply
 
-**Partial credit on select-all-that-apply questions**, on by default, changes how *every* question is graded, not just the multi-answer ones, and it turns on the "missing answer" mark described in [Outputs](outputs.md).
+**Partial credit on select-all-that-apply questions**, on by default, changes how *every* question is graded, not just the multi-answer ones.
 
 With it off, a question is right or wrong: an answer that exactly matches the key earns the question's points and anything else earns zero.
 
@@ -70,7 +70,7 @@ The scanner locates the three registration circles on each page and warps the im
 
 It then measures how dark the inside of every bubble is, minus the printed letter. Students shade differently, so instead of one darkness for everyone, the scanner learns each student's typical mark from the darkest bubble in each of their rows. A bubble counts as filled when it reaches the fill cutoff (0.35 of it, by default) of that student's typical mark, and when it is at least half as dark as the darkest bubble in its own row. The first rule lets a light pencil count. The second is what separates an erasure from a real answer: a heavy hand's erasure can be darker than a light hand's mark, but it is always much lighter than the fresh mark beside it. Multiple marks on one row produce a multi-letter answer such as `ABD`, and a row with nothing filled produces `-`.
 
-Marks the scanner cannot call confidently are reported rather than guessed: a lone light mark just under the cutoff, read as blank, and a mark close to half as dark as another in its row, which could be an erasure or a second answer. Each is listed in `ALERT.txt` and drawn on the marked sheet as an orange `?` and the letter, just right of the row. A sheet whose marks are all very light is listed too, as one to look over by eye.
+Marks the scanner cannot call confidently are reported rather than guessed: a lone light mark just under the cutoff, read as blank, and a mark close to half as dark as another in its row, which could be an erasure or a second answer. Each is listed in `ALERT.txt` with its scan number, question, and letter. A sheet whose marks are all very light is listed too, as one to look over by eye.
 
 A `-` is not silently treated as a wrong answer. Every student with an unscanned answer is written to an `ALERT.txt` file beside the results, naming the student and the question, because the usual cause is a sheet that scanned badly rather than a student who skipped a question.
 

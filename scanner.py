@@ -373,17 +373,16 @@ class Scanner(object):
                 self._alert(f'CHECK MARK: {who}: {f.field} bubble {f.label} {f.reason}.')
 
     def _row_areas(self, row_map):
-        """Per-row question areas and flags for markSheets, keyed by csv row.
+        """Per-row question areas for markSheets, keyed by csv row.
         row_map maps csv row string -> resdf row."""
-        areas, flags = {}, {}
+        areas = {}
         for row_str, row in row_map.items():
             r = self.reads.get(row)
             if r is None:
                 continue
             if r.layout is not sheet_layout.CLASSIC:
                 areas[row_str] = r.layout.q_areas(self.quests)
-            flags[row_str] = [f for f in r.flags if f.field.startswith('Q')]
-        return areas, flags
+        return areas
 
     def run(self):
         if self._key_data and self._key_data.get('metadata', {}).get('practical'):
@@ -679,12 +678,12 @@ class Scanner(object):
             if self.save_marked:
                 marked_list = [None] + imgs_for_ver  # None at [0] = synthetic key placeholder
                 _scan_rows = {str(j + 1): orig for j, orig in enumerate(row_indices)}
-                _areas, _flags = self._row_areas(_scan_rows)
+                _areas = self._row_areas(_scan_rows)
                 grade_functions.markSheets(
                     ver_csv, marked_list, self.markeddir,
-                    ver_areas, self.Qdict, self.markmissing, self.corrMark,
+                    ver_areas, self.Qdict, self.corrMark,
                     pages_per_student=pps, q_pages=q_pages,
-                    row_areas=_areas, flags=_flags, scan_rows=_scan_rows)
+                    row_areas=_areas, scan_rows=_scan_rows)
 
         if self.save_marked:
             print('Saving marked files')
@@ -838,14 +837,14 @@ class Scanner(object):
             q_pages = {}
             if self.openQ and openQs is not None:
                 q_pages.update(openQs._q_pages)
-            _areas, _flags = self._row_areas({str(r): r for r in self.reads})
+            _areas = self._row_areas({str(r): r for r in self.reads})
             # Pass the full aligned_image_list so markSheets can access all pages per student.
             # Layout: [0]=key page, [(r-1)*pps+1 .. r*pps]=student r's pages (r 1-based)
             keyname = grade_functions.markSheets(
                 self.resCsv, self.aligned_image_list, self.markeddir,
-                self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                self.qAreas, self.Qdict, self.corrMark,
                 pages_per_student=pps, q_pages=q_pages,
-                row_areas=_areas, flags=_flags)
+                row_areas=_areas)
             # intialize the output pdf
             print('Saving marked files')
             self.outpdf=FPDF('P','pt','Letter')
@@ -1125,12 +1124,12 @@ class Scanner(object):
             # [None] at index 0 = synthetic key row (no image); then all student pages
             # Layout: [None, s1_p1, s1_p2, s2_p1, s2_p2, ...]
             marked_list = [None] + self.aligned_image_list
-            _areas, _flags = self._row_areas({str(r): r for r in self.reads})
+            _areas = self._row_areas({str(r): r for r in self.reads})
             keyname = grade_functions.markSheets(
                 self.resCsv, marked_list, self.markeddir,
-                self.qAreas, self.Qdict, self.markmissing, self.corrMark,
+                self.qAreas, self.Qdict, self.corrMark,
                 pages_per_student=pps, q_pages=q_pages,
-                row_areas=_areas, flags=_flags)
+                row_areas=_areas)
 
             # 10. Save PDF
             print('Saving marked files')

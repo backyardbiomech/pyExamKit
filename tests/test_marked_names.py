@@ -41,7 +41,7 @@ def mark(scan_rows=None, version=''):
         PILImage.new('RGB', (200, 200), 'white').save(path)
         images.append(str(path))
     grade_functions.markSheets(csv, images, markeddir, {'Q1': ((10, 10), (100, 30))},
-                               {'A': 20, 'B': 40}, False, False, scan_rows=scan_rows)
+                               {'A': 20, 'B': 40}, False, scan_rows=scan_rows)
     return sorted(p.name for p in markeddir.glob('*.jpg'))
 
 
