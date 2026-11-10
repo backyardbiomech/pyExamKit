@@ -125,7 +125,7 @@ class ModelChoice(unittest.TestCase):
             return ai_ocr.recognize_batch(crops, ['1', '2'], api_key='sk-ant-FAKE', model=model)
 
     def test_default_is_haiku(self):
-        self.assertEqual(ai_ocr.current_model(), 'claude-haiku-4-5')
+        self.assertEqual(ai_ocr.current_model(), 'claude-haiku-5-5')
 
     def test_saved_choice_is_used(self):
         ai_ocr.save_config({'ai_model': 'claude-sonnet-5-5'})
@@ -134,23 +134,20 @@ class ModelChoice(unittest.TestCase):
         self.assertEqual(self.requests[0]['model'], 'claude-sonnet-5-5')
 
     def test_a_model_no_longer_offered_falls_back(self):
-        ai_ocr.save_config({'ai_model': 'claude-haiku-4-5-20251001'})
+        ai_ocr.save_config({'ai_model': 'claude-haiku-4-5'})
         self.assertEqual(ai_ocr.current_model(), ai_ocr.DEFAULT_MODEL)
 
     def test_every_menu_label_maps_back_to_its_model(self):
         for label in ai_ocr.MODEL_LABELS:
             self.assertEqual(ai_ocr.model_label(ai_ocr.MODEL_IDS[label]), label)
 
-    def test_sonnet_gets_effort_and_room_to_think(self):
-        self._run(SimpleNamespace(type='text', text='{}'), model='claude-sonnet-5-5')
-        req = self.requests[0]
-        self.assertEqual(req['output_config'], {'effort': 'low'})
-        self.assertGreaterEqual(req['max_tokens'], 8000)
-
-    def test_haiku_gets_no_effort(self):
-        """Haiku 4.5 rejects an effort setting."""
-        self._run(SimpleNamespace(type='text', text='{}'), model='claude-haiku-4-5')
-        self.assertNotIn('output_config', self.requests[0])
+    def test_every_model_gets_effort_and_room_to_think(self):
+        for model in ai_ocr.MODEL_IDS.values():
+            self.requests.clear()
+            self._run(SimpleNamespace(type='text', text='{}'), model=model)
+            req = self.requests[0]
+            self.assertEqual(req['output_config'], {'effort': 'low'})
+            self.assertGreaterEqual(req['max_tokens'], 8000)
 
     def test_reply_read_past_a_leading_thinking_block(self):
         out = self._run(SimpleNamespace(type='thinking', thinking=''),

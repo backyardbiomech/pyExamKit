@@ -100,13 +100,13 @@ PRESET_VALUES: dict[str, str | None] = {label: val for label, val in CONTEXT_PRE
 # ── Models ───────────────────────────────────────────────────────────────────
 
 # Models offered for transcription: (menu label, model ID, request options).
-# The first is the default. Sonnet 5.5 thinks before it answers when it judges
-# a task needs it, and that thinking counts against max_tokens: low effort keeps
-# it brief on a reading task, and the larger max_tokens leaves room for it as
-# well as the reply. Haiku 4.5 takes no effort setting.
+# The first is the default. Both models think before they answer when they
+# judge a task needs it, and that thinking counts against max_tokens: low effort
+# keeps it brief on a reading task, and the larger max_tokens leaves room for it
+# as well as the reply.
 MODELS: list[tuple[str, str, dict]] = [
-    ('Claude Haiku 4.5 (fast, cheapest)', 'claude-haiku-4-5',
-     {'max_tokens': 2048}),
+    ('Claude Haiku 5.5 (fast, cheapest)', 'claude-haiku-5-5',
+     {'max_tokens': 16000, 'output_config': {'effort': 'low'}}),
     ('Claude Sonnet 5.5 (slower, costs more)', 'claude-sonnet-5-5',
      {'max_tokens': 16000, 'output_config': {'effort': 'low'}}),
 ]
