@@ -31,6 +31,21 @@ def _header(aligned) -> PILImage.Image:
     return top.resize((800, max(1, top.height * 800 // top.width)), PILImage.LANCZOS)
 
 
+def _center_over(win, parent) -> None:
+    """Open a dialog centered over the app's window, which is on a display
+    the user can see. Centering on winfo_screenwidth/height put it off
+    screen on a Mac, where Tk's screen need not match the display the
+    window is on."""
+    win.update_idletasks()
+    top = parent.winfo_toplevel()
+    x = top.winfo_rootx() + (top.winfo_width() - win.winfo_reqwidth()) // 2
+    y = top.winfo_rooty() + (top.winfo_height() - win.winfo_reqheight()) // 2
+    # A dialog taller than the window would put its title bar under the
+    # menu bar, where it cannot be dragged; a display above the main one
+    # has negative coordinates, so its floor is the window's own top
+    win.geometry(f'+{x}+{max(y, min(top.winfo_rooty(), 0))}')
+
+
 class PageError(ValueError):
     '''A page that cannot be aligned; the message names it for the user.'''
 
@@ -354,10 +369,7 @@ class Scanner(object):
                   command=lambda: _done('')).pack(side='left', padx=6)
         entry.bind('<Return>', lambda _e: _submit())
 
-        win.update_idletasks()
-        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
-        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 2)
-        win.geometry(f'+{x}+{y}')
+        _center_over(win, self.parent)
         win.wait_window()
         return result[0]
 
@@ -518,11 +530,7 @@ class Scanner(object):
                       row=(len(self.version_keys) + 2) // 3, column=0,
                       columnspan=3, pady=(8, 0))
 
-        # Open centered on the screen so no edge of the dialog is cut off
-        win.update_idletasks()
-        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
-        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 2)
-        win.geometry(f'+{x}+{y}')
+        _center_over(win, self.parent)
 
         win.wait_window()
         return result[0]
